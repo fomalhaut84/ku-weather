@@ -349,4 +349,116 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       await expect(service.fetchRegionData()).resolves.not.toThrow();
     });
   });
+
+  describe('additional error handling coverage', () => {
+    it('should handle non-Error objects in fetchWeatherAlerts catch block', async () => {
+      const service = new WeatherService(testApiKey);
+      
+      // 문자열 에러를 던져서 else 브랜치 테스트
+      mockFetch.mockImplementation(() => {
+        throw 'string error';
+      });
+
+      await expect((service as any).fetchWeatherAlerts('H')).rejects.toBe('string error');
+    });
+
+    it('should handle malformed CSV lines in parseCSVResponse', () => {
+      const service = new WeatherService(testApiKey);
+      const csvData = `#START7777
+      , , , , , , , , , , ,  =
+202508011500, 202508011600, 202508011400, 184, L1020110,   H,   2,   1,  00,   4,   101, =`;
+
+      const result = (service as any).parseCSVResponse(csvData);
+      
+      // 실제로는 필드가 충분한 경우 빈 값으로도 파싱됨
+      expect(result).toHaveLength(2);
+      expect(result[0].REG_ID).toBe(''); // 첫 번째 라인의 빈 필드들
+      expect(result[1].REG_ID).toBe('L1020110'); // 두 번째 라인의 실제 값
+    });
+
+    it('should handle malformed CSV lines in parseRegionCSVResponse', () => {
+      const service = new WeatherService(testApiKey);
+      const csvData = `#START7777
+      , , , , , , , =
+L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시 강북구, =`;
+
+      const result = (service as any).parseRegionCSVResponse(csvData);
+      
+      // 실제로는 필드가 충분한 경우 빈 값으로도 파싱됨
+      expect(result).toHaveLength(2);
+      expect(result[0].REG_ID).toBe(''); // 첫 번째 라인의 빈 필드들
+      expect(result[1].REG_ID).toBe('L1020110'); // 두 번째 라인의 실제 값
+    });
+
+    it('should handle API error with status other than 403', async () => {
+      const service = new WeatherService(testApiKey);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+        text: async () => 'Server Error'
+      });
+
+      await expect((service as any).fetchWeatherAlerts()).rejects.toThrow(
+        'API 호출 실패: 500 Internal Server Error - Server Error'
+      );
+    });
+
+    it('should handle CSV parsing errors with logger.debug calls', async () => {
+      const service = new WeatherService(testApiKey);
+      
+      // getRegionName에서 예외를 발생시켜 catch 블록 실행 (라인 277)
+      const originalGetRegionName = (service as any).getRegionName;
+      (service as any).getRegionName = jest.fn().mockImplementation(() => {
+        throw new Error('getRegionName error');
+      });
+      
+      const csvData = `#START7777
+202508011500, 202508011600, 202508011400, 184, L1020110,   H,   2,   1,  00,   4,   101, =`;
+      
+      const result = (service as any).parseCSVResponse(csvData);
+      expect(result).toHaveLength(0); // 예외 발생으로 인해 빈 배열 반환
+      
+      // 원래 메서드 복원
+      (service as any).getRegionName = originalGetRegionName;
+    });
+
+    it('should handle region CSV parsing errors with logger.debug calls', async () => {
+      const service = new WeatherService(testApiKey);
+      
+      // 원래 배열 push 메서드를 모킹해서 예외 발생시키기
+      const csvData = `#START7777
+L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시 강북구, =`;
+      
+      // Array.prototype.push를 일시적으로 모킹
+      const originalPush = Array.prototype.push;
+      Array.prototype.push = jest.fn().mockImplementation(() => {
+        throw new Error('push error');
+      });
+      
+      const result = (service as any).parseRegionCSVResponse(csvData);
+      expect(result).toHaveLength(0); // 예외 발생으로 인해 빈 배열 반환
+      
+      // 원래 메서드 복원
+      Array.prototype.push = originalPush;
+    });
+
+    it('should call logger.info when region data is loaded successfully', async () => {
+      const service = new WeatherService(testApiKey);
+      const mockResponse = `#START7777
+L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시 강북구, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      await service.fetchRegionData();
+      
+      // logger.info 호출 확인 (라인 196은 이미 fetchRegionData에 의해 커버됨)
+      const mockLogger = require('../../utils/logger').logger;
+      expect(mockLogger.info).toHaveBeenCalledWith('1개 특보구역 데이터 로드 완료');
+    });
+  });
 });

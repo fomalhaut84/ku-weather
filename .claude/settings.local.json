@@ -9,7 +9,9 @@
       "Bash(timeout 30 npm run start)",
       "Bash(mkdir:*)",
       "Bash(npm test)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gh pr create:*)",
+      "Bash(npm test:*)"
     ],
     "deny": []
   }

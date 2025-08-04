@@ -104,6 +104,24 @@ describe('SlackService', () => {
       const result = (service as any).formatDateTime('invalid-date');
       expect(result).toBe('Invalid Date');
     });
+
+    it('should return original string when toLocaleString throws an error', () => {
+      const service = new SlackService(testWebhookUrl);
+      
+      // Date 생성자를 모킹해서 toLocaleString에서 에러가 발생하도록 설정
+      const mockDate = {
+        toLocaleString: jest.fn().mockImplementation(() => {
+          throw new Error('toLocaleString error');
+        })
+      };
+      
+      jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
+      
+      const result = (service as any).formatDateTime('2025-08-01T15:30:00');
+      expect(result).toBe('2025-08-01T15:30:00');
+      
+      (global.Date as any).mockRestore();
+    });
   });
 
   describe('sendAlert', () => {
