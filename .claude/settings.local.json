@@ -8,7 +8,8 @@
       "Bash(npm run start:*)",
       "Bash(timeout 30 npm run start)",
       "Bash(mkdir:*)",
-      "Bash(npm test)"
+      "Bash(npm test)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
