@@ -50,7 +50,7 @@ describe('WeatherService', () => {
       const service = new WeatherService(testApiKey);
       
       const result = (service as any).getRegionName('L1020110');
-      expect(result).toBe('서울강북');
+      expect(result).toBe('강릉시평지');
     });
 
     it('should return cached region name when available', () => {
@@ -105,7 +105,7 @@ describe('WeatherService', () => {
         WRN: 'H',
         LVL: '2',
         CMD: '1',
-        REG_NAME: '서울강북'
+        REG_NAME: '강릉시평지'
       });
     });
 
@@ -264,10 +264,10 @@ S1323200, 202101010000, 202312312359, B, S1323000, 서해중부, 서해중부근
         text: async () => mockResponse
       });
 
-      const result = await service.getWeatherAlerts(['서울강북']);
+      const result = await service.getWeatherAlerts(['강릉시평지']);
 
       expect(result).toHaveLength(1);
-      expect(result[0].REG_NAME).toBe('서울강북');
+      expect(result[0].REG_NAME).toBe('강릉시평지');
     });
 
     it('should handle API errors gracefully', async () => {
@@ -458,7 +458,7 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       
       // logger.info 호출 확인 (라인 196은 이미 fetchRegionData에 의해 커버됨)
       const mockLogger = require('../../utils/logger').logger;
-      expect(mockLogger.info).toHaveBeenCalledWith('1개 특보구역 데이터 로드 완료');
+      expect(mockLogger.info).toHaveBeenCalledWith('총 1개 특보구역 데이터 로드 완료');
     });
   });
 });
