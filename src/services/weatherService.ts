@@ -1035,9 +1035,22 @@ export class WeatherService {
    * @returns WeatherAlert 형태로 변환된 데이터
    */
   private convertCurrentToWeatherAlert(currentAlert: CurrentWeatherAlert): WeatherAlert {
+    // 지역명 결정: 1) REG_KO 2) getRegionName() 3) REG_UP_KO fallback
+    let regionName = '';
+    if (currentAlert.REG_KO && currentAlert.REG_KO.trim()) {
+      regionName = currentAlert.REG_KO.trim();
+    } else {
+      regionName = this.getRegionName(currentAlert.REG_ID);
+      // getRegionName이 패턴 기반 기본 처리를 반환하는 경우, 상위 지역명 시도
+      const isDefaultMapping = regionName.includes(`(${currentAlert.REG_ID})`);
+      if (isDefaultMapping && currentAlert.REG_UP_KO && currentAlert.REG_UP_KO.trim()) {
+        regionName = currentAlert.REG_UP_KO.trim();
+      }
+    }
+
     return {
       REG_ID: currentAlert.REG_ID,
-      REG_NAME: currentAlert.REG_KO || this.getRegionName(currentAlert.REG_ID),
+      REG_NAME: regionName,
       WRN: currentAlert.WRN,
       LVL: currentAlert.LVL,
       CMD: currentAlert.CMD,
@@ -1045,19 +1058,19 @@ export class WeatherService {
       TM_EF: currentAlert.TM_EF,
       REG_UP: currentAlert.REG_UP,
       REG_KO: currentAlert.REG_KO,
-      // API에서 제공되지 않는 필드들은 기본값으로 설정
-      TM_ST: '',
-      TM_ED: '',
-      REG_SP: '',
-      TM_IN: '',
-      STN: '',
-      STN_ID: '',
-      GRD: '',
-      CNT: '',
-      RPT: '',
-      TM_SEQ: '',
-      MAN_FC: '',
-      MAN_IN: ''
+      // 현재 특보현황 API에서 제공되지 않는 필드들
+      TM_ST: '',            // 시작시각 (현재 API에 없음)
+      TM_ED: '',            // 종료시각 (현재 API에 없음) 
+      REG_SP: '',           // 특성 (현재 API에 없음)
+      TM_IN: currentAlert.TM_FC,  // 입력시각 → 발표시각으로 대체
+      STN: currentAlert.REG_UP_KO || '', // 발표관서 → 상위지역명으로 대체
+      STN_ID: currentAlert.REG_UP || '', // 발표관서ID → 상위지역코드로 대체
+      GRD: '',              // 태풍경보시 등급 (현재 API에 없음)
+      CNT: '1',             // 작업순번 → 기본값 1
+      RPT: '1',             // 통보문 발송구분 → 기본값 1
+      TM_SEQ: '',           // 발표번호 (현재 API에 없음)
+      MAN_FC: '',           // 예보관명 (현재 API에 없음)
+      MAN_IN: ''            // 입력자명 (현재 API에 없음)
     };
   }
 

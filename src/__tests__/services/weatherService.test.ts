@@ -603,10 +603,32 @@ incomplete, line`;
       expect(convertedAlert.REG_UP).toBe('L1100000');
       expect(convertedAlert.REG_KO).toBe('서울강남구');
       
-      // 기본값들 확인
+      // 개선된 매핑 확인
       expect(convertedAlert.TM_ST).toBe('');
       expect(convertedAlert.TM_ED).toBe('');
-      expect(convertedAlert.STN).toBe('');
+      expect(convertedAlert.TM_IN).toBe('202501071000'); // 발표시각으로 대체
+      expect(convertedAlert.STN).toBe('서울특별시'); // 상위지역명으로 대체
+      expect(convertedAlert.STN_ID).toBe('L1100000'); // 상위지역코드로 대체
+      expect(convertedAlert.CNT).toBe('1'); // 기본값
+      expect(convertedAlert.RPT).toBe('1'); // 기본값
+    });
+
+    it('should handle region name fallback correctly', () => {
+      // REG_KO가 없고, getRegionName이 매핑을 찾지 못하는 경우
+      const mockResponse = `L9999999, 알수없는상위, L9999998, , 202501071000, 202501071100, H, 2, 1, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      return weatherService.fetchCurrentWeatherAlerts().then(currentAlerts => {
+        const convertedAlert = (weatherService as any).convertCurrentToWeatherAlert(currentAlerts[0]);
+        
+        // REG_KO가 비어있고, getRegionName도 매핑을 찾지 못한 경우 REG_UP_KO를 사용
+        expect(convertedAlert.REG_NAME).toBe('알수없는상위');
+        expect(convertedAlert.STN).toBe('알수없는상위');
+      });
     });
   });
 
