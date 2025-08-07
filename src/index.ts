@@ -1,5 +1,4 @@
 import { WeatherService } from './services/weatherService';
-import { SlackService } from './services/slackService';
 import { logger } from './utils/logger';
 import { config } from './config';
 
@@ -43,13 +42,6 @@ function getWarningCommand(cmdCode: string): string {
   return commands[cmdCode.trim()] || cmdCode;
 }
 
-function getWorkStatus(cntCode: string): string {
-  const statuses: Record<string, string> = {
-    '4': '통보완료'
-  };
-  return statuses[cntCode.trim()] || cntCode;
-}
-
 function formatDateTime(dateTimeStr: string): string {
   try {
     // YYYYMMDDHHMM 형태를 YYYY-MM-DD HH:MM 형태로 변환
@@ -72,9 +64,8 @@ async function main() {
     logger.info('기상특보 모니터링 시작');
     
     const weatherService = new WeatherService(config.weatherApiKey);
-    const slackService = new SlackService(config.slackWebhookUrl);
     
-    await startMonitoring(weatherService, slackService);
+    await startMonitoring(weatherService);
     
   } catch (error) {
     logger.error('애플리케이션 시작 중 오류 발생:', error);
@@ -82,7 +73,7 @@ async function main() {
   }
 }
 
-async function startMonitoring(weatherService: WeatherService, slackService: SlackService) {
+async function startMonitoring(weatherService: WeatherService) {
   logger.info(`${config.checkIntervalMinutes}분 간격으로 기상특보 모니터링 시작`);
   
   // 특보구역 데이터 로드
@@ -91,37 +82,47 @@ async function startMonitoring(weatherService: WeatherService, slackService: Sla
   
   const checkWeather = async () => {
     try {
-      logger.debug('기상특보 확인 중...');
-      const alerts = await weatherService.getWeatherAlerts(config.targetRegionIds, config.warningTypes, config.subcd);
+      logger.debug('기상특보 변동 확인 중...');
+      const changes = await weatherService.checkForAlertChanges(config.targetRegionIds, config.warningTypes, config.subcd);
       
-      if (alerts.length > 0) {
-        logger.info(`${alerts.length}개의 기상특보 발견`);
+      if (changes.length > 0) {
+        logger.info(`${changes.length}개의 특보 변동사항 발견`);
         
-        // 콘솔에 특보 내용 출력
-        console.log('\n=== 기상특보 상세 내용 ===');
-        alerts.forEach((alert, index) => {
-          console.log(`\n[${index + 1}] ${getWarningTypeName(alert.WRN)} ${getWarningLevel(alert.LVL)} ${getWarningCommand(alert.CMD)}`);
-          console.log(`📍 지역: ${alert.REG_NAME} (${alert.REG_ID})`);
-          console.log(`⚠️  종류: ${getWarningTypeName(alert.WRN)} (${alert.WRN})`);
-          console.log(`📊 수준: ${getWarningLevel(alert.LVL)} (${alert.LVL})`);
-          console.log(`📢 명령: ${getWarningCommand(alert.CMD)} (${alert.CMD})`);
-          console.log(`🕐 발표: ${formatDateTime(alert.TM_FC)}`);
-          console.log(`⏰ 발효: ${formatDateTime(alert.TM_EF)}`);
-          console.log(`📝 입력: ${formatDateTime(alert.TM_IN)}`);
-          console.log(`🏢 관서: ${alert.STN}`);
-          console.log(`🌀 태풍등급: ${alert.GRD}`);
-          console.log(`✅ 상태: ${getWorkStatus(alert.CNT)} (${alert.CNT})`);
-          console.log(`📤 발송: ${alert.RPT}`);
+        // 콘솔에 변동 내역 출력
+        console.log('\n=== 기상특보 변동 내역 ===');
+        changes.forEach((change, index) => {
+          const typeEmoji = {
+            'NEW': '🆕',
+            'RESOLVED': '✅', 
+            'LEVEL_UP': '⬆️',
+            'LEVEL_DOWN': '⬇️',
+            'MODIFIED': '🔄'
+          };
+          
+          console.log(`\n[${index + 1}] ${typeEmoji[change.type]} ${change.description}`);
+          
+          if (change.current) {
+            console.log(`📍 지역: ${change.current.regionName} (${change.current.regionId})`);
+            console.log(`⚠️  종류: ${getWarningTypeName(change.current.warningType)} (${change.current.warningType})`);
+            console.log(`📊 수준: ${getWarningLevel(change.current.level)} (${change.current.level})`);
+            console.log(`📢 명령: ${getWarningCommand(change.current.command)} (${change.current.command})`);
+            console.log(`🕐 발표: ${formatDateTime(change.current.announcedAt)}`);
+            console.log(`⏰ 발효: ${formatDateTime(change.current.effectiveAt)}`);
+          }
+          
+          if (change.previous && (change.type === 'RESOLVED' || change.type === 'LEVEL_UP' || change.type === 'LEVEL_DOWN')) {
+            console.log(`📋 이전: ${getWarningTypeName(change.previous.warningType)} ${getWarningLevel(change.previous.level)}`);
+          }
         });
         console.log('\n=========================\n');
         
         // Slack 전송 비활성화
-        // await slackService.sendWeatherAlert(alerts);
+        // await slackService.sendAlertChanges(changes);
       } else {
-        logger.debug('활성 기상특보 없음');
+        logger.debug('기상특보 변동 없음');
       }
     } catch (error) {
-      logger.error('기상특보 확인 중 오류:', error);
+      logger.error('기상특보 변동 확인 중 오류:', error);
     }
   };
   
