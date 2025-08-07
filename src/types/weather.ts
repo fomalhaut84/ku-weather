@@ -59,3 +59,62 @@ export interface WeatherRegion {
   REG_KO: string;    // 특보구역명(약어)
   REG_NAME: string;  // 특보구역명
 }
+
+/**
+ * 특보 변동 감지를 위한 타입 정의
+ */
+
+/**
+ * 캐시된 특보 데이터
+ * 변동 감지를 위해 간소화된 특보 정보를 저장합니다.
+ */
+export interface CachedAlert {
+  /** 고유 식별자 (지역코드+특보종류+수준+명령 조합) */
+  key: string;
+  /** 지역코드 (REG_ID) */
+  regionId: string;
+  /** 지역명 (REG_NAME) */
+  regionName: string;
+  /** 특보종류 (WRN) */
+  warningType: string;
+  /** 특보수준 (LVL) */
+  level: string;
+  /** 특보명령 (CMD) */
+  command: string;
+  /** 발표시각 (TM_FC) */
+  announcedAt: string;
+  /** 발효시각 (TM_EF) */
+  effectiveAt: string;
+  /** 마지막 업데이트 시각 (ISO string) */
+  lastUpdated: string;
+}
+
+/**
+ * 특보 변동 정보
+ * 이전 상태와 현재 상태의 비교 결과를 나타냅니다.
+ */
+export interface AlertChange {
+  /** 변동 유형 */
+  type: AlertChangeType;
+  /** 현재 특보 (신규/변경/수준변경 시) */
+  current?: CachedAlert;
+  /** 이전 특보 (해제/변경 시) */
+  previous?: CachedAlert;
+  /** 변동 설명 (사람이 읽기 쉬운 형태) */
+  description: string;
+}
+
+/**
+ * 특보 변동 유형
+ */
+export type AlertChangeType = 
+  /** 신규 발표: 이전에 없던 특보가 새로 발표됨 */
+  | 'NEW'
+  /** 해제: 기존 특보가 해제됨 */         
+  | 'RESOLVED'
+  /** 수준 상향: 주의보 → 경보 등 수준이 올라감 */    
+  | 'LEVEL_UP'
+  /** 수준 하향: 경보 → 주의보 등 수준이 내려감 */    
+  | 'LEVEL_DOWN'
+  /** 내용 변경: 동일 수준에서 내용이 변경됨 */  
+  | 'MODIFIED';
