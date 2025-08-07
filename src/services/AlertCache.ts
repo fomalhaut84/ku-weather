@@ -91,8 +91,8 @@ export class AlertCache {
       }
     }
 
-    // 캐시 업데이트
-    this.updateCache(currentAlerts);
+    // 캐시 업데이트 (변동 감지 완료 후)
+    this.replaceCache(currentCachedAlerts);
     
     logger.debug(`특보 변동 감지 완료: ${changes.length}개 변동사항`);
     return changes;
@@ -160,6 +160,25 @@ export class AlertCache {
     
     this.lastUpdateTime = new Date();
     logger.debug(`특보 캐시 업데이트 완료: ${this.cache.size}개 특보`);
+  }
+
+  /**
+   * 이미 변환된 캐시 데이터로 캐시를 교체합니다.
+   * detectChanges() 메서드에서 사용하여 중복 처리를 방지합니다.
+   * @param newCache 새로운 캐시 데이터 (Map<string, CachedAlert>)
+   */
+  private replaceCache(newCache: Map<string, CachedAlert>): void {
+    this.cache.clear();
+    
+    // 해제 관련 명령이 아닌 특보만 저장
+    newCache.forEach((cached, key) => {
+      if (!this.isResolvedCommand(cached.command)) {
+        this.cache.set(key, cached);
+      }
+    });
+    
+    this.lastUpdateTime = new Date();
+    logger.debug(`특보 캐시 교체 완료: ${this.cache.size}개 특보`);
   }
 
   /**

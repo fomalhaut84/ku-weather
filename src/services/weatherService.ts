@@ -396,11 +396,9 @@ export class WeatherService {
 
   async fetchRegionData(): Promise<void> {
     try {
-      // 여러 기간에 걸쳐 지역 데이터 수집 (더 많은 지역 커버리지를 위해)
+      // 기상특보와 동일한 기간(3일치)으로 지역 데이터 수집
       const periods = [
-        { days: 7, name: '최근 1주일' },
-        { days: 30, name: '최근 1개월' },
-        { days: 90, name: '최근 3개월' }
+        { days: 3, name: '최근 3일' }
       ];
 
       const allRegions = new Map<string, string>();
