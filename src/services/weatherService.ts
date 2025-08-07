@@ -1,10 +1,11 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange } from '../types/weather';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, CurrentWeatherAlert, CurrentWeatherApiParams } from '../types/weather';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
 
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
+  private readonly currentUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_now_data_new.php';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
   private alertCache: AlertCache = new AlertCache();
@@ -37,9 +38,10 @@ export class WeatherService {
       const isFirstRun = !this.isInitialized || this.lastCheckTime === null;
       
       if (isFirstRun) {
-        logger.debug('최초 실행: 3일치 데이터 조회');
-        // 최초 실행: 기존 로직 사용 (3일치)
-        allAlerts = await this.fetchWeatherAlertsWithPeriod(targetRegIds, warningTypes, subcd, 3);
+        logger.debug('최초 실행: 현재 특보현황 조회');
+        // 최초 실행: 현재 특보현황 API 사용
+        const currentAlerts = await this.fetchCurrentWeatherAlerts();
+        allAlerts = currentAlerts.map(alert => this.convertCurrentToWeatherAlert(alert));
       } else {
         logger.debug('증분 업데이트: 마지막 확인 이후 데이터만 조회');
         // 증분 업데이트: 마지막 확인 시점 + 안전 마진
@@ -58,7 +60,7 @@ export class WeatherService {
         );
       }
 
-      const period = isFirstRun ? '(3일치)' : '(증분)';
+      const period = isFirstRun ? '(현재상황)' : '(증분)';
       logger.info(`${period} 총 ${allAlerts.length}개의 기상특보를 조회했습니다`);
       return allAlerts;
     } catch (error) {
@@ -396,9 +398,9 @@ export class WeatherService {
 
   async fetchRegionData(): Promise<void> {
     try {
-      // 기상특보와 동일한 기간(3일치)으로 지역 데이터 수집
+      // 기상특보와 동일한 기간(7일치)으로 지역 데이터 수집
       const periods = [
-        { days: 3, name: '최근 3일' }
+        { days: 7, name: '최근 7일' }
       ];
 
       const allRegions = new Map<string, string>();
@@ -929,5 +931,156 @@ export class WeatherService {
    */
   getCachedAlerts() {
     return this.alertCache.getAllCachedAlerts();
+  }
+
+  /**
+   * 현재 특보현황을 조회합니다.
+   * 초기 캐시 설정 시 사용하기 위한 메서드입니다.
+   * @param fe 기준 (f: 발표시간기준, e: 발효시간기준)
+   * @param tm 기준시각 (년월일시분 KST)
+   * @returns 현재 특보 배열
+   */
+  async fetchCurrentWeatherAlerts(fe: 'f' | 'e' = 'f', tm?: string): Promise<CurrentWeatherAlert[]> {
+    try {
+      const params: CurrentWeatherApiParams = {
+        fe,
+        help: 0,
+        authKey: this.authKey
+      };
+
+      if (tm) {
+        params.tm = tm;
+      }
+
+      const queryString = Object.entries(params)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join('&');
+
+      const url = `${this.currentUrl}?${queryString}`;
+      logger.debug(`현재 특보현황 조회 URL: ${url}`);
+
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+          throw new Error('API 인증 실패 (403 Forbidden) - API 키를 확인하세요');
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const responseText = await response.text();
+      logger.debug(`현재 특보현황 API 응답: ${responseText.substring(0, 200)}...`);
+
+      const currentAlerts = this.parseCurrentWeatherCSVResponse(responseText);
+      logger.info(`현재 특보현황 조회 완료: ${currentAlerts.length}개 특보`);
+      
+      return currentAlerts;
+    } catch (error) {
+      if (error instanceof Error) {
+        logger.error('현재 특보현황 조회 중 오류:', error.message);
+      } else {
+        logger.error('현재 특보현황 조회 중 알 수 없는 오류:', error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * 현재 특보현황 API CSV 응답을 파싱합니다.
+   * @param responseText CSV 형태의 응답 텍스트
+   * @returns 현재 특보 배열
+   */
+  private parseCurrentWeatherCSVResponse(responseText: string): CurrentWeatherAlert[] {
+    const lines = responseText.split('\n');
+    const alerts: CurrentWeatherAlert[] = [];
+
+    for (const line of lines) {
+      // 주석이나 헤더 라인 건너뛰기
+      if (line.startsWith('#') || line.trim() === '' || !line.includes(',')) {
+        continue;
+      }
+
+      try {
+        // 현재 특보현황 API 응답 형식: REG_UP, REG_UP_KO, REG_ID, REG_KO, TM_FC, TM_EF, WRN, LVL, CMD
+        const fields = line.split(',').map(field => field.trim());
+        
+        if (fields.length >= 9) {
+          const alert: CurrentWeatherAlert = {
+            REG_UP: fields[0],      // 상위 특보구역코드
+            REG_UP_KO: fields[1],   // 상위 특보구역명
+            REG_ID: fields[2],      // 특보구역코드
+            REG_KO: fields[3],      // 특보구역명
+            TM_FC: fields[4],       // 발표시각
+            TM_EF: fields[5],       // 발효시각
+            WRN: fields[6],         // 특보종류
+            LVL: fields[7],         // 특보수준
+            CMD: fields[8],         // 특보명령
+          };
+          
+          alerts.push(alert);
+        }
+      } catch (error) {
+        logger.debug(`현재 특보현황 CSV 라인 파싱 오류: ${line}`);
+      }
+    }
+
+    return alerts;
+  }
+
+  /**
+   * CurrentWeatherAlert를 WeatherAlert로 변환합니다.
+   * 기존 AlertCache와 호환성을 위해 사용합니다.
+   * @param currentAlert 현재 특보현황 데이터
+   * @returns WeatherAlert 형태로 변환된 데이터
+   */
+  private convertCurrentToWeatherAlert(currentAlert: CurrentWeatherAlert): WeatherAlert {
+    return {
+      REG_ID: currentAlert.REG_ID,
+      REG_NAME: currentAlert.REG_KO || this.getRegionName(currentAlert.REG_ID),
+      WRN: currentAlert.WRN,
+      LVL: currentAlert.LVL,
+      CMD: currentAlert.CMD,
+      TM_FC: currentAlert.TM_FC,
+      TM_EF: currentAlert.TM_EF,
+      REG_UP: currentAlert.REG_UP,
+      REG_KO: currentAlert.REG_KO,
+      // API에서 제공되지 않는 필드들은 기본값으로 설정
+      TM_ST: '',
+      TM_ED: '',
+      REG_SP: '',
+      TM_IN: '',
+      STN: '',
+      STN_ID: '',
+      GRD: '',
+      CNT: '',
+      RPT: '',
+      TM_SEQ: '',
+      MAN_FC: '',
+      MAN_IN: ''
+    };
+  }
+
+  /**
+   * 현재 특보현황을 이용해 초기 캐시를 설정합니다.
+   * 과거 7일치 데이터 대신 현재 활성 특보로 캐시를 초기화합니다.
+   */
+  async initializeCacheWithCurrentAlerts(): Promise<void> {
+    try {
+      logger.info('현재 특보현황으로 캐시 초기화 시작');
+      
+      const currentAlerts = await this.fetchCurrentWeatherAlerts();
+      const convertedAlerts = currentAlerts.map(alert => this.convertCurrentToWeatherAlert(alert));
+      
+      // AlertCache에 현재 특보들을 저장 (변동 감지는 하지 않음)
+      this.alertCache.updateCache(convertedAlerts);
+      this.isInitialized = true;
+      this.lastCheckTime = new Date();
+      
+      logger.info(`현재 특보현황으로 캐시 초기화 완료: ${convertedAlerts.length}개 특보`);
+    } catch (error) {
+      logger.error('현재 특보현황으로 캐시 초기화 중 오류:', error);
+      throw error;
+    }
   }
 }

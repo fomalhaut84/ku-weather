@@ -461,4 +461,177 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       expect(mockLogger.info).toHaveBeenCalledWith('총 1개 특보구역 데이터 로드 완료');
     });
   });
+
+  describe('fetchCurrentWeatherAlerts', () => {
+    it('should fetch current weather alerts successfully', async () => {
+      const mockResponse = `# 현재 특보현황 API 응답
+L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      const alerts = await weatherService.fetchCurrentWeatherAlerts();
+
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toEqual({
+        REG_UP: 'L1100000',
+        REG_UP_KO: '서울특별시',
+        REG_ID: 'L1100110',
+        REG_KO: '서울강남구',
+        TM_FC: '202501071000',
+        TM_EF: '202501071100',
+        WRN: 'H',
+        LVL: '2',
+        CMD: '1'
+      });
+    });
+
+    it('should handle API error responses', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden'
+      });
+
+      await expect(weatherService.fetchCurrentWeatherAlerts()).rejects.toThrow('API 인증 실패 (403 Forbidden)');
+    });
+
+    it('should handle invalid response format', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => 'invalid data'
+      });
+
+      const alerts = await weatherService.fetchCurrentWeatherAlerts();
+      expect(alerts).toHaveLength(0);
+    });
+
+    it('should build correct API URL with parameters', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => '# empty'
+      });
+
+      await weatherService.fetchCurrentWeatherAlerts('e', '202501071000');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const calledUrl = mockFetch.mock.calls[0][0];
+      
+      expect(calledUrl).toContain('https://apihub.kma.go.kr/api/typ01/url/wrn_now_data_new.php');
+      expect(calledUrl).toContain('fe=e');
+      expect(calledUrl).toContain('tm=202501071000');
+      expect(calledUrl).toContain('help=0');
+      expect(calledUrl).toContain('authKey=test-api-key');
+    });
+  });
+
+  describe('parseCurrentWeatherCSVResponse', () => {
+    it('should parse current weather CSV correctly', async () => {
+      const mockResponse = `# 주석 라인
+L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =
+L1010000, 경기도, L1010200, 광명시, 202501071030, 202501071130, R, 3, 1, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      const alerts = await weatherService.fetchCurrentWeatherAlerts();
+
+      expect(alerts).toHaveLength(2);
+      expect(alerts[0].REG_KO).toBe('서울강남구');
+      expect(alerts[0].WRN).toBe('H');
+      expect(alerts[0].LVL).toBe('2');
+      expect(alerts[1].REG_KO).toBe('광명시');
+      expect(alerts[1].WRN).toBe('R');
+      expect(alerts[1].LVL).toBe('3');
+    });
+
+    it('should skip comment and empty lines', async () => {
+      const mockResponse = `# 현재 특보현황
+      
+L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =
+
+# 다른 주석
+`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      const alerts = await weatherService.fetchCurrentWeatherAlerts();
+      expect(alerts).toHaveLength(1);
+    });
+
+    it('should handle malformed CSV lines gracefully', async () => {
+      const mockResponse = `malformed line
+L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =
+incomplete, line`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      const alerts = await weatherService.fetchCurrentWeatherAlerts();
+      expect(alerts).toHaveLength(1);
+    });
+  });
+
+  describe('convertCurrentToWeatherAlert', () => {
+    it('should convert CurrentWeatherAlert to WeatherAlert correctly', async () => {
+      const mockResponse = `L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      const currentAlerts = await weatherService.fetchCurrentWeatherAlerts();
+      const convertedAlert = (weatherService as any).convertCurrentToWeatherAlert(currentAlerts[0]);
+
+      expect(convertedAlert.REG_ID).toBe('L1100110');
+      expect(convertedAlert.REG_NAME).toBe('서울강남구');
+      expect(convertedAlert.WRN).toBe('H');
+      expect(convertedAlert.LVL).toBe('2');
+      expect(convertedAlert.CMD).toBe('1');
+      expect(convertedAlert.TM_FC).toBe('202501071000');
+      expect(convertedAlert.TM_EF).toBe('202501071100');
+      expect(convertedAlert.REG_UP).toBe('L1100000');
+      expect(convertedAlert.REG_KO).toBe('서울강남구');
+      
+      // 기본값들 확인
+      expect(convertedAlert.TM_ST).toBe('');
+      expect(convertedAlert.TM_ED).toBe('');
+      expect(convertedAlert.STN).toBe('');
+    });
+  });
+
+  describe('initializeCacheWithCurrentAlerts', () => {
+    it('should initialize cache with current alerts', async () => {
+      const mockResponse = `L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => mockResponse
+      });
+
+      await weatherService.initializeCacheWithCurrentAlerts();
+
+      const cachedAlerts = weatherService.getCachedAlerts();
+      expect(cachedAlerts).toHaveLength(1);
+      expect(cachedAlerts[0].regionName).toBe('서울강남구');
+      expect(cachedAlerts[0].warningType).toBe('H');
+      expect(cachedAlerts[0].level).toBe('2');
+    });
+
+    it('should handle errors during initialization', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(weatherService.initializeCacheWithCurrentAlerts()).rejects.toThrow('Network error');
+    });
+  });
 });
