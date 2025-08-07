@@ -1,16 +1,72 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion } from '../types/weather';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange } from '../types/weather';
 import { logger } from '../utils/logger';
+import { AlertCache } from './AlertCache';
 
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
+  private alertCache: AlertCache = new AlertCache();
+  private lastCheckTime: Date | null = null;
+  private isInitialized: boolean = false;
 
   constructor(authKey: string) {
     this.authKey = authKey;
     if (!this.authKey) {
       throw new Error('WEATHER_API_KEY가 제공되지 않았습니다');
+    }
+  }
+
+  /**
+   * 최적화된 특보 데이터 조회 (증분 업데이트)
+   * @param targetRegIds 대상 지역 코드 배열
+   * @param warningTypes 특보 종류 배열
+   * @param subcd 날씨해설 부제목코드
+   * @returns 특보 배열
+   */
+  private async getWeatherAlertsOptimized(
+    targetRegIds: string[] = [], 
+    warningTypes: string[] = [],
+    subcd?: string
+  ): Promise<WeatherAlert[]> {
+    try {
+      let allAlerts: WeatherAlert[] = [];
+
+      // 최초 실행인지 확인
+      const isFirstRun = !this.isInitialized || this.lastCheckTime === null;
+      
+      if (isFirstRun) {
+        logger.debug('최초 실행: 3일치 데이터 조회');
+        // 최초 실행: 기존 로직 사용 (3일치)
+        allAlerts = await this.fetchWeatherAlertsWithPeriod(targetRegIds, warningTypes, subcd, 3);
+      } else {
+        logger.debug('증분 업데이트: 마지막 확인 이후 데이터만 조회');
+        // 증분 업데이트: 마지막 확인 시점 + 안전 마진
+        const safetyMarginMinutes = 10;
+        const fromTime = new Date(this.lastCheckTime!.getTime() - safetyMarginMinutes * 60 * 1000);
+        
+        allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, fromTime, subcd);
+      }
+
+      // 지역 필터링
+      if (targetRegIds.length > 0) {
+        allAlerts = allAlerts.filter(alert => 
+          targetRegIds.some(regId => 
+            alert.REG_NAME.includes(regId) || alert.REG_KO.includes(regId)
+          )
+        );
+      }
+
+      const period = isFirstRun ? '(3일치)' : '(증분)';
+      logger.info(`${period} 총 ${allAlerts.length}개의 기상특보를 조회했습니다`);
+      return allAlerts;
+    } catch (error) {
+      logger.error('최적화된 기상특보 조회 중 오류:', error);
+      
+      // 오류 시 기존 방식으로 폴백
+      logger.warn('기존 방식으로 폴백하여 재시도합니다');
+      return await this.getWeatherAlerts(targetRegIds, warningTypes, subcd);
     }
   }
 
@@ -122,6 +178,47 @@ export class WeatherService {
     }
   }
 
+  /**
+   * 특보 변동사항을 감지합니다.
+   * 최초 실행 시 3일치 데이터로 캐시 초기화, 이후 증분 조회로 최적화됩니다.
+   * @param targetRegIds 대상 지역 코드 배열
+   * @param warningTypes 특보 종류 배열
+   * @param subcd 날씨해설 부제목코드
+   * @returns 감지된 변동사항 배열
+   */
+  async checkForAlertChanges(
+    targetRegIds: string[] = [], 
+    warningTypes: string[] = [],
+    subcd?: string
+  ): Promise<AlertChange[]> {
+    try {
+      logger.debug('특보 변동 감지 시작');
+      
+      // 현재 특보 데이터 조회 (최적화된 기간)
+      const alerts = await this.getWeatherAlertsOptimized(targetRegIds, warningTypes, subcd);
+      
+      // AlertCache를 통한 변동 감지
+      const changes = this.alertCache.detectChanges(alerts);
+      
+      // 마지막 확인 시각 업데이트
+      this.lastCheckTime = new Date();
+      
+      if (!this.isInitialized) {
+        this.isInitialized = true;
+        logger.info('특보 캐시 초기화 완료');
+        // 최초 실행 시에는 빈 배열 반환 (기존 특보를 신규로 알림하지 않음)
+        return [];
+      }
+      
+      logger.info(`특보 변동 감지 완료: ${changes.length}개 변동사항`);
+      return changes;
+      
+    } catch (error) {
+      logger.error('특보 변동 감지 중 오류:', error);
+      return [];
+    }
+  }
+
   async checkForNewAlerts(
     targetRegIds: string[] = [], 
     warningTypes: string[] = [],
@@ -134,6 +231,156 @@ export class WeatherService {
     } catch (error) {
       logger.error('새로운 기상특보 확인 중 오류:', error);
       return [];
+    }
+  }
+
+  /**
+   * 지정된 일수만큼 과거부터 현재까지의 특보 데이터를 조회합니다.
+   * @param targetRegIds 대상 지역 코드 배열
+   * @param warningTypes 특보 종류 배열
+   * @param subcd 날씨해설 부제목코드
+   * @param days 조회할 일수
+   * @returns 특보 배열
+   */
+  private async fetchWeatherAlertsWithPeriod(
+    targetRegIds: string[] = [], 
+    warningTypes: string[] = [],
+    subcd?: string,
+    days: number = 3
+  ): Promise<WeatherAlert[]> {
+    const allAlerts: WeatherAlert[] = [];
+    
+    // 특보 종류별로 요청
+    if (warningTypes.length === 0) {
+      const alerts = await this.fetchWeatherAlertsForPeriod(undefined, subcd, days);
+      allAlerts.push(...alerts);
+    } else {
+      for (const warningType of warningTypes) {
+        const alerts = await this.fetchWeatherAlertsForPeriod(warningType as WeatherWarningType, subcd, days);
+        allAlerts.push(...alerts);
+      }
+    }
+    
+    return allAlerts;
+  }
+
+  /**
+   * 지정된 시각부터 현재까지의 특보 데이터를 조회합니다.
+   * @param targetRegIds 대상 지역 코드 배열
+   * @param warningTypes 특보 종류 배열
+   * @param subcd 날씨해설 부제목코드
+   * @param fromTime 조회 시작 시각
+   * @returns 특보 배열
+   */
+  private async fetchWeatherAlertsFromTime(
+    targetRegIds: string[] = [], 
+    warningTypes: string[] = [],
+    fromTime: Date,
+    subcd?: string
+  ): Promise<WeatherAlert[]> {
+    const allAlerts: WeatherAlert[] = [];
+    
+    // 특보 종류별로 요청
+    if (warningTypes.length === 0) {
+      const alerts = await this.fetchWeatherAlertsForTimeRange(fromTime, new Date(), undefined, subcd);
+      allAlerts.push(...alerts);
+    } else {
+      for (const warningType of warningTypes) {
+        const alerts = await this.fetchWeatherAlertsForTimeRange(fromTime, new Date(), warningType as WeatherWarningType, subcd);
+        allAlerts.push(...alerts);
+      }
+    }
+    
+    return allAlerts;
+  }
+
+  /**
+   * 특정 기간 동안의 특보를 조회합니다.
+   * @param warningType 특보 종류
+   * @param subcd 날씨해설 부제목코드
+   * @param days 조회할 일수
+   * @returns 특보 배열
+   */
+  private async fetchWeatherAlertsForPeriod(warningType?: WeatherWarningType, subcd?: string, days: number = 3): Promise<WeatherAlert[]> {
+    const now = new Date();
+    const pastDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    
+    return this.fetchWeatherAlertsForTimeRange(pastDate, now, warningType, subcd);
+  }
+
+  /**
+   * 지정된 시간 범위의 특보를 조회합니다.
+   * @param warningType 특보 종류
+   * @param subcd 날씨해설 부제목코드
+   * @param startTime 시작 시각
+   * @param endTime 종료 시각
+   * @returns 특보 배열
+   */
+  private async fetchWeatherAlertsForTimeRange(
+    startTime: Date,
+    endTime: Date,
+    warningType?: WeatherWarningType,
+    subcd?: string
+  ): Promise<WeatherAlert[]> {
+    try {
+      const params: WeatherApiParams = {
+        tmfc1: this.formatDateForAPI(startTime),
+        tmfc2: this.formatDateForAPI(endTime),
+        disp: 0,   // 기본 표출
+        help: 0,   // 도움말 비표시
+        authKey: this.authKey
+      };
+
+      // wrn 파라미터: 없으면 전체 특보
+      if (warningType) {
+        params.wrn = warningType;
+      }
+
+      // subcd 파라미터: 없으면 전체
+      if (subcd) {
+        params.subcd = subcd;
+      }
+
+      const queryString = Object.entries(params)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+        .join('&');
+
+      const url = `${this.baseUrl}?${queryString}`;
+      const timeDiff = Math.round((endTime.getTime() - startTime.getTime()) / (1000 * 60)); // 분 단위
+      logger.debug(`기상특보 API 호출 (${timeDiff}분간): ${warningType || '전체'}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.debug(`API 응답 상태: ${response.status}, 내용: ${errorText}`);
+        
+        if (response.status === 403) {
+          throw new Error(`API 활용신청이 필요합니다. 기상청 API Hub(https://apihub.kma.go.kr)에서 활용신청을 먼저 해주세요. 응답: ${errorText}`);
+        }
+        
+        throw new Error(`API 호출 실패: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const responseText = await response.text();
+      
+      // 응답 형식이 CSV 형태인지 확인
+      if (!responseText.trim().startsWith('#START')) {
+        logger.debug(`API 응답: ${responseText.substring(0, 200)}...`);
+        throw new Error(`유효하지 않은 응답 형식: ${responseText.substring(0, 100)}`);
+      }
+
+      const data = this.parseCSVResponse(responseText);
+      
+      logger.debug(`${warningType || '전체'} 특보 ${data.length}개 조회 (${timeDiff}분간)`);
+      return data;
+    } catch (error) {
+      if (error instanceof Error) {
+        logger.error(`기상특보 조회 중 오류 (종류: ${warningType || '전체'}): ${error.message}`);
+      } else {
+        logger.error(`기상특보 조회 중 알 수 없는 오류 (종류: ${warningType || '전체'}):`, error);
+      }
+      throw error;
     }
   }
 
@@ -653,5 +900,36 @@ export class WeatherService {
     }
     
     return regId;
+  }
+
+  /**
+   * AlertCache 상태를 조회합니다.
+   * @returns 캐시 상태 정보
+   */
+  getCacheStatus(): { count: number; lastUpdated: Date; isInitialized: boolean; lastCheckTime: Date | null } {
+    const cacheStatus = this.alertCache.getCacheStatus();
+    return {
+      ...cacheStatus,
+      isInitialized: this.isInitialized,
+      lastCheckTime: this.lastCheckTime
+    };
+  }
+
+  /**
+   * AlertCache를 초기화합니다.
+   */
+  clearAlertCache(): void {
+    this.alertCache.clearCache();
+    this.isInitialized = false;
+    this.lastCheckTime = null;
+    logger.info('WeatherService AlertCache 초기화 완료');
+  }
+
+  /**
+   * 캐시된 특보들을 조회합니다.
+   * @returns 캐시된 특보 배열
+   */
+  getCachedAlerts() {
+    return this.alertCache.getAllCachedAlerts();
   }
 }

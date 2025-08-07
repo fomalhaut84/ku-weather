@@ -17,7 +17,8 @@
       "Bash(git merge-tool:*)",
       "Bash(git fetch:*)",
       "Bash(gh issue create:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(gh issue close:*)"
     ],
     "deny": []
   }
