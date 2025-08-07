@@ -190,7 +190,7 @@ describe('AlertCache', () => {
         expect(changes[0].description).toContain('내용 변경');
       });
 
-      it('should detect time changes', () => {
+      it('should detect announcement time changes', () => {
         alertCache.updateCache([mockAlert1]);
         
         const modifiedAlert = { ...mockAlert1, TM_FC: '202501071000' };
@@ -198,6 +198,18 @@ describe('AlertCache', () => {
         
         expect(changes).toHaveLength(1);
         expect(changes[0].type).toBe('MODIFIED');
+        expect(changes[0].description).toContain('내용 변경');
+      });
+
+      it('should detect effective time extensions', () => {
+        alertCache.updateCache([mockAlert1]);
+        
+        const extendedAlert = { ...mockAlert1, TM_EF: '202501071200' }; // 발효시각만 변경
+        const changes = alertCache.detectChanges([extendedAlert]);
+        
+        expect(changes).toHaveLength(1);
+        expect(changes[0].type).toBe('TIME_EXTENDED');
+        expect(changes[0].description).toContain('발효시각 연장');
       });
     });
 

@@ -127,10 +127,21 @@ export class AlertCache {
       }
     }
 
-    // 기타 내용 변경 감지
-    if (previous.command !== current.command || 
-        previous.announcedAt !== current.announcedAt ||
+    // 발효시각만 변경된 경우 (명령과 발표시각은 동일)
+    if (previous.command === current.command && 
+        previous.announcedAt === current.announcedAt && 
         previous.effectiveAt !== current.effectiveAt) {
+      return {
+        type: 'TIME_EXTENDED',
+        current,
+        previous,
+        description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 발효시각 연장`
+      };
+    }
+    
+    // 기타 내용 변경 감지 (명령 또는 발표시각 변경)
+    if (previous.command !== current.command || 
+        previous.announcedAt !== current.announcedAt) {
       return {
         type: 'MODIFIED',
         current,

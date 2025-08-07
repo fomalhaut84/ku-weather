@@ -2,6 +2,10 @@ import { WeatherService } from './services/weatherService';
 import { logger } from './utils/logger';
 import { config } from './config';
 
+// UTF-8 출력 설정
+process.stdout.setDefaultEncoding('utf8');
+process.stderr.setDefaultEncoding('utf8');
+
 function getWarningTypeName(warningCode: string): string {
   const warningTypes: Record<string, string> = {
     'W': '강풍',
@@ -96,6 +100,7 @@ async function startMonitoring(weatherService: WeatherService) {
             'RESOLVED': '✅', 
             'LEVEL_UP': '⬆️',
             'LEVEL_DOWN': '⬇️',
+            'TIME_EXTENDED': '⏰',
             'MODIFIED': '🔄'
           };
           

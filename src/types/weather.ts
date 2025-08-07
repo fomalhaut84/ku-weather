@@ -141,5 +141,7 @@ export type AlertChangeType =
   | 'LEVEL_UP'
   /** 수준 하향: 경보 → 주의보 등 수준이 내려감 */    
   | 'LEVEL_DOWN'
+  /** 시간 연장: 발효시각이 변경됨 */
+  | 'TIME_EXTENDED'
   /** 내용 변경: 동일 수준에서 내용이 변경됨 */  
   | 'MODIFIED';
