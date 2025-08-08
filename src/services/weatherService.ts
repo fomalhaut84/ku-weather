@@ -1,6 +1,7 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, CurrentWeatherAlert, CurrentWeatherApiParams } from '../types/weather';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, RawWeatherAlertResponse, RawCurrentWeatherResponse, CurrentWeatherApiParams } from '../types/weather';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
+import * as iconv from 'iconv-lite';
 
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
@@ -41,7 +42,7 @@ export class WeatherService {
         logger.debug('최초 실행: 현재 특보현황 조회');
         // 최초 실행: 현재 특보현황 API 사용
         const currentAlerts = await this.fetchCurrentWeatherAlerts();
-        allAlerts = currentAlerts.map(alert => this.convertCurrentToWeatherAlert(alert));
+        allAlerts = currentAlerts.map(alert => this.convertRawCurrentToWeatherAlert(alert));
       } else {
         logger.debug('증분 업데이트: 마지막 확인 이후 데이터만 조회');
         // 증분 업데이트: 마지막 확인 시점 + 안전 마진
@@ -524,28 +525,16 @@ export class WeatherService {
         
         if (fields.length >= 11) {
           const alert: WeatherAlert = {
+            REG_ID: fields[4],      // 특보구역코드
+            REG_NAME: this.getRegionName(fields[4]), // 특보구역명
             TM_FC: fields[0],       // 발표시각
             TM_EF: fields[1],       // 발효시각
-            TM_IN: fields[2],       // 입력시각
-            STN: fields[3],         // 발표관서
-            REG_ID: fields[4],      // 특보구역코드
             WRN: fields[5],         // 특보종류코드
             LVL: fields[6],         // 특보수준
             CMD: fields[7],         // 특보명령
-            GRD: fields[8],         // 태풍경보시 등급
-            CNT: fields[9],         // 작업순번
-            RPT: fields[10],        // 특보 발송구분
-            // API에서 제공되지 않는 필드들은 기본값으로 설정
-            TM_ST: '',              // 시작시각
-            TM_ED: '',              // 종료시각
-            REG_SP: '',             // 특성
             REG_UP: '',             // 상위 특보구역코드
             REG_KO: '',             // 특보구역명(약어)
-            REG_NAME: this.getRegionName(fields[4]), // 특보구역명
-            STN_ID: fields[3],      // 발표관서 (STN과 동일)
-            TM_SEQ: '',             // 발표번호
-            MAN_FC: '',             // 예보관명
-            MAN_IN: ''              // 입력자명
+            REG_UP_KO: ''           // 상위 특보구역명
           };
           
           alerts.push(alert);
@@ -557,7 +546,7 @@ export class WeatherService {
 
     return alerts;
   }
-
+  
   private getRegionName(regId: string): string {
     // 먼저 캐시에서 찾기
     const cachedName = this.regionCache.get(regId);
@@ -940,7 +929,7 @@ export class WeatherService {
    * @param tm 기준시각 (년월일시분 KST)
    * @returns 현재 특보 배열
    */
-  async fetchCurrentWeatherAlerts(fe: 'f' | 'e' = 'f', tm?: string): Promise<CurrentWeatherAlert[]> {
+  async fetchCurrentWeatherAlerts(fe: 'f' | 'e' = 'f', tm?: string): Promise<RawCurrentWeatherResponse[]> {
     try {
       const params: CurrentWeatherApiParams = {
         fe,
@@ -969,7 +958,9 @@ export class WeatherService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseText = await response.text();
+      // EUC-KR 인코딩된 응답을 UTF-8로 변환
+      const responseBuffer = await response.arrayBuffer();
+      const responseText = iconv.decode(Buffer.from(responseBuffer), 'euc-kr');
       logger.debug(`현재 특보현황 API 응답: ${responseText.substring(0, 200)}...`);
 
       const currentAlerts = this.parseCurrentWeatherCSVResponse(responseText);
@@ -991,9 +982,9 @@ export class WeatherService {
    * @param responseText CSV 형태의 응답 텍스트
    * @returns 현재 특보 배열
    */
-  private parseCurrentWeatherCSVResponse(responseText: string): CurrentWeatherAlert[] {
+  private parseCurrentWeatherCSVResponse(responseText: string): RawCurrentWeatherResponse[] {
     const lines = responseText.split('\n');
-    const alerts: CurrentWeatherAlert[] = [];
+    const alerts: RawCurrentWeatherResponse[] = [];
 
     for (const line of lines) {
       // 주석이나 헤더 라인 건너뛰기
@@ -1006,7 +997,7 @@ export class WeatherService {
         const fields = line.split(',').map(field => field.trim());
         
         if (fields.length >= 9) {
-          const alert: CurrentWeatherAlert = {
+          const alert: RawCurrentWeatherResponse = {
             REG_UP: fields[0],      // 상위 특보구역코드
             REG_UP_KO: fields[1],   // 상위 특보구역명
             REG_ID: fields[2],      // 특보구역코드
@@ -1029,12 +1020,12 @@ export class WeatherService {
   }
 
   /**
-   * CurrentWeatherAlert를 WeatherAlert로 변환합니다.
+   * RawCurrentWeatherResponse를 WeatherAlert로 변환합니다.
    * 기존 AlertCache와 호환성을 위해 사용합니다.
    * @param currentAlert 현재 특보현황 데이터
    * @returns WeatherAlert 형태로 변환된 데이터
    */
-  private convertCurrentToWeatherAlert(currentAlert: CurrentWeatherAlert): WeatherAlert {
+  private convertRawCurrentToWeatherAlert(currentAlert: RawCurrentWeatherResponse): WeatherAlert {
     // 지역명 결정: 1) REG_KO 2) getRegionName() 3) REG_UP_KO fallback
     let regionName = '';
     if (currentAlert.REG_KO && currentAlert.REG_KO.trim()) {
@@ -1058,19 +1049,8 @@ export class WeatherService {
       TM_EF: currentAlert.TM_EF,
       REG_UP: currentAlert.REG_UP,
       REG_KO: currentAlert.REG_KO,
-      // 현재 특보현황 API에서 제공되지 않는 필드들
-      TM_ST: '',            // 시작시각 (현재 API에 없음)
-      TM_ED: '',            // 종료시각 (현재 API에 없음) 
-      REG_SP: '',           // 특성 (현재 API에 없음)
-      TM_IN: currentAlert.TM_FC,  // 입력시각 → 발표시각으로 대체
-      STN: currentAlert.REG_UP_KO || '', // 발표관서 → 상위지역명으로 대체
-      STN_ID: currentAlert.REG_UP || '', // 발표관서ID → 상위지역코드로 대체
-      GRD: '',              // 태풍경보시 등급 (현재 API에 없음)
-      CNT: '1',             // 작업순번 → 기본값 1
-      RPT: '1',             // 통보문 발송구분 → 기본값 1
-      TM_SEQ: '',           // 발표번호 (현재 API에 없음)
-      MAN_FC: '',           // 예보관명 (현재 API에 없음)
-      MAN_IN: ''            // 입력자명 (현재 API에 없음)
+      // 현재 특보현황 API의 상위 특보구역명 필드
+      REG_UP_KO: currentAlert.REG_UP_KO || '' // 상위 특보구역명
     };
   }
 
@@ -1083,7 +1063,7 @@ export class WeatherService {
       logger.info('현재 특보현황으로 캐시 초기화 시작');
       
       const currentAlerts = await this.fetchCurrentWeatherAlerts();
-      const convertedAlerts = currentAlerts.map(alert => this.convertCurrentToWeatherAlert(alert));
+      const convertedAlerts = currentAlerts.map(alert => this.convertRawCurrentToWeatherAlert(alert));
       
       // AlertCache에 현재 특보들을 저장 (변동 감지는 하지 않음)
       this.alertCache.updateCache(convertedAlerts);

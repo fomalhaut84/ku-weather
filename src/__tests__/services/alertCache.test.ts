@@ -16,20 +16,9 @@ describe('AlertCache', () => {
     CMD: '1',
     TM_FC: '202501070900',
     TM_EF: '202501071000',
-    TM_IN: '202501070850',
-    STN: '서울지방기상청',
-    STN_ID: 'KMA001',
-    TM_ST: '',
-    TM_ED: '',
-    REG_SP: '',
     REG_UP: '',
     REG_KO: '서울',
-    GRD: '',
-    CNT: '4',
-    RPT: '1',
-    TM_SEQ: '',
-    MAN_FC: '',
-    MAN_IN: ''
+    REG_UP_KO: '서울특별시'
   };
 
   const mockAlert2: WeatherAlert = {

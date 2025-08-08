@@ -1,25 +1,18 @@
+/**
+ * 기상특보 핵심 데이터 구조
+ * 두 API(wrn_met_data, wrn_now_data_new)의 공통 필드들로 구성
+ */
 export interface WeatherAlert {
-  REG_ID: string;        // 특보구역코드
-  TM_ST: string;         // 시작시각(년월일시분,KST)
-  TM_ED: string;         // 종료시각(년월일시분,KST)
-  REG_SP: string;        // 특성
-  REG_UP: string;        // 상위 특보구역코드
-  REG_KO: string;        // 특보구역명(약어)
-  REG_NAME: string;      // 특보구역명
-  TM_FC: string;         // 발표시각(KST)
-  TM_EF: string;         // 발효시각(KST)
-  TM_IN: string;         // 입력시각(KST)
-  STN: string;           // 발표관서
-  WRN: string;           // 특보종류코드
-  LVL: string;           // 특보수준
-  CMD: string;           // 특보명령
-  GRD: string;           // 태풍경보시 등급
-  CNT: string;           // 작업상태
-  RPT: string;           // 통보문 발송구분
-  STN_ID: string;        // 발표관서
-  TM_SEQ: string;        // 발표번호
-  MAN_FC: string;        // 예보관명
-  MAN_IN: string;        // 입력자명
+  REG_ID: string;        // 특보구역코드 (필수)
+  REG_UP: string;        // 상위 특보구역코드 (REG_ID로부터 도출 가능)
+  REG_KO: string;        // 특보구역명(약어) (REG_ID로부터 도출 가능)  
+  REG_UP_KO: string;     // 상위 특보구역명 (REG_ID로부터 도출 가능)
+  REG_NAME: string;      // 특보구역명 (REG_ID로부터 도출)
+  TM_FC: string;         // 발표시각(KST) (필수)
+  TM_EF: string;         // 발효시각(KST) (필수)
+  WRN: string;           // 특보종류코드 (필수)
+  LVL: string;           // 특보수준 (필수)
+  CMD: string;           // 특보명령 (필수)
 }
 
 export type WeatherWarningType = 'W' | 'R' | 'C' | 'D' | 'O' | 'N' | 'V' | 'T' | 'S' | 'Y' | 'H' | 'F';
@@ -61,9 +54,26 @@ export interface WeatherRegion {
 }
 
 /**
- * 현재 특보현황 API 응답 구조
+ * 특보 이력 API (wrn_met_data) 원시 응답 구조 
  */
-export interface CurrentWeatherAlert {
+export interface RawWeatherAlertResponse {
+  TM_FC: string;         // 발표시각
+  TM_EF: string;         // 발효시각  
+  TM_IN: string;         // 입력시각
+  STN: string;           // 발표관서
+  REG_ID: string;        // 특보구역코드
+  WRN: string;           // 특보종류코드
+  LVL: string;           // 특보수준
+  CMD: string;           // 특보명령
+  GRD: string;           // 태풍경보시 등급
+  CNT: string;           // 작업순번
+  RPT: string;           // 특보 발송구분
+}
+
+/**
+ * 현재 특보현황 API (wrn_now_data_new) 원시 응답 구조
+ */
+export interface RawCurrentWeatherResponse {
   REG_UP: string;        // 상위 특보구역코드
   REG_UP_KO: string;     // 상위 특보구역명
   REG_ID: string;        // 특보구역코드

@@ -1,5 +1,6 @@
 import { WeatherService } from '../../services/weatherService';
 import { WeatherAlert, WeatherRegion } from '../../types/weather';
+import * as iconv from 'iconv-lite';
 
 // fetch 모킹
 const mockFetch = jest.fn();
@@ -97,15 +98,16 @@ describe('WeatherService', () => {
 
       expect(result).toHaveLength(2);
       expect(result[0]).toMatchObject({
+        REG_ID: 'L1020110',
+        REG_NAME: '강릉시평지',
         TM_FC: '202508011500',
         TM_EF: '202508011600',
-        TM_IN: '202508011400',
-        STN: '184',
-        REG_ID: 'L1020110',
         WRN: 'H',
         LVL: '2',
         CMD: '1',
-        REG_NAME: '강릉시평지'
+        REG_UP: '',
+        REG_KO: '',
+        REG_UP_KO: ''
       });
     });
 
@@ -467,9 +469,12 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       const mockResponse = `# 현재 특보현황 API 응답
 L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
 
+      // EUC-KR로 인코딩하여 실제 API 응답 시뮤레이션
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const alerts = await weatherService.fetchCurrentWeatherAlerts();
@@ -499,9 +504,12 @@ L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100
     });
 
     it('should handle invalid response format', async () => {
+      const invalidData = 'invalid data';
+      const eucKrBuffer = iconv.encode(invalidData, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => 'invalid data'
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const alerts = await weatherService.fetchCurrentWeatherAlerts();
@@ -509,9 +517,12 @@ L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100
     });
 
     it('should build correct API URL with parameters', async () => {
+      const emptyResponse = '# empty';
+      const eucKrBuffer = iconv.encode(emptyResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => '# empty'
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       await weatherService.fetchCurrentWeatherAlerts('e', '202501071000');
@@ -533,9 +544,11 @@ L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100
 L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =
 L1010000, 경기도, L1010200, 광명시, 202501071030, 202501071130, R, 3, 1, =`;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const alerts = await weatherService.fetchCurrentWeatherAlerts();
@@ -557,9 +570,11 @@ L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100
 # 다른 주석
 `;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const alerts = await weatherService.fetchCurrentWeatherAlerts();
@@ -571,9 +586,11 @@ L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100
 L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =
 incomplete, line`;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const alerts = await weatherService.fetchCurrentWeatherAlerts();
@@ -585,13 +602,15 @@ incomplete, line`;
     it('should convert CurrentWeatherAlert to WeatherAlert correctly', async () => {
       const mockResponse = `L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       const currentAlerts = await weatherService.fetchCurrentWeatherAlerts();
-      const convertedAlert = (weatherService as any).convertCurrentToWeatherAlert(currentAlerts[0]);
+      const convertedAlert = (weatherService as any).convertRawCurrentToWeatherAlert(currentAlerts[0]);
 
       expect(convertedAlert.REG_ID).toBe('L1100110');
       expect(convertedAlert.REG_NAME).toBe('서울강남구');
@@ -603,31 +622,27 @@ incomplete, line`;
       expect(convertedAlert.REG_UP).toBe('L1100000');
       expect(convertedAlert.REG_KO).toBe('서울강남구');
       
-      // 개선된 매핑 확인
-      expect(convertedAlert.TM_ST).toBe('');
-      expect(convertedAlert.TM_ED).toBe('');
-      expect(convertedAlert.TM_IN).toBe('202501071000'); // 발표시각으로 대체
-      expect(convertedAlert.STN).toBe('서울특별시'); // 상위지역명으로 대체
-      expect(convertedAlert.STN_ID).toBe('L1100000'); // 상위지역코드로 대체
-      expect(convertedAlert.CNT).toBe('1'); // 기본값
-      expect(convertedAlert.RPT).toBe('1'); // 기본값
+      // 상위지역 정보 확인
+      expect(convertedAlert.REG_UP_KO).toBe('서울특별시'); // 상위지역명
     });
 
     it('should handle region name fallback correctly', () => {
       // REG_KO가 없고, getRegionName이 매핑을 찾지 못하는 경우
       const mockResponse = `L9999999, 알수없는상위, L9999998, , 202501071000, 202501071100, H, 2, 1, =`;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       return weatherService.fetchCurrentWeatherAlerts().then(currentAlerts => {
-        const convertedAlert = (weatherService as any).convertCurrentToWeatherAlert(currentAlerts[0]);
+        const convertedAlert = (weatherService as any).convertRawCurrentToWeatherAlert(currentAlerts[0]);
         
         // REG_KO가 비어있고, getRegionName도 매핑을 찾지 못한 경우 REG_UP_KO를 사용
         expect(convertedAlert.REG_NAME).toBe('알수없는상위');
-        expect(convertedAlert.STN).toBe('알수없는상위');
+        expect(convertedAlert.REG_UP_KO).toBe('알수없는상위');
       });
     });
   });
@@ -636,9 +651,11 @@ incomplete, line`;
     it('should initialize cache with current alerts', async () => {
       const mockResponse = `L1100000, 서울특별시, L1100110, 서울강남구, 202501071000, 202501071100, H, 2, 1, =`;
 
+      const eucKrBuffer = iconv.encode(mockResponse, 'euc-kr');
+      
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockResponse
+        arrayBuffer: async () => eucKrBuffer.buffer
       });
 
       await weatherService.initializeCacheWithCurrentAlerts();
