@@ -574,6 +574,7 @@ export class WeatherService {
             REG_SP: '',             // 특성
             REG_UP: '',             // 상위 특보구역코드
             REG_KO: '',             // 특보구역명(약어)
+            REG_UP_KO: '',          // 상위 특보구역명
             REG_NAME: this.getRegionName(fields[4]), // 특보구역명
             STN_ID: fields[3],      // 발표관서 (STN과 동일)
             TM_SEQ: '',             // 발표번호

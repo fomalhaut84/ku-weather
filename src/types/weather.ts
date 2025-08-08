@@ -10,9 +10,21 @@ export interface WeatherAlert {
   REG_NAME: string;      // 특보구역명 (REG_ID로부터 도출)
   TM_FC: string;         // 발표시각(KST) (필수)
   TM_EF: string;         // 발효시각(KST) (필수)
+  TM_IN: string;         // 입력시각(KST)
+  STN: string;           // 발표관서
   WRN: string;           // 특보종류코드 (필수)
   LVL: string;           // 특보수준 (필수)
   CMD: string;           // 특보명령 (필수)
+  GRD: string;           // 태풍경보시 등급
+  CNT: string;           // 작업순번
+  RPT: string;           // 특보 발송구분
+  TM_ST: string;         // 시작시각(년월일시분,KST)
+  TM_ED: string;         // 종료시각(년월일시분,KST)
+  REG_SP: string;        // 특성
+  STN_ID: string;        // 발표관서
+  TM_SEQ: string;        // 발표번호
+  MAN_FC: string;        // 예보관명
+  MAN_IN: string;        // 입력자명
 }
 
 export type WeatherWarningType = 'W' | 'R' | 'C' | 'D' | 'O' | 'N' | 'V' | 'T' | 'S' | 'Y' | 'H' | 'F';

@@ -25,15 +25,27 @@ describe('SlackService', () => {
 
   const createMockAlert = (overrides: Partial<WeatherAlert> = {}): WeatherAlert => ({
     TM_FC: '202508011500',
-    TM_EF: '202508011600', 
+    TM_EF: '202508011600',
+    TM_IN: '202508011400',
+    STN: '184',
     REG_ID: 'L1020110',
     WRN: 'H',
     LVL: '2',
     CMD: '1',
+    GRD: '00',
+    CNT: '1',
+    RPT: '101',
+    TM_ST: '',
+    TM_ED: '',
+    REG_SP: '',
     REG_UP: '',
     REG_KO: '',
-    REG_NAME: '서울강북',
     REG_UP_KO: '서울특별시',
+    REG_NAME: '서울강북',
+    STN_ID: '184',
+    TM_SEQ: '',
+    MAN_FC: '',
+    MAN_IN: '',
     ...overrides
   });
 

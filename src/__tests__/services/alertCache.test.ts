@@ -16,9 +16,21 @@ describe('AlertCache', () => {
     CMD: '1',
     TM_FC: '202501070900',
     TM_EF: '202501071000',
+    TM_IN: '202501070800',
+    STN: '184',
+    GRD: '00',
+    CNT: '1',
+    RPT: '101',
+    TM_ST: '',
+    TM_ED: '',
+    REG_SP: '',
     REG_UP: '',
     REG_KO: '서울',
-    REG_UP_KO: '서울특별시'
+    REG_UP_KO: '서울특별시',
+    STN_ID: '184',
+    TM_SEQ: '',
+    MAN_FC: '',
+    MAN_IN: ''
   };
 
   const mockAlert2: WeatherAlert = {
