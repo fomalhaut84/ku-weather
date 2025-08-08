@@ -296,6 +296,7 @@ npm run test:ci
  - 특보자료 url 형식 : https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php?reg=0&wrn=A&tmfc1=201501010000&tmfc2=201502010000&disp=0&help=1&authKey=KsyZ36GfRYSMmd-hn4WEnA
  - baseUrl : https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php
  - 요청인자
+
 | 인자명 | 의미 | 설명 | 
 | ------ | ------ | ------ |
 | wrn | 특보종류 | W: 강풍, R: 호우, C: 한파, D: 건조, O: 해일, N: 지진해일, V:풍랑, T: 태풍, S: 대설, Y: 황사, H: 폭염, F: 안개 (없으면 전체) | 
@@ -306,7 +307,9 @@ npm run test:ci
 | disp | 표출단계 | 0(기본), 1(+특보내용), 2(+입력자) | 
 | help | 도움말 | 1(도움말 정보 표시) | 
 | authKey | 인증키 | 발급된 API 인증키 | 
+
 - 출력결과
+
 | 변수명 | 의미(단위) | 변수명 | 의미(단위) |
 |--------|------------|--------|------------|
 | REG_ID | 톡보구역코드 | TM_ST | 시작시각(년월일시분,KST) |

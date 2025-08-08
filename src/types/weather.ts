@@ -53,47 +53,6 @@ export interface WeatherRegion {
   REG_NAME: string;  // 특보구역명
 }
 
-/**
- * 특보 이력 API (wrn_met_data) 원시 응답 구조 
- */
-export interface RawWeatherAlertResponse {
-  TM_FC: string;         // 발표시각
-  TM_EF: string;         // 발효시각  
-  TM_IN: string;         // 입력시각
-  STN: string;           // 발표관서
-  REG_ID: string;        // 특보구역코드
-  WRN: string;           // 특보종류코드
-  LVL: string;           // 특보수준
-  CMD: string;           // 특보명령
-  GRD: string;           // 태풍경보시 등급
-  CNT: string;           // 작업순번
-  RPT: string;           // 특보 발송구분
-}
-
-/**
- * 현재 특보현황 API (wrn_now_data_new) 원시 응답 구조
- */
-export interface RawCurrentWeatherResponse {
-  REG_UP: string;        // 상위 특보구역코드
-  REG_UP_KO: string;     // 상위 특보구역명
-  REG_ID: string;        // 특보구역코드
-  REG_KO: string;        // 특보구역명
-  TM_FC: string;         // 발표시각(년월일시분,KST)
-  TM_EF: string;         // 발효시각(년월일시분,KST)
-  WRN: string;           // 특보종류
-  LVL: string;           // 특보수준
-  CMD: string;           // 특보명령
-}
-
-/**
- * 현재 특보현황 조회 API 파라미터
- */
-export interface CurrentWeatherApiParams {
-  fe?: 'f' | 'e';        // 기준 (f: 발표시간기준(default), e: 발효시간기준)
-  tm?: string;           // 기준시각 (년월일시분 KST)
-  help?: number;         // 도움말 (1: 도움말 정보 표시)
-  authKey: string;       // 발급된 API 인증키
-}
 
 /**
  * 특보 변동 감지를 위한 타입 정의

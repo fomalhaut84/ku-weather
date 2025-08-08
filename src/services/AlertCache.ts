@@ -78,11 +78,11 @@ export class AlertCache {
       }
     }
 
-    // 2. 해제된 특보 감지
-    for (const [key, previous] of this.cache) {
-      const current = currentCachedAlerts.get(key);
-      if (!current || this.isResolvedCommand(current.command)) {
-        // 해제된 특보 (완전히 사라졌거나 해제 명령)
+    // 2. 해제된 특보 감지 (CMD가 해제 명령인 경우만)
+    for (const [key, current] of currentCachedAlerts) {
+      const previous = this.cache.get(key);
+      if (previous && this.isResolvedCommand(current.command)) {
+        // 해제 명령이 포함된 특보
         changes.push({
           type: 'RESOLVED',
           previous,

@@ -124,17 +124,28 @@ describe('AlertCache', () => {
     });
 
     describe('특보 해제 감지', () => {
-      it('should detect resolved alerts', () => {
-        // 초기 캐시에 두 개 특보 설정
-        alertCache.updateCache([mockAlert1, mockAlert2]);
+      it('should detect resolved alerts when CMD indicates resolution', () => {
+        // 초기 캐시에 특보 설정
+        alertCache.updateCache([mockAlert1]);
         
-        // 하나만 남김 (하나 해제됨)
-        const changes = alertCache.detectChanges([mockAlert1]);
+        // 해제 명령(CMD: '3')을 가진 특보로 변경
+        const resolvedAlert = { ...mockAlert1, CMD: '3' };
+        const changes = alertCache.detectChanges([resolvedAlert]);
         
         expect(changes).toHaveLength(1);
         expect(changes[0].type).toBe('RESOLVED');
-        expect(changes[0].previous?.regionName).toBe('경기도');
+        expect(changes[0].previous?.regionName).toBe('서울특별시');
         expect(changes[0].description).toContain('해제');
+      });
+
+      it('should not detect resolution when alert is just missing from API response', () => {
+        // 초기 캐시에 두 개 특보 설정
+        alertCache.updateCache([mockAlert1, mockAlert2]);
+        
+        // API 응답에서 하나가 누락되어도 해제로 간주하지 않음
+        const changes = alertCache.detectChanges([mockAlert1]);
+        
+        expect(changes).toHaveLength(0); // 해제로 감지하지 않음
       });
     });
 
@@ -285,12 +296,15 @@ describe('AlertCache', () => {
     it('should convert warning codes to Korean names correctly', () => {
       const alerts = [
         { ...mockAlert1, WRN: 'H' }, // 폭염
-        { ...mockAlert1, WRN: 'R' }, // 호우
-        { ...mockAlert1, WRN: 'W' }, // 강풍
+        { ...mockAlert1, WRN: 'R', REG_ID: 'L1010000' }, // 호우
+        { ...mockAlert1, WRN: 'W', REG_ID: 'L1020000' }, // 강풍
       ];
       
       alertCache.updateCache(alerts);
-      const changes = alertCache.detectChanges([]);
+      
+      // 해제 명령을 가진 특보들로 변경
+      const resolvedAlerts = alerts.map(alert => ({ ...alert, CMD: '3' }));
+      const changes = alertCache.detectChanges(resolvedAlerts);
       
       expect(changes).toHaveLength(3);
       expect(changes[0].description).toContain('폭염');
@@ -319,7 +333,10 @@ describe('AlertCache', () => {
       ];
       
       alertCache.updateCache(alerts);
-      const changes = alertCache.detectChanges([]);
+      
+      // 해제 명령을 가진 특보들로 변경
+      const resolvedAlerts = alerts.map(alert => ({ ...alert, CMD: '3' }));
+      const changes = alertCache.detectChanges(resolvedAlerts);
       
       expect(changes).toHaveLength(3);
       expect(changes[0].description).toContain('예비');
