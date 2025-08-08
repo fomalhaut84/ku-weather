@@ -78,11 +78,11 @@ export class AlertCache {
       }
     }
 
-    // 2. 해제된 특보 감지
-    for (const [key, previous] of this.cache) {
-      const current = currentCachedAlerts.get(key);
-      if (!current || this.isResolvedCommand(current.command)) {
-        // 해제된 특보 (완전히 사라졌거나 해제 명령)
+    // 2. 해제된 특보 감지 (CMD가 해제 명령인 경우만)
+    for (const [key, current] of currentCachedAlerts) {
+      const previous = this.cache.get(key);
+      if (previous && this.isResolvedCommand(current.command)) {
+        // 해제 명령이 포함된 특보
         changes.push({
           type: 'RESOLVED',
           previous,
@@ -91,8 +91,8 @@ export class AlertCache {
       }
     }
 
-    // 캐시 업데이트
-    this.updateCache(currentAlerts);
+    // 캐시 업데이트 (변동 감지 완료 후)
+    this.replaceCache(currentCachedAlerts);
     
     logger.debug(`특보 변동 감지 완료: ${changes.length}개 변동사항`);
     return changes;
@@ -127,10 +127,21 @@ export class AlertCache {
       }
     }
 
-    // 기타 내용 변경 감지
-    if (previous.command !== current.command || 
-        previous.announcedAt !== current.announcedAt ||
+    // 발효시각만 변경된 경우 (명령과 발표시각은 동일)
+    if (previous.command === current.command && 
+        previous.announcedAt === current.announcedAt && 
         previous.effectiveAt !== current.effectiveAt) {
+      return {
+        type: 'TIME_EXTENDED',
+        current,
+        previous,
+        description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 발효시각 연장`
+      };
+    }
+    
+    // 기타 내용 변경 감지 (명령 또는 발표시각 변경)
+    if (previous.command !== current.command || 
+        previous.announcedAt !== current.announcedAt) {
       return {
         type: 'MODIFIED',
         current,
@@ -160,6 +171,25 @@ export class AlertCache {
     
     this.lastUpdateTime = new Date();
     logger.debug(`특보 캐시 업데이트 완료: ${this.cache.size}개 특보`);
+  }
+
+  /**
+   * 이미 변환된 캐시 데이터로 캐시를 교체합니다.
+   * detectChanges() 메서드에서 사용하여 중복 처리를 방지합니다.
+   * @param newCache 새로운 캐시 데이터 (Map<string, CachedAlert>)
+   */
+  private replaceCache(newCache: Map<string, CachedAlert>): void {
+    this.cache.clear();
+    
+    // 해제 관련 명령이 아닌 특보만 저장
+    newCache.forEach((cached, key) => {
+      if (!this.isResolvedCommand(cached.command)) {
+        this.cache.set(key, cached);
+      }
+    });
+    
+    this.lastUpdateTime = new Date();
+    logger.debug(`특보 캐시 교체 완료: ${this.cache.size}개 특보`);
   }
 
   /**

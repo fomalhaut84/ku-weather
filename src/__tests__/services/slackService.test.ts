@@ -25,7 +25,7 @@ describe('SlackService', () => {
 
   const createMockAlert = (overrides: Partial<WeatherAlert> = {}): WeatherAlert => ({
     TM_FC: '202508011500',
-    TM_EF: '202508011600', 
+    TM_EF: '202508011600',
     TM_IN: '202508011400',
     STN: '184',
     REG_ID: 'L1020110',
@@ -33,13 +33,14 @@ describe('SlackService', () => {
     LVL: '2',
     CMD: '1',
     GRD: '00',
-    CNT: '4',
+    CNT: '1',
     RPT: '101',
     TM_ST: '',
     TM_ED: '',
     REG_SP: '',
     REG_UP: '',
     REG_KO: '',
+    REG_UP_KO: '서울특별시',
     REG_NAME: '서울강북',
     STN_ID: '184',
     TM_SEQ: '',
@@ -154,7 +155,7 @@ describe('SlackService', () => {
         TM_FC: '202508011500',
         TM_EF: '202508011600',
         LVL: '2',
-        STN: '184'
+        REG_UP_KO: '서울특별시'
       });
       
       mockFetch.mockResolvedValueOnce({
@@ -174,7 +175,7 @@ describe('SlackService', () => {
             fields: expect.arrayContaining([
               { title: '지역', value: '서울강북', short: true },
               { title: '특보수준', value: '2', short: true },
-              { title: '발표관서', value: '184', short: true }
+              { title: '상위지역', value: '서울특별시', short: true }
             ])
           })
         ]

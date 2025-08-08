@@ -16,17 +16,18 @@ describe('AlertCache', () => {
     CMD: '1',
     TM_FC: '202501070900',
     TM_EF: '202501071000',
-    TM_IN: '202501070850',
-    STN: '서울지방기상청',
-    STN_ID: 'KMA001',
+    TM_IN: '202501070800',
+    STN: '184',
+    GRD: '00',
+    CNT: '1',
+    RPT: '101',
     TM_ST: '',
     TM_ED: '',
     REG_SP: '',
     REG_UP: '',
     REG_KO: '서울',
-    GRD: '',
-    CNT: '4',
-    RPT: '1',
+    REG_UP_KO: '서울특별시',
+    STN_ID: '184',
     TM_SEQ: '',
     MAN_FC: '',
     MAN_IN: ''
@@ -135,17 +136,28 @@ describe('AlertCache', () => {
     });
 
     describe('특보 해제 감지', () => {
-      it('should detect resolved alerts', () => {
-        // 초기 캐시에 두 개 특보 설정
-        alertCache.updateCache([mockAlert1, mockAlert2]);
+      it('should detect resolved alerts when CMD indicates resolution', () => {
+        // 초기 캐시에 특보 설정
+        alertCache.updateCache([mockAlert1]);
         
-        // 하나만 남김 (하나 해제됨)
-        const changes = alertCache.detectChanges([mockAlert1]);
+        // 해제 명령(CMD: '3')을 가진 특보로 변경
+        const resolvedAlert = { ...mockAlert1, CMD: '3' };
+        const changes = alertCache.detectChanges([resolvedAlert]);
         
         expect(changes).toHaveLength(1);
         expect(changes[0].type).toBe('RESOLVED');
-        expect(changes[0].previous?.regionName).toBe('경기도');
+        expect(changes[0].previous?.regionName).toBe('서울특별시');
         expect(changes[0].description).toContain('해제');
+      });
+
+      it('should not detect resolution when alert is just missing from API response', () => {
+        // 초기 캐시에 두 개 특보 설정
+        alertCache.updateCache([mockAlert1, mockAlert2]);
+        
+        // API 응답에서 하나가 누락되어도 해제로 간주하지 않음
+        const changes = alertCache.detectChanges([mockAlert1]);
+        
+        expect(changes).toHaveLength(0); // 해제로 감지하지 않음
       });
     });
 
@@ -190,7 +202,7 @@ describe('AlertCache', () => {
         expect(changes[0].description).toContain('내용 변경');
       });
 
-      it('should detect time changes', () => {
+      it('should detect announcement time changes', () => {
         alertCache.updateCache([mockAlert1]);
         
         const modifiedAlert = { ...mockAlert1, TM_FC: '202501071000' };
@@ -198,6 +210,18 @@ describe('AlertCache', () => {
         
         expect(changes).toHaveLength(1);
         expect(changes[0].type).toBe('MODIFIED');
+        expect(changes[0].description).toContain('내용 변경');
+      });
+
+      it('should detect effective time extensions', () => {
+        alertCache.updateCache([mockAlert1]);
+        
+        const extendedAlert = { ...mockAlert1, TM_EF: '202501071200' }; // 발효시각만 변경
+        const changes = alertCache.detectChanges([extendedAlert]);
+        
+        expect(changes).toHaveLength(1);
+        expect(changes[0].type).toBe('TIME_EXTENDED');
+        expect(changes[0].description).toContain('발효시각 연장');
       });
     });
 
@@ -284,12 +308,15 @@ describe('AlertCache', () => {
     it('should convert warning codes to Korean names correctly', () => {
       const alerts = [
         { ...mockAlert1, WRN: 'H' }, // 폭염
-        { ...mockAlert1, WRN: 'R' }, // 호우
-        { ...mockAlert1, WRN: 'W' }, // 강풍
+        { ...mockAlert1, WRN: 'R', REG_ID: 'L1010000' }, // 호우
+        { ...mockAlert1, WRN: 'W', REG_ID: 'L1020000' }, // 강풍
       ];
       
       alertCache.updateCache(alerts);
-      const changes = alertCache.detectChanges([]);
+      
+      // 해제 명령을 가진 특보들로 변경
+      const resolvedAlerts = alerts.map(alert => ({ ...alert, CMD: '3' }));
+      const changes = alertCache.detectChanges(resolvedAlerts);
       
       expect(changes).toHaveLength(3);
       expect(changes[0].description).toContain('폭염');
@@ -318,7 +345,10 @@ describe('AlertCache', () => {
       ];
       
       alertCache.updateCache(alerts);
-      const changes = alertCache.detectChanges([]);
+      
+      // 해제 명령을 가진 특보들로 변경
+      const resolvedAlerts = alerts.map(alert => ({ ...alert, CMD: '3' }));
+      const changes = alertCache.detectChanges(resolvedAlerts);
       
       expect(changes).toHaveLength(3);
       expect(changes[0].description).toContain('예비');

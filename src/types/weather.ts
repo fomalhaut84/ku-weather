@@ -1,21 +1,26 @@
+/**
+ * 기상특보 핵심 데이터 구조
+ * 두 API(wrn_met_data, wrn_now_data_new)의 공통 필드들로 구성
+ */
 export interface WeatherAlert {
-  REG_ID: string;        // 특보구역코드
+  REG_ID: string;        // 특보구역코드 (필수)
+  REG_UP: string;        // 상위 특보구역코드 (REG_ID로부터 도출 가능)
+  REG_KO: string;        // 특보구역명(약어) (REG_ID로부터 도출 가능)  
+  REG_UP_KO: string;     // 상위 특보구역명 (REG_ID로부터 도출 가능)
+  REG_NAME: string;      // 특보구역명 (REG_ID로부터 도출)
+  TM_FC: string;         // 발표시각(KST) (필수)
+  TM_EF: string;         // 발효시각(KST) (필수)
+  TM_IN: string;         // 입력시각(KST)
+  STN: string;           // 발표관서
+  WRN: string;           // 특보종류코드 (필수)
+  LVL: string;           // 특보수준 (필수)
+  CMD: string;           // 특보명령 (필수)
+  GRD: string;           // 태풍경보시 등급
+  CNT: string;           // 작업순번
+  RPT: string;           // 특보 발송구분
   TM_ST: string;         // 시작시각(년월일시분,KST)
   TM_ED: string;         // 종료시각(년월일시분,KST)
   REG_SP: string;        // 특성
-  REG_UP: string;        // 상위 특보구역코드
-  REG_KO: string;        // 특보구역명(약어)
-  REG_NAME: string;      // 특보구역명
-  TM_FC: string;         // 발표시각(KST)
-  TM_EF: string;         // 발효시각(KST)
-  TM_IN: string;         // 입력시각(KST)
-  STN: string;           // 발표관서
-  WRN: string;           // 특보종류코드
-  LVL: string;           // 특보수준
-  CMD: string;           // 특보명령
-  GRD: string;           // 태풍경보시 등급
-  CNT: string;           // 작업상태
-  RPT: string;           // 통보문 발송구분
   STN_ID: string;        // 발표관서
   TM_SEQ: string;        // 발표번호
   MAN_FC: string;        // 예보관명
@@ -59,6 +64,7 @@ export interface WeatherRegion {
   REG_KO: string;    // 특보구역명(약어)
   REG_NAME: string;  // 특보구역명
 }
+
 
 /**
  * 특보 변동 감지를 위한 타입 정의
@@ -116,5 +122,7 @@ export type AlertChangeType =
   | 'LEVEL_UP'
   /** 수준 하향: 경보 → 주의보 등 수준이 내려감 */    
   | 'LEVEL_DOWN'
+  /** 시간 연장: 발효시각이 변경됨 */
+  | 'TIME_EXTENDED'
   /** 내용 변경: 동일 수준에서 내용이 변경됨 */  
   | 'MODIFIED';

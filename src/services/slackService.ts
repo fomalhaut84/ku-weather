@@ -42,8 +42,8 @@ export class SlackService {
                 short: true
               },
               {
-                title: '발표관서',
-                value: alert.STN,
+                title: '상위지역',
+                value: alert.REG_UP_KO || '알 수 없음',
                 short: true
               }
             ],
