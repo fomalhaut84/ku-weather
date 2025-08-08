@@ -60,30 +60,6 @@ export interface WeatherRegion {
   REG_NAME: string;  // 특보구역명
 }
 
-/**
- * 현재 특보현황 API 응답 구조
- */
-export interface CurrentWeatherAlert {
-  REG_UP: string;        // 상위 특보구역코드
-  REG_UP_KO: string;     // 상위 특보구역명
-  REG_ID: string;        // 특보구역코드
-  REG_KO: string;        // 특보구역명
-  TM_FC: string;         // 발표시각(년월일시분,KST)
-  TM_EF: string;         // 발효시각(년월일시분,KST)
-  WRN: string;           // 특보종류
-  LVL: string;           // 특보수준
-  CMD: string;           // 특보명령
-}
-
-/**
- * 현재 특보현황 조회 API 파라미터
- */
-export interface CurrentWeatherApiParams {
-  fe?: 'f' | 'e';        // 기준 (f: 발표시간기준(default), e: 발효시간기준)
-  tm?: string;           // 기준시각 (년월일시분 KST)
-  help?: number;         // 도움말 (1: 도움말 정보 표시)
-  authKey: string;       // 발급된 API 인증키
-}
 
 /**
  * 특보 변동 감지를 위한 타입 정의
