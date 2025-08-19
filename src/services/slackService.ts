@@ -72,12 +72,12 @@ export class SlackService {
             title: change.description,
             fields: [
               {
-                title: '지역',
+                title: '📍 지역',
                 value: alert.regionName,
                 short: true
               },
               {
-                title: '특보종류',
+                title: '⚠️ 특보종류',
                 value: this.getWarningTypeName(alert.warningType),
                 short: true
               }
@@ -159,12 +159,12 @@ export class SlackService {
     // 공통 필드들
     attachment.fields.push(
       {
-        title: '발표시각',
+        title: '📢 발표시각',
         value: this.formatDateTime(alert.announcedAt),
         short: true
       },
       {
-        title: '발효시각', 
+        title: '⏰ 발효시각', 
         value: this.formatDateTime(alert.effectiveAt),
         short: true
       }
@@ -175,7 +175,7 @@ export class SlackService {
       case 'NEW':
         if (change.current) {
           attachment.fields.push({
-            title: '특보수준',
+            title: '📊 특보수준',
             value: this.getWarningLevel(change.current.level),
             short: true
           });
@@ -185,7 +185,7 @@ export class SlackService {
       case 'RESOLVED':
         if (change.previous) {
           attachment.fields.push({
-            title: '해제된 수준',
+            title: '❌ 해제된 수준',
             value: this.getWarningLevel(change.previous.level),
             short: true
           });
@@ -196,7 +196,7 @@ export class SlackService {
       case 'LEVEL_DOWN':
         if (change.previous && change.current) {
           attachment.fields.push({
-            title: '수준 변화',
+            title: '📈 수준 변화',
             value: `${this.getWarningLevel(change.previous.level)} → ${this.getWarningLevel(change.current.level)}`,
             short: false
           });
@@ -206,7 +206,7 @@ export class SlackService {
       case 'TIME_EXTENDED':
         if (change.previous && change.current) {
           attachment.fields.push({
-            title: '발효시각 변화',
+            title: '⏳ 발효시각 변화',
             value: `${this.formatDateTime(change.previous.effectiveAt)} → ${this.formatDateTime(change.current.effectiveAt)}`,
             short: false
           });
@@ -216,7 +216,7 @@ export class SlackService {
       case 'MODIFIED':
         if (change.current) {
           attachment.fields.push({
-            title: '현재 수준',
+            title: '📊 현재 수준',
             value: this.getWarningLevel(change.current.level),
             short: true
           });
@@ -237,6 +237,19 @@ export class SlackService {
     return levels[levelCode.trim()] || levelCode;
   }
 
+  private getWarningCommand(cmdCode: string): string {
+    const commands: Record<string, string> = {
+      '1': '발표',
+      '2': '대치',
+      '3': '해제',
+      '4': '대치해제(자동)',
+      '5': '연장',
+      '6': '변경',
+      '7': '변경해제'
+    };
+    return commands[cmdCode.trim()] || cmdCode;
+  }
+
   async sendAlert(alert: WeatherAlert): Promise<void> {
     try {
       
@@ -245,35 +258,35 @@ export class SlackService {
         attachments: [
           {
             color: alert.LVL === '1' ? 'danger' : 'warning',
-            title: `${this.getWarningTypeName(alert.WRN)} ${alert.CMD}`,
+            title: `${this.getWarningTypeName(alert.WRN)} ${this.getWarningCommand(alert.CMD)}`,
             fields: [
               {
-                title: '지역',
+                title: '📍 지역',
                 value: alert.REG_NAME,
                 short: true
               },
               {
-                title: '발령시각',
+                title: '📢 발령시각',
                 value: this.formatDateTime(alert.TM_FC),
                 short: true
               },
               {
-                title: '발효시각',
+                title: '⏰ 발효시각',
                 value: this.formatDateTime(alert.TM_EF),
                 short: true
               },
               {
-                title: '특보수준',
-                value: alert.LVL,
+                title: '📊 특보수준',
+                value: this.getWarningLevel(alert.LVL),
                 short: true
               },
               {
-                title: '상위지역',
+                title: '🏢 상위지역',
                 value: alert.REG_UP_KO || '알 수 없음',
                 short: true
               }
             ],
-            footer: '한국 기상청',
+            footer: '🌤️ 한국 기상청',
             ts: Math.floor(new Date(alert.TM_FC).getTime() / 1000)
           }
         ]
@@ -353,15 +366,31 @@ export class SlackService {
 
   private formatDateTime(dateTimeStr: string): string {
     try {
+      // YYYYMMDDHHMM 형태를 YYYY-MM-DD HH:MM 형태로 변환 (기상청 API 형식)
+      if (dateTimeStr.length === 12 && /^\d{12}$/.test(dateTimeStr)) {
+        const year = dateTimeStr.substring(0, 4);
+        const month = dateTimeStr.substring(4, 6);
+        const day = dateTimeStr.substring(6, 8);
+        const hour = dateTimeStr.substring(8, 10);
+        const minute = dateTimeStr.substring(10, 12);
+        return `${year}-${month}-${day} ${hour}:${minute}`;
+      }
+      
+      // ISO 형식이나 다른 형식 처리
       const date = new Date(dateTimeStr);
-      return date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Asia/Seoul'
-      });
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleString('ko-KR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Seoul'
+        });
+      }
+      
+      // 변환할 수 없는 경우 원본 반환
+      return dateTimeStr;
     } catch {
       return dateTimeStr;
     }

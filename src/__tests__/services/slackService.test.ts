@@ -105,7 +105,14 @@ describe('SlackService', () => {
   });
 
   describe('formatDateTime', () => {
-    it('should format date string correctly', () => {
+    it('should format 12-digit date string correctly (KMA format)', () => {
+      const service = new SlackService(testWebhookUrl);
+      
+      const result = (service as any).formatDateTime('202508011530');
+      expect(result).toBe('2025-08-01 15:30');
+    });
+
+    it('should format ISO date string correctly', () => {
       const service = new SlackService(testWebhookUrl);
       
       // Mock toLocaleString to return predictable result
@@ -120,11 +127,11 @@ describe('SlackService', () => {
       (global.Date as any).mockRestore();
     });
 
-    it('should return formatted date for invalid dates that produce Invalid Date', () => {
+    it('should return original string for invalid dates', () => {
       const service = new SlackService(testWebhookUrl);
       
       const result = (service as any).formatDateTime('invalid-date');
-      expect(result).toBe('Invalid Date');
+      expect(result).toBe('invalid-date');
     });
 
     it('should return original string when toLocaleString throws an error', () => {
@@ -132,6 +139,7 @@ describe('SlackService', () => {
       
       // Date 생성자를 모킹해서 toLocaleString에서 에러가 발생하도록 설정
       const mockDate = {
+        getTime: jest.fn().mockReturnValue(NaN), // Invalid date
         toLocaleString: jest.fn().mockImplementation(() => {
           throw new Error('toLocaleString error');
         })
@@ -143,6 +151,13 @@ describe('SlackService', () => {
       expect(result).toBe('2025-08-01T15:30:00');
       
       (global.Date as any).mockRestore();
+    });
+
+    it('should handle non-numeric 12-character strings', () => {
+      const service = new SlackService(testWebhookUrl);
+      
+      const result = (service as any).formatDateTime('abcd12345678');
+      expect(result).toBe('abcd12345678');
     });
   });
 
@@ -194,9 +209,9 @@ describe('SlackService', () => {
           expect.objectContaining({
             title: expect.stringContaining('폭염'),
             fields: expect.arrayContaining([
-              { title: '지역', value: '서울강북', short: true },
-              { title: '특보수준', value: '2', short: true },
-              { title: '상위지역', value: '서울특별시', short: true }
+              { title: '📍 지역', value: '서울강북', short: true },
+              { title: '📊 특보수준', value: '주의보', short: true },
+              { title: '🏢 상위지역', value: '서울특별시', short: true }
             ])
           })
         ]
@@ -448,9 +463,9 @@ describe('SlackService', () => {
           expect.objectContaining({
             color: 'danger',
             fields: expect.arrayContaining([
-              { title: '지역', value: '서울강북', short: true },
-              { title: '특보종류', value: '폭염', short: true },
-              { title: '특보수준', value: '주의보', short: true }
+              { title: '📍 지역', value: '서울강북', short: true },
+              { title: '⚠️ 특보종류', value: '폭염', short: true },
+              { title: '📊 특보수준', value: '주의보', short: true }
             ])
           })
         ]
@@ -476,7 +491,7 @@ describe('SlackService', () => {
           expect.objectContaining({
             color: 'good',
             fields: expect.arrayContaining([
-              { title: '해제된 수준', value: '주의보', short: true }
+              { title: '❌ 해제된 수준', value: '주의보', short: true }
             ])
           })
         ]
@@ -497,7 +512,7 @@ describe('SlackService', () => {
 
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(payload.attachments[0].fields).toContainEqual({
-        title: '수준 변화',
+        title: '📈 수준 변화',
         value: '주의보 → 경보',
         short: false
       });
@@ -517,7 +532,7 @@ describe('SlackService', () => {
 
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(payload.attachments[0].fields).toContainEqual({
-        title: '발효시각 변화',
+        title: '⏳ 발효시각 변화',
         value: expect.stringContaining('→'),
         short: false
       });
