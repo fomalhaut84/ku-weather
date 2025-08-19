@@ -21,7 +21,12 @@
       "Bash(gh issue close:*)",
       "Bash(git push:*)",
       "Bash(grep:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh issue:*)",
+      "Bash(timeout 60 npm run start)",
+      "Bash(node:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
