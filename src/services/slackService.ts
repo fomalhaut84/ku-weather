@@ -1,14 +1,29 @@
 import { WeatherAlert, AlertChange, AlertChangeType } from '../types/weather';
 import { logger } from '../utils/logger';
+import { config } from '../config';
 
 export class SlackService {
   private readonly webhookUrl: string;
+  private readonly environment: string;
 
   constructor(webhookUrl: string) {
     this.webhookUrl = webhookUrl;
+    this.environment = config.environment;
     if (!this.webhookUrl) {
       throw new Error('SLACK_WEBHOOK_URL이 제공되지 않았습니다');
     }
+  }
+
+  /**
+   * 환경별 메시지 접두사를 반환합니다.
+   */
+  private getEnvironmentPrefix(): string {
+    const prefixes: Record<string, string> = {
+      'development': '[DEV] ',
+      'staging': '[STAGING] ',
+      'production': ''
+    };
+    return prefixes[this.environment] || `[${this.environment.toUpperCase()}] `;
   }
 
   /**
@@ -65,7 +80,7 @@ export class SlackService {
       }
 
       const payload = {
-        text: `${config.emoji} 기상특보 ${config.title}`,
+        text: `${this.getEnvironmentPrefix()}${config.emoji} 기상특보 ${config.title}`,
         attachments: [
           {
             color: config.color,
@@ -100,12 +115,26 @@ export class SlackService {
       });
 
       if (!response.ok) {
-        throw new Error(`Slack 메시지 보내기 실패: ${response.status} ${response.statusText}`);
+        const errorMessage = `Slack 메시지 보내기 실패: ${response.status} ${response.statusText}`;
+        logger.error(errorMessage, {
+          changeType: change.type,
+          regionName: alert.regionName,
+          webhookUrl: this.webhookUrl.substring(0, 50) + '...',
+          environment: this.environment
+        });
+        throw new Error(errorMessage);
       }
 
       logger.info(`Slack 변동 알림 전송 완료: ${change.type} - ${alert.regionName}`);
     } catch (error) {
-      logger.error('Slack 변동 알림 전송 중 오류:', error);
+      const alertInfo = change.current || change.previous;
+      logger.error('Slack 변동 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        changeType: change.type,
+        regionName: alertInfo?.regionName || '알 수 없음',
+        environment: this.environment,
+        webhookUrl: this.webhookUrl.substring(0, 50) + '...'
+      });
       throw error;
     }
   }
@@ -125,7 +154,11 @@ export class SlackService {
         await this.sendMultipleAlertChanges(changes);
       }
     } catch (error) {
-      logger.error('기상특보 변동 Slack 알림 전송 중 오류:', error);
+      logger.error('기상특보 변동 Slack 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        changesCount: changes.length,
+        environment: this.environment
+      });
       throw error;
     }
   }
@@ -145,7 +178,11 @@ export class SlackService {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      logger.error('다중 Slack 변동 알림 전송 중 오류:', error);
+      logger.error('다중 Slack 변동 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        changesCount: changes.length,
+        environment: this.environment
+      });
       throw error;
     }
   }
@@ -253,7 +290,7 @@ export class SlackService {
     try {
       
       const payload = {
-        text: '🌦️ 기상특보 알림',
+        text: `${this.getEnvironmentPrefix()}🌦️ 기상특보 알림`,
         attachments: [
           {
             color: alert.LVL === '1' ? 'danger' : 'warning',
@@ -300,12 +337,27 @@ export class SlackService {
       });
 
       if (!response.ok) {
-        throw new Error(`Slack 메시지 보내기 실패: ${response.status} ${response.statusText}`);
+        const errorMessage = `Slack 메시지 보내기 실패: ${response.status} ${response.statusText}`;
+        logger.error(errorMessage, {
+          regionName: alert.REG_NAME,
+          warningType: alert.WRN,
+          command: alert.CMD,
+          webhookUrl: this.webhookUrl.substring(0, 50) + '...',
+          environment: this.environment
+        });
+        throw new Error(errorMessage);
       }
 
       logger.info(`Slack 알림 전송 완료: ${alert.REG_NAME} - ${alert.CMD}`);
     } catch (error) {
-      logger.error('Slack 알림 전송 중 오류:', error);
+      logger.error('Slack 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        regionName: alert.REG_NAME,
+        warningType: alert.WRN,
+        command: alert.CMD,
+        environment: this.environment,
+        webhookUrl: this.webhookUrl.substring(0, 50) + '...'
+      });
       throw error;
     }
   }
@@ -322,7 +374,11 @@ export class SlackService {
         await this.sendMultipleAlerts(alerts);
       }
     } catch (error) {
-      logger.error('기상특보 Slack 알림 전송 중 오류:', error);
+      logger.error('기상특보 Slack 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        alertsCount: alerts.length,
+        environment: this.environment
+      });
       throw error;
     }
   }
@@ -339,7 +395,11 @@ export class SlackService {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
-      logger.error('다중 Slack 알림 전송 중 오류:', error);
+      logger.error('다중 Slack 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        alertsCount: alerts.length,
+        environment: this.environment
+      });
       throw error;
     }
   }
