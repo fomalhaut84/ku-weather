@@ -1,5 +1,5 @@
 import { SlackService } from '../../services/slackService';
-import { WeatherAlert } from '../../types/weather';
+import { WeatherAlert, AlertChange, CachedAlert } from '../../types/weather';
 
 // fetch 모킹
 const mockFetch = jest.fn();
@@ -11,6 +11,7 @@ jest.mock('../../utils/logger', () => ({
     info: jest.fn(),
     debug: jest.fn(),
     error: jest.fn(),
+    warn: jest.fn(),
   }
 }));
 
@@ -46,6 +47,26 @@ describe('SlackService', () => {
     TM_SEQ: '',
     MAN_FC: '',
     MAN_IN: '',
+    ...overrides
+  });
+
+  const createMockCachedAlert = (overrides: Partial<CachedAlert> = {}): CachedAlert => ({
+    key: 'L1020110-H',
+    regionId: 'L1020110',
+    regionName: '서울강북',
+    warningType: 'H',
+    level: '2',
+    command: '1',
+    announcedAt: '202508011500',
+    effectiveAt: '202508011600',
+    lastUpdated: '2025-01-08T15:00:00.000Z',
+    ...overrides
+  });
+
+  const createMockAlertChange = (overrides: Partial<AlertChange> = {}): AlertChange => ({
+    type: 'NEW',
+    current: createMockCachedAlert(),
+    description: '서울강북 폭염 주의보 신규 발표',
     ...overrides
   });
 
