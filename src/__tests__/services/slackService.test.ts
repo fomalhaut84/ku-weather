@@ -178,7 +178,7 @@ describe('SlackService', () => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: expect.stringContaining('🌦️ 기상특보 알림')
+          body: expect.stringContaining('[DEV] 🌦️ 기상특보 알림')
         })
       );
     });
@@ -204,7 +204,7 @@ describe('SlackService', () => {
       const payload = JSON.parse(callArgs[1].body);
 
       expect(payload).toMatchObject({
-        text: '🌦️ 기상특보 알림',
+        text: '[DEV] 🌦️ 기상특보 알림',
         attachments: [
           expect.objectContaining({
             title: expect.stringContaining('폭염'),
@@ -437,7 +437,7 @@ describe('SlackService', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('🆕 기상특보 신규 발표')
+          body: expect.stringContaining('[DEV] 🆕 기상특보 신규 발표')
         })
       );
     });
@@ -458,7 +458,7 @@ describe('SlackService', () => {
 
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(payload).toMatchObject({
-        text: '🆕 기상특보 신규 발표',
+        text: '[DEV] 🆕 기상특보 신규 발표',
         attachments: [
           expect.objectContaining({
             color: 'danger',
@@ -486,7 +486,7 @@ describe('SlackService', () => {
 
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(payload).toMatchObject({
-        text: '✅ 기상특보 해제',
+        text: '[DEV] ✅ 기상특보 해제',
         attachments: [
           expect.objectContaining({
             color: 'good',

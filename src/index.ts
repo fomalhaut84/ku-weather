@@ -1,4 +1,5 @@
 import { WeatherService } from './services/weatherService';
+import { SlackService } from './services/slackService';
 import { logger } from './utils/logger';
 import { config } from './config';
 
@@ -68,8 +69,9 @@ async function main() {
     logger.info('기상특보 모니터링 시작');
     
     const weatherService = new WeatherService(config.weatherApiKey);
+    const slackService = new SlackService(config.slackWebhookUrl);
     
-    await startMonitoring(weatherService);
+    await startMonitoring(weatherService, slackService);
     
   } catch (error) {
     logger.error('애플리케이션 시작 중 오류 발생:', error);
@@ -77,7 +79,7 @@ async function main() {
   }
 }
 
-async function startMonitoring(weatherService: WeatherService) {
+async function startMonitoring(weatherService: WeatherService, slackService: SlackService) {
   logger.info(`${config.checkIntervalMinutes}분 간격으로 기상특보 모니터링 시작`);
   
   // 특보구역 데이터 로드
@@ -121,8 +123,13 @@ async function startMonitoring(weatherService: WeatherService) {
         });
         console.log('\n=========================\n');
         
-        // Slack 전송 비활성화
-        // await slackService.sendAlertChanges(changes);
+        // Slack 알림 전송
+        try {
+          await slackService.sendAlertChanges(changes);
+          logger.info(`${changes.length}개 변동사항 Slack 전송 완료`);
+        } catch (error) {
+          logger.error('Slack 전송 실패:', error);
+        }
       } else {
         logger.debug('기상특보 변동 없음');
       }

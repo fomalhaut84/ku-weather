@@ -12,6 +12,7 @@ export interface Config {
   checkIntervalMinutes: number;
   nodeEnv: string;
   debug: boolean;
+  environment: string;
 }
 
 function validateConfig(): Config {
@@ -23,6 +24,7 @@ function validateConfig(): Config {
   const checkIntervalMinutes = parseInt(process.env.CHECK_INTERVAL_MINUTES || '30', 10);
   const nodeEnv = process.env.NODE_ENV || 'development';
   const debug = process.env.DEBUG === 'true';
+  const environment = process.env.ENVIRONMENT || 'development';
 
   if (!weatherApiKey) {
     throw new Error('WEATHER_API_KEY 환경변수가 설정되지 않았습니다');
@@ -44,7 +46,8 @@ function validateConfig(): Config {
     subcd,
     checkIntervalMinutes,
     nodeEnv,
-    debug
+    debug,
+    environment
   };
 
   logger.info('설정 로드 완료:', {
@@ -53,7 +56,8 @@ function validateConfig(): Config {
     subcd: config.subcd || '전체',
     checkIntervalMinutes: config.checkIntervalMinutes,
     nodeEnv: config.nodeEnv,
-    debug: config.debug
+    debug: config.debug,
+    environment: config.environment
   });
 
   return config;
