@@ -59,13 +59,19 @@ export class AlertCache {
       const previous = this.cache.get(key);
       
       if (!previous) {
-        // 신규 특보 (해제 명령이 아닌 경우만)
-        if (!this.isResolvedCommand(current.command)) {
+        if (this.isNewCommand(current.command)) {
+          // CMD=1: 진짜 신규 발표
           changes.push({
             type: 'NEW',
             current,
             description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 신규 발표`
           });
+        } else if (!this.isResolvedCommand(current.command)) {
+          // CMD=2,5,6: 기존 활성 특보 (초기 실행 시 캐시에 저장만 하고 알림 없음)
+          logger.debug(`기존 활성 특보 발견: ${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getCommandName(current.command)} (초기 캐시 설정)`);
+        } else {
+          // CMD=3,4,7: 해제 명령이지만 캐시에 이전 데이터가 없음 (이미 해제된 상태)
+          logger.debug(`이미 해제된 특보: ${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getCommandName(current.command)}`);
         }
       } else {
         // 기존 특보의 변동 감지 (해제 명령이 아닌 경우만)
@@ -78,21 +84,30 @@ export class AlertCache {
       }
     }
 
-    // 2. 해제된 특보 감지 (CMD가 해제 명령인 경우만)
+    // 2. 해제된 특보 감지 및 캐시에서 제거
+    const activeAlerts = new Map<string, CachedAlert>();
+    
     for (const [key, current] of currentCachedAlerts) {
       const previous = this.cache.get(key);
-      if (previous && this.isResolvedCommand(current.command)) {
-        // 해제 명령이 포함된 특보
-        changes.push({
-          type: 'RESOLVED',
-          previous,
-          description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제`
-        });
+      
+      if (this.isResolvedCommand(current.command)) {
+        if (previous) {
+          // 해제 명령이 있고 이전 캐시에 있던 특보 → RESOLVED 변동으로 처리
+          changes.push({
+            type: 'RESOLVED',
+            previous,
+            description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제`
+          });
+        }
+        // 해제된 특보는 캐시에 저장하지 않음 (activeAlerts에 추가 안함)
+      } else {
+        // 활성 특보만 캐시에 유지
+        activeAlerts.set(key, current);
       }
     }
 
-    // 캐시 업데이트 (변동 감지 완료 후)
-    this.replaceCache(currentCachedAlerts);
+    // 캐시 업데이트 (활성 특보만)
+    this.replaceCache(activeAlerts);
     
     logger.debug(`특보 변동 감지 완료: ${changes.length}개 변동사항`);
     return changes;
@@ -275,5 +290,33 @@ export class AlertCache {
   private isResolvedCommand(command: string): boolean {
     // 3: 해제, 4: 대치해제(자동), 7: 변경해제
     return ['3', '4', '7'].includes(command.trim());
+  }
+
+  /**
+   * 신규 발표 명령인지 확인합니다.
+   * @param command 특보 명령 코드
+   * @returns 신규 발표 명령 여부
+   */
+  private isNewCommand(command: string): boolean {
+    // 1: 발표 (신규)
+    return command.trim() === '1';
+  }
+
+  /**
+   * 명령 코드를 한국어 이름으로 변환합니다.
+   * @param command 특보 명령 코드
+   * @returns 한국어 명령 이름
+   */
+  private getCommandName(command: string): string {
+    const commands: Record<string, string> = {
+      '1': '발표',
+      '2': '대치',
+      '3': '해제',
+      '4': '대치해제(자동)',
+      '5': '연장',
+      '6': '변경',
+      '7': '변경해제'
+    };
+    return commands[command.trim()] || command;
   }
 }

@@ -133,6 +133,50 @@ describe('AlertCache', () => {
         expect(changes[0].type).toBe('NEW');
         expect(changes[0].current?.regionName).toBe('경기도');
       });
+
+      it('should NOT detect new alert for change command (CMD=6) without existing cache', () => {
+        // 변경 명령(CMD: '6')을 가진 특보가 캐시에 없을 때
+        const changeAlert = { ...mockAlert1, CMD: '6' }; // 변경 명령
+        
+        const changes = alertCache.detectChanges([changeAlert]);
+        
+        // 변경 명령이므로 신규로 분류되지 않아야 함
+        expect(changes).toHaveLength(0);
+      });
+
+      it('should only detect new alert for announcement command (CMD=1)', () => {
+        const newAlert = { ...mockAlert1, CMD: '1' }; // 발표 명령 (신규)
+        const changeAlert = { ...mockAlert2, CMD: '6' }; // 변경 명령 (기존 수정)
+        
+        const changes = alertCache.detectChanges([newAlert, changeAlert]);
+        
+        // CMD=1만 신규로 감지되어야 함
+        expect(changes).toHaveLength(1);
+        expect(changes[0].type).toBe('NEW');
+        expect(changes[0].current?.regionName).toBe('서울특별시');
+      });
+
+      it('should handle all CMD types correctly on initial run', () => {
+        const cmd1Alert = { ...mockAlert1, CMD: '1', REG_ID: 'L1000001' }; // 발표 (신규)
+        const cmd2Alert = { ...mockAlert1, CMD: '2', REG_ID: 'L1000002' }; // 대치 (기존)
+        const cmd3Alert = { ...mockAlert1, CMD: '3', REG_ID: 'L1000003' }; // 해제 (무시)
+        const cmd5Alert = { ...mockAlert1, CMD: '5', REG_ID: 'L1000005' }; // 연장 (기존)
+        const cmd6Alert = { ...mockAlert1, CMD: '6', REG_ID: 'L1000006' }; // 변경 (기존)
+        
+        const changes = alertCache.detectChanges([cmd1Alert, cmd2Alert, cmd3Alert, cmd5Alert, cmd6Alert]);
+        
+        // CMD=1만 NEW로 분류, 나머지는 알림 없음
+        expect(changes).toHaveLength(1);
+        expect(changes[0].type).toBe('NEW');
+        expect(changes[0].current?.regionId).toBe('L1000001');
+        
+        // 하지만 모든 활성 특보(CMD=1,2,5,6)는 캐시에 저장되어야 함
+        const cachedAlerts = alertCache.getAllCachedAlerts();
+        expect(cachedAlerts).toHaveLength(4); // CMD=3 제외한 4개
+        
+        const cachedRegionIds = cachedAlerts.map(alert => alert.regionId).sort();
+        expect(cachedRegionIds).toEqual(['L1000001', 'L1000002', 'L1000005', 'L1000006']);
+      });
     });
 
     describe('특보 해제 감지', () => {
@@ -158,6 +202,25 @@ describe('AlertCache', () => {
         const changes = alertCache.detectChanges([mockAlert1]);
         
         expect(changes).toHaveLength(0); // 해제로 감지하지 않음
+      });
+
+      it('should remove resolved alerts from cache', () => {
+        // 초기 캐시에 두 개 특보 설정
+        alertCache.updateCache([mockAlert1, mockAlert2]);
+        expect(alertCache.getCacheStatus().count).toBe(2);
+        
+        // 하나는 유지, 하나는 해제 명령(CMD: '3')으로 변경
+        const resolvedAlert = { ...mockAlert1, CMD: '3' };
+        const changes = alertCache.detectChanges([mockAlert2, resolvedAlert]);
+        
+        // 해제 감지
+        expect(changes).toHaveLength(1);
+        expect(changes[0].type).toBe('RESOLVED');
+        
+        // 해제된 특보는 캐시에서 제거되어야 함
+        expect(alertCache.getCacheStatus().count).toBe(1);
+        expect(alertCache.getCachedAlert('L1100000-H')).toBeUndefined(); // 해제된 특보
+        expect(alertCache.getCachedAlert('L1010000-H')).toBeDefined(); // 유지된 특보
       });
     });
 

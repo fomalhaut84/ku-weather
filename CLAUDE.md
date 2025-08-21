@@ -424,3 +424,244 @@ npm run test:ci
 - TM_EF 추가 설명
 발효시각(년월일시분,KST), 예비특보의 경우 다음과 같이 매칭하여 사용
 02:59 새벽(00시~03시), 05:59 새벽(03시~06시), 08:59 아침(06시~09시), 11:59 오전(09시~12시), 14:59 낮(12시~15시), 17:59 늦은 오후(15시~18시), 20:59 저녁(18시~21시), 23:59 밤(21시~24시), 11:58 오전(06시~12시), 17:58 오후(12시~18시), 05:58 새벽(00시~06시), 23:58 밤(18시~24시), 14:58 오후(12시~18시)
+
+## TODO: 다중 플랫폼 알림 시스템 구현
+
+### 🚀 기능 개요
+현재 Slack 전용으로 구현된 알림 시스템을 Telegram, Discord, Email 등 다중 플랫폼으로 확장하여 
+사용자가 선호하는 채널로 기상특보 알림을 받을 수 있도록 개선
+
+### 🎯 핵심 목표
+- **플랫폼 확장성**: 새로운 알림 채널 쉽게 추가 가능한 구조
+- **동시 다중 전송**: 여러 플랫폼에 동시 알림 전송 지원
+- **플랫폼별 최적화**: 각 플랫폼의 특성에 맞는 메시지 포맷팅
+- **설정 유연성**: 환경변수로 사용할 플랫폼 선택 및 설정
+- **에러 핸들링**: 일부 플랫폼 실패 시에도 다른 플랫폼은 정상 동작
+
+### 📋 구현해야 할 작업들
+
+#### 1. **아키텍처 리팩토링** 🏗️
+- [ ] **추상화 레이어 구현**
+  ```typescript
+  // 공통 인터페이스 정의
+  interface NotificationService {
+    sendAlert(alert: WeatherAlert): Promise<void>;
+    sendAlertChange(change: AlertChange): Promise<void>;
+    sendAlertChanges(changes: AlertChange[]): Promise<void>;
+    validateConfig(): boolean;
+  }
+  
+  // 팩토리 패턴으로 서비스 생성
+  class NotificationFactory {
+    static createServices(config: NotificationConfig): NotificationService[];
+  }
+  ```
+
+- [ ] **현재 SlackService 리팩토링**
+  - 공통 인터페이스 구현하도록 수정
+  - 플랫폼 특화 로직과 공통 로직 분리
+  - 기존 기능 보장 (환경 접두사, 상세 로깅 등)
+
+#### 2. **Telegram Bot 연동** 📱
+- [ ] **Telegram Bot API 클라이언트 구현**
+  ```typescript
+  class TelegramService implements NotificationService {
+    private botToken: string;
+    private chatId: string;
+    
+    async sendMessage(text: string, options?: TelegramSendOptions): Promise<void>;
+    async sendAlert(alert: WeatherAlert): Promise<void>;
+    // ...
+  }
+  ```
+
+- [ ] **Telegram 전용 메시지 포맷팅**
+  - HTML/Markdown 지원 활용
+  - 인라인 키보드 버튼 (상세보기, 음소거 등)
+  - 이모지와 특수 문자 최적화
+  - 메시지 길이 제한 처리 (4096자)
+
+- [ ] **Telegram 설정**
+  - Bot 생성 및 토큰 발급
+  - Chat ID 획득 방법 문서화
+  - 환경변수 추가 (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`)
+
+#### 3. **Discord Webhook 연동** 💬
+- [ ] **Discord Webhook 클라이언트 구현**
+  ```typescript
+  class DiscordService implements NotificationService {
+    private webhookUrl: string;
+    
+    async sendWebhook(payload: DiscordWebhookPayload): Promise<void>;
+    async sendAlert(alert: WeatherAlert): Promise<void>;
+    // ...
+  }
+  ```
+
+- [ ] **Discord 특화 기능**
+  - Rich Embed 메시지 활용
+  - 색상 코딩 (위험도별 색상)
+  - 썸네일 및 footer 정보
+  - Mention 기능 (@everyone, @here)
+
+#### 4. **Email 알림 시스템** 📧
+- [ ] **SMTP/Email 서비스 구현**
+  ```typescript
+  class EmailService implements NotificationService {
+    private transporter: Transporter;
+    private recipients: string[];
+    
+    async sendEmail(subject: string, html: string): Promise<void>;
+    async sendAlert(alert: WeatherAlert): Promise<void>;
+    // ...
+  }
+  ```
+
+- [ ] **HTML 이메일 템플릿**
+  - 모바일 반응형 디자인
+  - 기상청 로고 및 브랜딩
+  - 테이블 형태의 정보 표시
+  - 구글 지도 연동 (선택적)
+
+#### 5. **통합 알림 매니저** 🎯
+- [ ] **MultiplatformNotificationService 구현**
+  ```typescript
+  class MultiplatformNotificationService {
+    private services: NotificationService[] = [];
+    
+    addService(service: NotificationService): void;
+    async sendToAll(alert: WeatherAlert): Promise<NotificationResult[]>;
+    async sendToAllWithRetry(alert: WeatherAlert): Promise<void>;
+  }
+  ```
+
+- [ ] **에러 처리 및 재시도 로직**
+  - 플랫폼별 독립적 에러 처리
+  - 실패 시 재시도 메커니즘 (exponential backoff)
+  - 전체 시스템 실패 방지 (circuit breaker pattern)
+
+#### 6. **설정 시스템 확장** ⚙️
+- [ ] **환경변수 확장**
+  ```bash
+  # 기존 Slack 설정
+  SLACK_WEBHOOK_URL=https://hooks.slack.com/...
+  
+  # 새로운 플랫폼 설정
+  TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234...
+  TELEGRAM_CHAT_ID=-1001234567890
+  
+  DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+  
+  EMAIL_SMTP_HOST=smtp.gmail.com
+  EMAIL_SMTP_PORT=587
+  EMAIL_USER=alert@example.com
+  EMAIL_PASS=app-password
+  EMAIL_RECIPIENTS=user1@example.com,user2@example.com
+  
+  # 활성화할 플랫폼 선택
+  NOTIFICATION_PLATFORMS=slack,telegram,discord
+  ```
+
+- [ ] **Config 인터페이스 확장**
+  ```typescript
+  interface NotificationConfig {
+    platforms: string[];
+    slack?: SlackConfig;
+    telegram?: TelegramConfig;
+    discord?: DiscordConfig;
+    email?: EmailConfig;
+  }
+  ```
+
+#### 7. **테스트 프레임워크 확장** 🧪
+- [ ] **각 플랫폼별 단위 테스트**
+  - API 호출 모킹 및 검증
+  - 메시지 포맷팅 테스트
+  - 에러 시나리오 테스트
+  - 환경변수 검증 테스트
+
+- [ ] **통합 테스트**
+  - 다중 플랫폼 동시 전송 테스트
+  - 부분 실패 시나리오 테스트
+  - 성능 테스트 (동시 전송 시간)
+
+#### 8. **모니터링 및 로깅 강화** 📊
+- [ ] **플랫폼별 성공률 추적**
+  ```typescript
+  interface NotificationMetrics {
+    platform: string;
+    successCount: number;
+    failureCount: number;
+    avgResponseTime: number;
+    lastError?: string;
+  }
+  ```
+
+- [ ] **대시보드 데이터 제공**
+  - 플랫폼별 전송 상태
+  - 에러율 및 성능 지표
+  - 사용량 통계
+
+### 📈 단계별 구현 계획
+
+#### **Phase 1: 기반 구조 (2주)**
+1. NotificationService 인터페이스 설계
+2. 현재 SlackService를 인터페이스에 맞게 리팩토링  
+3. MultiplatformNotificationService 구현
+4. 기본 에러 처리 및 로깅
+
+#### **Phase 2: Telegram 연동 (1주)**  
+1. TelegramService 구현
+2. Bot 설정 및 메시지 포맷팅
+3. 테스트 작성 및 검증
+4. 문서화
+
+#### **Phase 3: Discord 연동 (1주)**
+1. DiscordService 구현  
+2. Webhook 설정 및 Rich Embed
+3. 테스트 작성 및 검증
+4. 문서화
+
+#### **Phase 4: Email 연동 (1-2주)**
+1. EmailService 구현
+2. HTML 템플릿 디자인
+3. SMTP 설정 및 테스트
+4. 보안 고려사항 점검
+
+#### **Phase 5: 고도화 (1주)**
+1. 재시도 로직 및 Circuit breaker  
+2. 성능 최적화
+3. 모니터링 시스템
+4. 최종 문서화
+
+### 🔧 기술적 고려사항
+
+#### **의존성 관리**
+- `node-telegram-bot-api`: Telegram Bot API 클라이언트
+- `nodemailer`: Email 전송 (SMTP)
+- `axios`: HTTP 클라이언트 (Discord webhook)
+
+#### **보안 사항**
+- API 토큰 및 패스워드 환경변수 관리
+- 로그에서 민감정보 마스킹
+- Rate limiting 준수
+
+#### **성능 최적화**
+- 플랫폼별 병렬 전송
+- Connection pooling
+- 메시지 배치 처리 (가능한 경우)
+
+### 📚 문서화 계획
+- [ ] **사용자 가이드**: 각 플랫폼별 설정 방법
+- [ ] **API 문서**: 새로운 인터페이스 및 클래스
+- [ ] **배포 가이드**: 환경변수 및 인프라 설정
+- [ ] **트러블슈팅**: 자주 발생하는 문제 해결법
+
+### 🎯 성공 지표
+- **기능적**: 모든 플랫폼에서 정상적인 알림 전송
+- **안정성**: 99% 이상 전송 성공률 유지  
+- **성능**: 전체 플랫폼 전송 시간 5초 이내
+- **확장성**: 새로운 플랫폼 추가 시 기존 코드 변경 최소화
+- **테스트**: 90% 이상 코드 커버리지 유지
+
+이 다중 플랫폼 알림 시스템을 통해 사용자는 선호하는 채널에서 안정적이고 빠른 기상특보 알림을 받을 수 있게 됩니다.
