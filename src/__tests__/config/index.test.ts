@@ -233,7 +233,8 @@ describe('Config', () => {
         checkIntervalMinutes: 45,
         nodeEnv: 'test',
         debug: true,
-        environment: 'development'
+        environment: 'development',
+        slackBatchMode: true
       });
     });
 
@@ -252,7 +253,8 @@ describe('Config', () => {
         checkIntervalMinutes: 30,
         nodeEnv: 'development',
         debug: false,
-        environment: 'development'
+        environment: 'development',
+        slackBatchMode: true
       });
     });
   });

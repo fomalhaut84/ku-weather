@@ -5,10 +5,12 @@ import { config } from '../config';
 export class SlackService {
   private readonly webhookUrl: string;
   private readonly environment: string;
+  private readonly batchMode: boolean;
 
   constructor(webhookUrl: string) {
     this.webhookUrl = webhookUrl;
     this.environment = config.environment;
+    this.batchMode = config.slackBatchMode;
     if (!this.webhookUrl) {
       throw new Error('SLACK_WEBHOOK_URL이 제공되지 않았습니다');
     }
@@ -151,20 +153,99 @@ export class SlackService {
       if (changes.length === 1) {
         await this.sendAlertChange(changes[0]);
       } else {
-        await this.sendMultipleAlertChanges(changes);
+        // 설정에 따라 배치 모드 또는 개별 전송 방식 선택
+        if (this.batchMode) {
+          await this.sendBatchedAlertChanges(changes);
+        } else {
+          await this.sendMultipleAlertChanges(changes);
+        }
       }
     } catch (error) {
       logger.error('기상특보 변동 Slack 알림 전송 중 오류:', {
         error: error instanceof Error ? error.message : String(error),
         changesCount: changes.length,
-        environment: this.environment
+        environment: this.environment,
+        batchMode: this.batchMode
       });
       throw error;
     }
   }
 
   /**
-   * 여러 특보 변동사항을 순차적으로 전송합니다.
+   * 여러 특보 변동사항을 하나의 메시지로 묶어서 전송합니다.
+   */
+  async sendBatchedAlertChanges(changes: AlertChange[]): Promise<void> {
+    if (changes.length === 0) {
+      return;
+    }
+
+    try {
+      const attachments = changes.map((change, index) => {
+        const config = this.getChangeTypeConfig(change.type);
+        const alert = change.current || change.previous!;
+        
+        const attachment: any = {
+          color: config.color,
+          title: `${config.emoji} ${change.description}`,
+          fields: [
+            {
+              title: '📍 지역',
+              value: alert.regionName,
+              short: true
+            },
+            {
+              title: '⚠️ 특보종류',
+              value: this.getWarningTypeName(alert.warningType),
+              short: true
+            }
+          ],
+          footer: index === changes.length - 1 ? '한국 기상청' : '',
+          ts: index === changes.length - 1 ? Math.floor(Date.now() / 1000) : undefined
+        };
+
+        // 변동 유형별 추가 필드
+        this.addBatchedChangeFields(attachment, change);
+        
+        return attachment;
+      });
+
+      const payload = {
+        text: `${this.getEnvironmentPrefix()}🌦️ 기상특보 변동 알림 (${changes.length}건)`,
+        attachments
+      };
+
+      const response = await fetch(this.webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorMessage = `Slack 메시지 보내기 실패: ${response.status} ${response.statusText}`;
+        logger.error(errorMessage, {
+          changesCount: changes.length,
+          webhookUrl: this.webhookUrl.substring(0, 50) + '...',
+          environment: this.environment
+        });
+        throw new Error(errorMessage);
+      }
+
+      logger.info(`Slack 배치 변동 알림 전송 완료: ${changes.length}건`);
+    } catch (error) {
+      logger.error('Slack 배치 변동 알림 전송 중 오류:', {
+        error: error instanceof Error ? error.message : String(error),
+        changesCount: changes.length,
+        environment: this.environment,
+        webhookUrl: this.webhookUrl.substring(0, 50) + '...'
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 여러 특보 변동사항을 순차적으로 전송합니다. (기존 방식 유지)
    */
   async sendMultipleAlertChanges(changes: AlertChange[]): Promise<void> {
     if (changes.length === 0) {
@@ -188,7 +269,66 @@ export class SlackService {
   }
 
   /**
-   * 변동 유형에 따른 추가 필드를 설정합니다.
+   * 배치 메시지용 간소화된 필드를 설정합니다.
+   */
+  private addBatchedChangeFields(attachment: any, change: AlertChange): void {
+    // 배치 메시지에서는 핵심 정보만 표시
+    switch (change.type) {
+      case 'NEW':
+        if (change.current) {
+          attachment.fields.push({
+            title: '📊 수준',
+            value: this.getWarningLevel(change.current.level),
+            short: true
+          });
+        }
+        break;
+        
+      case 'RESOLVED':
+        if (change.previous) {
+          attachment.fields.push({
+            title: '❌ 해제수준',
+            value: this.getWarningLevel(change.previous.level),
+            short: true
+          });
+        }
+        break;
+        
+      case 'LEVEL_UP':
+      case 'LEVEL_DOWN':
+        if (change.previous && change.current) {
+          attachment.fields.push({
+            title: '📈 수준변화',
+            value: `${this.getWarningLevel(change.previous.level)} → ${this.getWarningLevel(change.current.level)}`,
+            short: false
+          });
+        }
+        break;
+        
+      case 'TIME_EXTENDED':
+        if (change.current) {
+          attachment.fields.push({
+            title: '⏰ 발효시각',
+            value: this.formatDateTime(change.current.effectiveAt),
+            short: true
+          });
+        }
+        break;
+        
+      case 'MODIFIED':
+        if (change.current) {
+          attachment.fields.push({
+            title: '📊 수준',
+            value: this.getWarningLevel(change.current.level),
+            short: true
+          });
+        }
+        break;
+    }
+  }
+
+  /**
+   * 변동 유형에 따른 추가 필드를 설정합니다. (개별 메시지용)
    */
   private addChangeSpecificFields(attachment: any, change: AlertChange): void {
     const alert = change.current || change.previous!;
