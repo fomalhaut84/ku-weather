@@ -582,7 +582,7 @@ describe('SlackService', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('should send multiple changes via sendMultipleAlertChanges', async () => {
+    it('should send multiple changes via sendBatchedAlertChanges (default batch mode)', async () => {
       const mockChanges = [
         createMockAlertChange({ description: '서울강북 변동' }),
         createMockAlertChange({ description: '서울강남 변동' })
@@ -592,7 +592,36 @@ describe('SlackService', () => {
 
       await slackService.sendAlertChanges(mockChanges);
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // 배치 모드에서는 1번의 fetch 호출로 모든 변동사항을 전송
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      
+      const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(payload.text).toContain('기상특보 변동 알림 (2건)');
+      expect(payload.attachments).toHaveLength(2);
+    });
+
+    it('should send multiple changes via sendBatchedAlertChanges when batch mode enabled', async () => {
+      const mockChanges = [
+        createMockAlertChange({ description: '서울강북 변동' }),
+        createMockAlertChange({ description: '서울강남 변동' }),
+        createMockAlertChange({ description: '부산 변동' })
+      ];
+      
+      mockFetch.mockResolvedValue({ ok: true });
+
+      await slackService.sendAlertChanges(mockChanges);
+
+      // 배치 모드에서는 1번의 fetch 호출로 모든 변동사항을 전송
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      
+      const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(payload.text).toContain('기상특보 변동 알림 (3건)');
+      expect(payload.attachments).toHaveLength(3);
+      
+      // 각 attachment가 올바른 변동사항을 포함하는지 확인
+      expect(payload.attachments[0].title).toContain('서울강북 변동');
+      expect(payload.attachments[1].title).toContain('서울강남 변동');
+      expect(payload.attachments[2].title).toContain('부산 변동');
     });
 
     it('should handle errors gracefully', async () => {
@@ -662,6 +691,96 @@ describe('SlackService', () => {
       await slackService.sendMultipleAlertChanges(mockChanges);
 
       expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 1000);
+    });
+  });
+
+  describe('sendBatchedAlertChanges', () => {
+    it('should do nothing when no changes provided', async () => {
+      await slackService.sendBatchedAlertChanges([]);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should send all changes in a single batched message', async () => {
+      const mockChanges = [
+        createMockAlertChange({ 
+          type: 'NEW', 
+          description: '서울 폭염 신규 발표',
+          current: {
+            regionName: '서울특별시',
+            warningType: 'H',
+            level: '2',
+            command: '1',
+            announcedAt: '202501070900',
+            effectiveAt: '202501071000'
+          } as any
+        }),
+        {
+          type: 'RESOLVED',
+          description: '부산 호우 해제',
+          previous: {
+            regionName: '부산광역시',
+            warningType: 'R',
+            level: '3',
+            command: '3',
+            announcedAt: '202501070800',
+            effectiveAt: '202501071000'
+          } as any,
+          current: undefined
+        } as AlertChange
+      ];
+      
+      mockFetch.mockResolvedValue({ ok: true });
+
+      await slackService.sendBatchedAlertChanges(mockChanges);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      
+      const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
+      
+      // 헤더 메시지 확인
+      expect(payload.text).toContain('[DEV] 🌦️ 기상특보 변동 알림 (2건)');
+      
+      // attachments 구조 확인
+      expect(payload.attachments).toHaveLength(2);
+      
+      // 첫 번째 변동 (NEW) 확인
+      const firstAttachment = payload.attachments[0];
+      expect(firstAttachment.title).toBe('🆕 서울 폭염 신규 발표');
+      expect(firstAttachment.color).toBe('danger');
+      expect(firstAttachment.fields).toEqual(
+        expect.arrayContaining([
+          { title: '📍 지역', value: '서울특별시', short: true },
+          { title: '⚠️ 특보종류', value: '폭염', short: true },
+          { title: '📊 수준', value: '주의보', short: true }
+        ])
+      );
+      
+      // 두 번째 변동 (RESOLVED) 확인
+      const secondAttachment = payload.attachments[1];
+      expect(secondAttachment.title).toBe('✅ 부산 호우 해제');
+      expect(secondAttachment.color).toBe('good');
+      expect(secondAttachment.fields).toEqual(
+        expect.arrayContaining([
+          { title: '📍 지역', value: '부산광역시', short: true },
+          { title: '⚠️ 특보종류', value: '호우', short: true },
+          { title: '❌ 해제수준', value: '경보', short: true }
+        ])
+      );
+      
+      // 마지막 attachment에만 footer와 timestamp가 있는지 확인
+      expect(firstAttachment.footer).toBe('');
+      expect(firstAttachment.ts).toBeUndefined();
+      expect(secondAttachment.footer).toBe('한국 기상청');
+      expect(secondAttachment.ts).toBeDefined();
+    });
+
+    it('should handle API errors in batch mode', async () => {
+      const mockChanges = [createMockAlertChange()];
+      
+      mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Server Error' });
+
+      await expect(slackService.sendBatchedAlertChanges(mockChanges))
+        .rejects.toThrow('Slack 메시지 보내기 실패: 500 Internal Server Error');
     });
   });
 });
