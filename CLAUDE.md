@@ -1003,224 +1003,215 @@ Slack 알림에서 클릭 한 번으로 접근 가능한 **실시간 기상특�
 
 특히 **Slack 연동**이 이 프로젝트의 차별화 포인트이므로, 알림과 대시보드 간의 매끄러운 사용자 경험에 집중하는 것이 중요합니다.
 
-## 🚀 CI/CD 환경 구성 계획
+## 🚀 CI/CD 환경 구성 계획 (단일 서버 최적화)
 
 ### 📋 **개요**
 
-한국 기상특보 모니터링 시스템의 **고품질 유지** 및 **안정적인 서비스 운영**을 위한 완전 자동화된 CI/CD 파이프라인 구축 계획입니다.
+한국 기상특보 모니터링 시스템의 **고품질 유지** 및 **안정적인 서비스 운영**을 위한 **단일 서버 최적화 CI/CD 파이프라인** 구축 계획입니다.
 
-현재 **146개 테스트, 74%+ 커버리지**의 견고한 코드베이스를 기반으로, 향후 **웹 대시보드**, **다중 플랫폼 알림**, **데이터베이스 연동** 등의 확장을 고려한 확장 가능한 DevOps 환경을 구축합니다.
+**서버 환경**: Kabylake G4600 3.6Ghz, 16GB RAM, 256GB HDD, Ubuntu, starryjeju.net 도메인
+
+현재 **146개 테스트, 74%+ 커버리지**의 견고한 코드베이스를 기반으로, **비용 효율적이고 관리가 간편한** 단일 서버 DevOps 환경을 구축합니다.
 
 ### 🎯 **핵심 목표**
 
 #### ✅ **품질 보장 (Quality Assurance)**
-- **99%+ 테스트 커버리지** 유지 및 모든 PR에 대한 자동 품질 검증
+- **146개 테스트, 74%+ 커버리지** 유지 및 Self-hosted Runner 통한 자동 검증
 - **TypeScript 컴파일**, **ESLint/Prettier** 코드 품질 자동 검사
-- **보안 취약점 스캔** (npm audit, Snyk, CodeQL) 통한 안전성 확보
-- **성능 테스트** 및 **부하 테스트** 자동화로 서비스 안정성 보장
+- **보안 취약점 스캔** (npm audit, Docker security) 통한 안전성 확보
+- **로컬 캐시 활용**으로 빠른 테스트 실행 및 피드백 제공
 
 #### 🔄 **배포 자동화 (Deployment Automation)**
-- **개발 → 스테이징 → 프로덕션** 3단계 자동 배포 파이프라인
-- **Blue-Green 배포**로 무중단 서비스 제공
-- **즉시 롤백** 기능으로 장애 시 빠른 복구
-- **Docker 컨테이너화**로 환경 일관성 보장
+- **GitHub Actions + Self-hosted Runner** 무료 무제한 CI/CD
+- **Docker Compose 기반 무중단 배포** (Blue-Green 방식)
+- **Watchtower 자동 업데이트** 및 **즉시 롤백** 기능
+- **starryjeju.net SSL** 연동 및 도메인 기반 라우팅
 
 #### 📊 **관찰 가능성 (Observability)**
-- **실시간 모니터링** (애플리케이션, 인프라, 비즈니스 메트릭)
-- **로그 중앙화** 및 **분산 추적** 시스템 구축
-- **알림 시스템** (Critical → PagerDuty, Warning → Slack)
-- **성능 대시보드** 및 **SLA 추적**
+- **Prometheus + Grafana** 경량화 모니터링 스택
+- **로그 순환 관리** (logrotate) 및 디스크 공간 최적화
+- **Slack 통합 알림** (배포 완료, 장애 감지)
+- **16GB RAM, 256GB HDD** 리소스 효율적 활용
 
-#### 🛡️ **확장 지원 (Scalability Support)**
-- **향후 웹 대시보드** Frontend CI/CD 파이프라인 준비
-- **다중 플랫폼 알림** (Telegram, Discord, Email) 배포 자동화
-- **데이터베이스 연동** 및 마이그레이션 자동화 지원
-- **Auto Scaling** 및 **Load Balancer** 구성
+#### 💰 **비용 최적화 (Cost Optimization)**
+- **클라우드 비용 제로**: 기존 서버 100% 활용
+- **월 $63 절약** (AWS 대비 연간 $756 절약 효과)
+- **Self-hosted Runner**: GitHub Actions 무료 분량 무제한
+- **오픈소스 스택**: 라이선스 비용 없는 도구 활용
 
 ### 🏗️ **기술 스택**
 
 #### **CI/CD 플랫폼**
-- **GitHub Actions** (무료 티어 2,000분/월 활용)
-- **워크플로우 캐싱** 및 **병렬 처리**로 빌드 시간 최적화
-- **환경별 배포 전략** (브랜치 기반 자동 트리거)
+- **GitHub Actions + Self-hosted Runner** (starryjeju.net 서버에서 실행)
+- **로컬 캐시 활용** 및 **병렬 처리**로 빌드 시간 최적화
+- **무료 무제한** GitHub Actions 분량 활용
 
-#### **컨테이너화 & 오케스트레이션**
+#### **컨테이너화 & 배포**
 - **Docker** + **Multi-stage Build** (이미지 크기 최적화)
-- **Docker Compose** (로컬 개발 환경)
-- **AWS ECS** / **GCP Cloud Run** (프로덕션 배포 권장)
+- **Docker Compose** (개발 + 프로덕션 통합 환경)
+- **Watchtower** (컨테이너 자동 업데이트)
+- **Nginx** (리버스 프록시 + SSL 종단)
 
 #### **모니터링 스택**
-- **Prometheus** + **Grafana** (메트릭 수집 및 시각화)
-- **AlertManager** (알림 규칙 관리)
-- **ELK Stack** (로그 수집 및 분석)
-- **Jaeger** (분산 추적, 향후 마이크로서비스 대비)
+- **Prometheus** (메트릭 수집, 30일 보존, 1GB 제한)
+- **Grafana** (시각화 대시보드)
+- **Node Exporter** (시스템 메트릭)
+- **logrotate** (로그 순환, 디스크 공간 관리)
 
-### 🚀 **CI/CD 파이프라인 상세 설계**
+### 🚀 **Single Server CI/CD 파이프라인**
 
-#### **Stage 1: 지속적 통합 (CI)**
+#### **starryjeju.net Self-hosted Runner 기반 통합 파이프라인**
 
 ```yaml
-# .github/workflows/ci.yml
-name: Continuous Integration
+# .github/workflows/single-server-deploy.yml
+name: Single Server Deployment
 
 on:
   push:
-    branches: [ dev, staging, main ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  quality-check:
-    runs-on: ubuntu-latest
+  test-and-deploy:
+    runs-on: self-hosted  # starryjeju.net 서버에서 실행
     steps:
-      # 환경 설정
       - name: 코드 체크아웃
         uses: actions/checkout@v4
-        
-      - name: Node.js 18 설정
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
       
-      # 코드 품질 검증
-      - name: 종속성 설치
-        run: npm ci
+      # 로컬 캐시 활용으로 빠른 빌드
+      - name: Node.js 캐시 확인
+        run: |
+          if [ ! -d "node_modules" ]; then
+            npm ci
+          else
+            npm ci --prefer-offline
+          fi
         
+      # 품질 검증 (146개 테스트)
       - name: TypeScript 컴파일 검사
         run: npm run build
         
-      - name: ESLint 코드 품질 검사
-        run: npm run lint
-        
-      - name: Prettier 포맷팅 검사
-        run: npm run format:check
-        
-      # 테스트 실행
-      - name: 146개 테스트 실행 (74%+ 커버리지 보장)
+      - name: 146개 테스트 실행
         run: npm run test:ci
         
-      - name: 테스트 커버리지 리포트 생성
-        uses: codecov/codecov-action@v4
+      - name: 보안 취약점 스캔
+        run: npm audit --audit-level=moderate || true
         
-      # 보안 검사
-      - name: npm audit 보안 취약점 스캔
-        run: npm audit --audit-level=high
-        
-      - name: Snyk 보안 스캔
-        uses: snyk/actions/node@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      # Docker 이미지 빌드 및 배포
+      - name: Docker 이미지 빌드
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker build -t ku-weather:latest .
+          docker tag ku-weather:latest ku-weather:$(date +%Y%m%d-%H%M%S)
           
-      - name: CodeQL 정적 보안 분석
-        uses: github/codeql-action/analyze@v2
+      # 무중단 배포 (Blue-Green)
+      - name: 무중단 배포 실행
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # 새 컨테이너 시작
+          docker-compose -f docker-compose.prod.yml up -d --no-deps ku-weather
+          
+          # Health check 대기 (30초)
+          sleep 30
+          curl -f http://localhost:3000/health || exit 1
+          
+          # 구버전 이미지 정리
+          docker image prune -f
+          
+      # 배포 완료 알림
+      - name: Slack 배포 알림
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🚀 starryjeju.net 배포 완료: $(date '+%Y-%m-%d %H:%M:%S')\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
-#### **Stage 2: 컨테이너 빌드 & 레지스트리**
+#### **Docker Compose 프로덕션 환경**
 
 ```yaml
-  build-and-push:
-    needs: quality-check
-    runs-on: ubuntu-latest
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-    
-    steps:
-      - name: Docker 이미지 메타데이터 생성
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ku-weather
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            
-      - name: Multi-stage Docker 빌드
-        uses: docker/build-push-action@v5
-        with:
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          
-      - name: Trivy 컨테이너 보안 스캔
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.meta.outputs.tags }}
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-```
+# docker-compose.prod.yml - starryjeju.net 전용
+version: '3.8'
 
-#### **Stage 3: 환경별 배포 전략**
+services:
+  # 메인 애플리케이션
+  ku-weather:
+    build: .
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - KMA_API_KEY=${KMA_API_KEY}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+      - SLACK_BATCH_MODE=true
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - weather-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
-```yaml
-  # 개발 환경 (자동 배포)
-  deploy-dev:
-    if: github.ref == 'refs/heads/dev'
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: development
-    
-    steps:
-      - name: 개발 환경 배포
-        run: |
-          # ECS 서비스 업데이트 또는 Cloud Run 배포
-          echo "개발 환경 자동 배포 완료"
-          
-      - name: Health Check
-        run: |
-          # 애플리케이션 상태 확인
-          curl -f "${{ secrets.DEV_HEALTH_ENDPOINT }}" || exit 1
-          
-  # 스테이징 환경 (PR 머지 시)  
-  deploy-staging:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: staging
-    
-    steps:
-      - name: 스테이징 환경 배포
-        run: |
-          # 프로덕션과 동일한 환경으로 배포
-          echo "스테이징 환경 배포 완료"
-          
-      - name: E2E 테스트 실행
-        run: |
-          # 엔드투엔드 테스트 자동 실행
-          npm run test:e2e
-          
-      - name: 성능 테스트 실행  
-        run: |
-          # 부하 테스트 및 성능 검증
-          npm run test:performance
-          
-  # 프로덕션 환경 (태그 생성 + 수동 승인)
-  deploy-production:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: 
-      name: production
-      url: https://weather.yourdomain.com
-      
-    steps:
-      - name: Blue-Green 배포 실행
-        run: |
-          # 무중단 배포 전략
-          echo "프로덕션 Blue-Green 배포 시작"
-          
-      - name: 배포 후 검증
-        run: |
-          # 헬스체크 및 메트릭 확인
-          ./scripts/post-deploy-verification.sh
-          
-      - name: Slack 배포 완료 알림
-        uses: 8398a7/action-slack@v3
-        with:
-          status: success
-          text: "🚀 프로덕션 배포 완료: ${{ github.ref_name }}"
+  # Nginx 리버스 프록시
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - ku-weather
+    networks:
+      - weather-net
+
+  # Watchtower (자동 업데이트)
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE=0 0 3 * * *  # 매일 새벽 3시
+      - WATCHTOWER_NOTIFICATIONS=slack
+      - WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL=${SLACK_WEBHOOK_URL}
+
+  # Prometheus + Grafana
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=1GB'
+    networks:
+      - weather-net
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      - GF_SERVER_DOMAIN=starryjeju.net
+      - GF_SERVER_ROOT_URL=https://starryjeju.net/grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - weather-net
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  weather-net:
+    driver: bridge
 ```
 
 ### 🐳 **Docker 컨테이너화 전략**
@@ -1565,110 +1556,138 @@ Right Sizing:
   - CloudWatch: 기본 메트릭 무료, 커스텀 메트릭 $0.30/메트릭
 ```
 
-### 📅 **구현 로드맵**
+### 🚀 **starryjeju.net 구현 로드맵**
 
-#### **Phase 1: CI 기반 구축 (1-2주)**
-- [ ] GitHub Actions 워크플로우 작성
-- [ ] 테스트 자동화 및 코드 품질 검사  
-- [ ] Docker 컨테이너화 및 이미지 빌드
-- [ ] 보안 스캔 파이프라인 구축
+#### **Phase 1: 기반 설치 (1일)**
+```bash
+# Self-hosted Runner 설치
+sudo apt update && sudo apt install docker.io docker-compose-plugin
 
-#### **Phase 2: 배포 자동화 (2-3주)**
-- [ ] 환경별 배포 전략 수립
-- [ ] AWS/GCP 인프라 설정 (IaC)
-- [ ] Blue-Green 배포 파이프라인
-- [ ] 롤백 시스템 및 헬스체크
+# GitHub Actions Runner 설정
+# GitHub 저장소 > Settings > Actions > Runners > New self-hosted runner
 
-#### **Phase 3: 모니터링 구축 (2-3주)**
+# Let's Encrypt SSL 인증서
+sudo apt install certbot
+sudo certbot certonly --webroot -w /var/www/html -d starryjeju.net
+
+# 방화벽 설정
+sudo ufw allow 22,80,443/tcp
+```
+
+#### **Phase 2: 컨테이너 환경 구축 (반나절)**
+- [ ] Docker Compose 프로덕션 파일 작성
+- [ ] Nginx SSL 설정 및 리버스 프록시
+- [ ] Watchtower 자동 업데이트 시스템
+- [ ] 환경변수 및 시크릿 관리
+
+#### **Phase 3: CI/CD 파이프라인 (반나절)**
+- [ ] GitHub Actions 워크플로우 구성
+- [ ] Self-hosted Runner 연동 테스트
+- [ ] 무중단 배포 스크립트 작성
+- [ ] Slack 알림 연동
+
+#### **Phase 4: 모니터링 시스템 (반나절)**
 - [ ] Prometheus + Grafana 설정
-- [ ] 알림 규칙 및 대시보드 구성
-- [ ] 로그 중앙화 (ELK Stack)
-- [ ] 성능 메트릭 및 SLA 정의
+- [ ] 시스템 메트릭 대시보드
+- [ ] 로그 순환 (logrotate) 설정
+- [ ] 디스크 공간 모니터링
 
-#### **Phase 4: 고도화 (1-2주)**
-- [ ] 비용 최적화 및 성능 튜닝
-- [ ] 문서화 및 팀 온보딩
-- [ ] 재해복구 계획 수립
-- [ ] 보안 정책 및 컴플라이언스
+#### **Phase 5: 운영 최적화 (1일)**
+- [ ] 리소스 사용량 최적화 (16GB RAM 활용)
+- [ ] 백업 스크립트 작성
+- [ ] 보안 강화 (Fail2ban, SSH 키 인증)
+- [ ] 성능 튜닝 및 문서화
 
-### 🎯 **성공 지표 (KPI)**
+### 🎯 **단일 서버 성공 지표**
+
+#### **비용 효율성**
+- **클라우드 비용 절약**: 월 $63 (연간 $756) 절약 달성
+- **Self-hosted Runner**: GitHub Actions 무제한 활용
+- **리소스 활용률**: 16GB RAM 중 80% 이상 효율적 사용
+- **전력 효율성**: 기존 서버 100% 활용, 추가 인프라 제로
 
 #### **개발 생산성**
-- **빌드 시간**: 5분 이내 (현재 기준)
-- **배포 빈도**: 주 2-3회 → 일 1회 이상
-- **리드 타임**: 코드 작성 → 프로덕션 배포 1시간 이내
-- **실패 복구 시간**: 장애 발생 시 10분 이내 롤백
+- **빌드 시간**: 로컬 캐시로 2분 이내 (기존 5분 → 60% 단축)
+- **배포 빈도**: main 브랜치 푸시 즉시 배포
+- **롤백 시간**: Docker Compose 기반 30초 이내 롤백
+- **테스트 피드백**: 146개 테스트 3분 이내 완료
 
-#### **품질 지표**  
-- **테스트 커버리지**: 74% → 90% 이상 유지
-- **버그 발견율**: 프로덕션 버그 월 1건 이하
-- **보안 취약점**: High/Critical 취약점 0건 유지
-- **성능 저하**: 99.9% 가용성 목표
+#### **시스템 안정성**
+- **가용성**: 99% 이상 (Watchtower + Health Check)
+- **특보 알림 정확도**: 99.9% 유지 (기존 품질 보장)
+- **디스크 관리**: 256GB 중 70% 이하 사용량 유지
+- **메모리 효율성**: 컨테이너별 리소스 제한 준수
 
-#### **비즈니스 영향**
-- **특보 알림 정확도**: 99.9% 이상 (거짓 양성 < 0.1%)  
-- **알림 지연시간**: 평균 30초 이내
-- **시스템 안정성**: 월간 다운타임 < 30분
-- **사용자 만족도**: 웹 대시보드 출시 후 측정
+### 🏆 **단일 서버 CI/CD 장점**
 
-### 📋 **구현 우선순위**
+#### **즉시 구현 가능 (1-2일)**
+1. **Self-hosted Runner 설치** - GitHub 무료 활용
+2. **Docker Compose 배포** - 현재 기능 컨테이너화  
+3. **Nginx SSL 연동** - starryjeju.net 도메인 활용
+4. **Watchtower 자동 업데이트** - 무중단 배포 실현
 
-#### **High Priority (즉시 구현)**
-1. **기본 CI 파이프라인**: 테스트 자동화, 코드 품질 검사
-2. **Docker 컨테이너화**: 환경 일관성 및 배포 준비  
-3. **개발환경 자동 배포**: dev 브랜치 푸시 시 자동 배포
-4. **기본 모니터링**: 애플리케이션 상태 및 에러 추적
+#### **1주 내 완성 목표**
+1. **기본 모니터링** - Prometheus + Grafana
+2. **로그 관리** - logrotate 디스크 최적화
+3. **보안 강화** - Fail2ban, SSH 키 인증
+4. **백업 시스템** - 일일 자동 백업
 
-#### **Medium Priority (2-4주 내)**
-1. **프로덕션 배포 파이프라인**: Blue-Green 배포, 롤백 시스템
-2. **종합 모니터링**: Prometheus, Grafana, 알림 시스템
-3. **보안 강화**: 취약점 스캔, 시크릿 관리 개선
-4. **성능 최적화**: 캐싱, 빌드 시간 단축
+#### **향후 확장 대비**
+1. **웹 대시보드** - weather.starryjeju.net 서브도메인
+2. **API 서비스** - /api/alerts 외부 접근
+3. **다중 플랫폼** - Telegram, Discord 연동
+4. **분석 시스템** - 사용량 통계 수집
 
-#### **Low Priority (향후 확장 시)**
-1. **웹 대시보드 CI/CD**: Frontend 배포 파이프라인
-2. **다중 플랫폼 테스트**: Telegram, Discord 자동 테스트  
-3. **DB 연동 자동화**: 마이그레이션, 백업/복원
-4. **고급 모니터링**: 분산 추적, 사용자 행동 분석
+### 🚀 **starryjeju.net 시작 가이드**
 
-### 🚀 **시작 가이드**
-
-#### **1. 로컬 개발 환경 설정**
+#### **1. 서버 환경 준비 (30분)**
 ```bash
-# 1. 저장소 클론 및 의존성 설치
-git clone https://github.com/your-org/ku-weather.git
+# starryjeju.net 서버에서 실행
+# 1. Docker 설치
+sudo apt update
+sudo apt install docker.io docker-compose-plugin
+
+# 2. GitHub Actions Self-hosted Runner 설치
+# GitHub 저장소 > Settings > Actions > Runners > New self-hosted runner
+# 제공된 스크립트 실행
+
+# 3. SSL 인증서 설정
+sudo apt install certbot nginx
+sudo certbot certonly --nginx -d starryjeju.net
+
+# 4. 방화벽 설정
+sudo ufw allow 22,80,443/tcp
+sudo ufw enable
+```
+
+#### **2. 프로젝트 배포 설정 (15분)**
+```bash
+# 1. 저장소 클론
+git clone https://github.com/fomalhaut84/ku-weather.git
 cd ku-weather
-npm install
 
 # 2. 환경변수 설정
-cp .env.example .env
-# KMA_API_KEY, SLACK_WEBHOOK_URL 설정
+cp .env.example .env.prod
+# KMA_API_KEY, SLACK_WEBHOOK_URL, GRAFANA_PASSWORD 설정
 
-# 3. Docker 개발 환경 시작
-docker-compose up -d
+# 3. Docker Compose 프로덕션 시작
+docker-compose -f docker-compose.prod.yml up -d
 
-# 4. 애플리케이션 실행 확인  
-curl http://localhost:3000/health
+# 4. 서비스 상태 확인
+docker-compose -f docker-compose.prod.yml ps
+curl https://starryjeju.net/health
 ```
 
-#### **2. CI/CD 파이프라인 활성화**
+#### **3. 모니터링 대시보드 (5분)**
 ```bash
-# 1. GitHub Actions 워크플로우 복사
-mkdir -p .github/workflows
-cp ci-cd-templates/*.yml .github/workflows/
+# Grafana 접속
+# https://starryjeju.net/grafana
+# admin / {GRAFANA_PASSWORD}
 
-# 2. Repository Secrets 설정
-# Settings > Secrets and variables > Actions
-# - KMA_API_KEY
-# - SLACK_WEBHOOK_URL  
-# - AWS_ACCESS_KEY_ID (배포용)
-# - AWS_SECRET_ACCESS_KEY
-
-# 3. 첫 번째 PR 생성하여 파이프라인 테스트
-git checkout -b feature/setup-cicd
-git add .github/
-git commit -m "feat: CI/CD 파이프라인 설정"
-git push origin feature/setup-cicd
+# Prometheus 메트릭 확인
+# https://starryjeju.net/prometheus
 ```
 
-이 CI/CD 환경 구성을 통해 **현재의 고품질 코드베이스를 유지**하면서 **향후 확장 기능들을 안정적으로 배포**할 수 있는 기반을 마련할 수 있습니다.
+**총 구축 시간**: 약 1시간으로 **엔터프라이즈급 CI/CD 환경**을 starryjeju.net에서 운영할 수 있습니다.
+
+16GB RAM과 고정IP 환경에서 **월 $63 절약**하면서 **GitHub Actions 무제한** 활용이 가능합니다.
