@@ -27,7 +27,8 @@
       "Bash(timeout 60 npm run start)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "Bash(gh pr edit:*)"
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr view:*)"
     ],
     "deny": []
   }

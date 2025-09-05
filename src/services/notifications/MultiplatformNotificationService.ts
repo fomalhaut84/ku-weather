@@ -2,6 +2,7 @@ import { WeatherAlert, AlertChange } from '../../types/weather';
 import { logger } from '../../utils/logger';
 import { NotificationService, NotificationResult } from './interfaces';
 import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
+import { HybridSubscriptionManager } from '../subscriptions/HybridSubscriptionManager';
 
 /**
  * 다중 플랫폼 알림 관리 서비스
@@ -11,6 +12,7 @@ import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult }
 export class MultiplatformNotificationService {
   private services: NotificationService[] = [];
   private subscriptionManager: SubscriptionManager;
+  private hybridManager?: HybridSubscriptionManager;
 
   constructor(services: NotificationService[] = [], subscriptionManager?: SubscriptionManager) {
     this.services = [...services];
@@ -515,5 +517,124 @@ export class MultiplatformNotificationService {
       'N': '지진해일'
     };
     return types[code?.trim()] || code;
+  }
+
+  // ========== 하이브리드 구독 관리 시스템 연동 ==========
+
+  /**
+   * 하이브리드 구독 관리 시스템 설정
+   */
+  setHybridSubscriptionManager(hybridManager: HybridSubscriptionManager): void {
+    this.hybridManager = hybridManager;
+    logger.info('하이브리드 구독 관리 시스템 연동 완료');
+  }
+
+  /**
+   * 하이브리드 구독 관리 시스템 반환
+   */
+  getHybridSubscriptionManager(): HybridSubscriptionManager | undefined {
+    return this.hybridManager;
+  }
+
+  /**
+   * 하이브리드 구독 관리 시스템 사용 가능 여부
+   */
+  isHybridSubscriptionAvailable(): boolean {
+    return !!this.hybridManager;
+  }
+
+  /**
+   * 플랫폼별 구독 명령어 처리 (하이브리드 시스템 연동)
+   */
+  async processSubscriptionCommand(
+    platform: string,
+    userId: string,
+    command: string,
+    args: string[] = [],
+    rawMessage?: string
+  ): Promise<{ success: boolean; message: string; error?: string }> {
+    if (!this.hybridManager) {
+      return {
+        success: false,
+        message: '하이브리드 구독 시스템이 설정되지 않았습니다.',
+        error: 'HYBRID_SYSTEM_NOT_AVAILABLE'
+      };
+    }
+
+    try {
+      const result = await this.hybridManager.processCommand({
+        command: command as any,
+        platform,
+        userId,
+        args,
+        rawMessage
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('하이브리드 구독 명령어 처리 실패:', error);
+      return {
+        success: false,
+        message: '구독 명령어 처리 중 오류가 발생했습니다.',
+        error: error instanceof Error ? error.message : 'COMMAND_PROCESSING_FAILED'
+      };
+    }
+  }
+
+  /**
+   * 웹 토큰 생성 (하이브리드 시스템 연동)
+   */
+  async generateWebToken(platform: string, userId: string): Promise<string | null> {
+    if (!this.hybridManager) {
+      logger.warn('하이브리드 구독 시스템이 설정되지 않았습니다');
+      return null;
+    }
+
+    try {
+      const authToken = await this.hybridManager.generateUserToken(platform, userId);
+      return authToken.token;
+    } catch (error) {
+      logger.error('웹 토큰 생성 실패:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 하이브리드 플랫폼별 구독 통계 조회
+   */
+  async getHybridSubscriptionStats(): Promise<Record<string, any> | null> {
+    if (!this.hybridManager) {
+      return null;
+    }
+
+    try {
+      return await this.hybridManager.getPlatformStats();
+    } catch (error) {
+      logger.error('하이브리드 구독 통계 조회 실패:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 등록된 하이브리드 플랫폼 목록
+   */
+  getHybridPlatformNames(): string[] {
+    return this.hybridManager?.getRegisteredPlatforms() || [];
+  }
+
+  /**
+   * 플랫폼별 도움말 메시지 조회 (하이브리드 시스템)
+   */
+  async getHybridHelpMessage(platform: string): Promise<string | null> {
+    if (!this.hybridManager) {
+      return null;
+    }
+
+    try {
+      return await this.hybridManager.getHelpMessage(platform);
+    } catch (error) {
+      logger.error('하이브리드 도움말 조회 실패:', error);
+      return null;
+    }
   }
 }
