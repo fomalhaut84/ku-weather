@@ -232,7 +232,9 @@ describe('Config', () => {
         subcd: '12',
         checkIntervalMinutes: 45,
         nodeEnv: 'test',
-        debug: true
+        debug: true,
+        environment: 'development',
+        slackBatchMode: true
       });
     });
 
@@ -250,7 +252,9 @@ describe('Config', () => {
         subcd: '전체',
         checkIntervalMinutes: 30,
         nodeEnv: 'development',
-        debug: false
+        debug: false,
+        environment: 'development',
+        slackBatchMode: true
       });
     });
   });
