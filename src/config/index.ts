@@ -1,5 +1,6 @@
 import * as dotenv from 'dotenv';
 import { logger } from '../utils/logger';
+import { NotificationConfig } from '../services/notifications/interfaces';
 
 dotenv.config();
 
@@ -14,6 +15,8 @@ export interface Config {
   debug: boolean;
   environment: string;
   slackBatchMode: boolean;
+  // 새로운 다중 플랫폼 설정
+  notificationConfig: NotificationConfig;
 }
 
 function validateConfig(): Config {
@@ -40,6 +43,17 @@ function validateConfig(): Config {
     throw new Error('CHECK_INTERVAL_MINUTES는 양수여야 합니다');
   }
 
+  // 다중 플랫폼 알림 설정 생성
+  const notificationConfig: NotificationConfig = {
+    platforms: ['slack'], // 현재는 Slack만 지원 (Phase 1)
+    environment,
+    slack: {
+      enabled: true,
+      webhookUrl: slackWebhookUrl,
+      batchMode: slackBatchMode
+    }
+  };
+
   const config: Config = {
     weatherApiKey,
     slackWebhookUrl,
@@ -50,7 +64,8 @@ function validateConfig(): Config {
     nodeEnv,
     debug,
     environment,
-    slackBatchMode
+    slackBatchMode,
+    notificationConfig
   };
 
   logger.info('설정 로드 완료:', {
