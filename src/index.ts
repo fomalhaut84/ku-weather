@@ -1,7 +1,8 @@
 import { WeatherService } from './services/weatherService';
-import { SlackService } from './services/slackService';
 import { logger } from './utils/logger';
 import { config } from './config';
+import { NotificationFactory } from './services/notifications/NotificationFactory';
+import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 
 // UTF-8 출력 설정
 process.stdout.setDefaultEncoding('utf8');
@@ -69,9 +70,18 @@ async function main() {
     logger.info('기상특보 모니터링 시작');
     
     const weatherService = new WeatherService(config.weatherApiKey);
-    const slackService = new SlackService(config.slackWebhookUrl);
     
-    await startMonitoring(weatherService, slackService);
+    // 새로운 다중 플랫폼 알림 서비스 초기화
+    const notificationService = NotificationFactory.createMultiplatformService(config.notificationConfig);
+    
+    // 설정 유효성 검사
+    const validation = NotificationFactory.validateConfig(config.notificationConfig);
+    if (!validation.valid) {
+      logger.error('알림 설정 검증 실패:', validation.errors);
+      throw new Error('알림 설정이 올바르지 않습니다');
+    }
+    
+    await startMonitoring(weatherService, notificationService);
     
   } catch (error) {
     logger.error('애플리케이션 시작 중 오류 발생:', error);
@@ -79,12 +89,24 @@ async function main() {
   }
 }
 
-async function startMonitoring(weatherService: WeatherService, slackService: SlackService) {
+async function startMonitoring(weatherService: WeatherService, notificationService: MultiplatformNotificationService) {
   logger.info(`${config.checkIntervalMinutes}분 간격으로 기상특보 모니터링 시작`);
   
   // 특보구역 데이터 로드
   logger.info('특보구역 데이터 로드 중...');
   await weatherService.fetchRegionData();
+  
+  // 알림 서비스 건강 상태 확인
+  logger.info('알림 서비스 건강 상태 확인 중...');
+  const healthStatus = await notificationService.healthCheck();
+  const healthyPlatforms = Object.entries(healthStatus).filter(([_, healthy]) => healthy);
+  const unhealthyPlatforms = Object.entries(healthStatus).filter(([_, healthy]) => !healthy);
+  
+  if (unhealthyPlatforms.length === 0) {
+    logger.info(`모든 알림 플랫폼이 정상 상태입니다: ${healthyPlatforms.map(([platform]) => platform).join(', ')}`);
+  } else {
+    logger.warn(`일부 알림 플랫폼이 비정상 상태입니다. 정상: ${healthyPlatforms.map(([platform]) => platform).join(', ')}, 비정상: ${unhealthyPlatforms.map(([platform]) => platform).join(', ')}`);
+  }
   
   const checkWeather = async () => {
     try {
@@ -123,12 +145,24 @@ async function startMonitoring(weatherService: WeatherService, slackService: Sla
         });
         console.log('\n=========================\n');
         
-        // Slack 알림 전송
+        // 다중 플랫폼 알림 전송
         try {
-          await slackService.sendAlertChanges(changes);
-          logger.info(`${changes.length}개 변동사항 Slack 전송 완료`);
+          const results = await notificationService.sendAlertChanges(changes);
+          const successCount = results.filter(r => r.success).length;
+          const failCount = results.length - successCount;
+          
+          if (failCount === 0) {
+            logger.info(`${changes.length}개 변동사항 알림 전송 완료 (${successCount}개 플랫폼 성공)`);
+          } else {
+            logger.warn(`${changes.length}개 변동사항 알림 전송 완료 (성공: ${successCount}, 실패: ${failCount})`);
+            
+            // 실패한 플랫폼 로그 출력
+            results.filter(r => !r.success).forEach(result => {
+              logger.error(`${result.platform} 전송 실패: ${result.error}`);
+            });
+          }
         } catch (error) {
-          logger.error('Slack 전송 실패:', error);
+          logger.error('알림 전송 실패:', error);
         }
       } else {
         logger.debug('기상특보 변동 없음');
