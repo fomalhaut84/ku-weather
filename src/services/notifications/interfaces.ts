@@ -1,4 +1,5 @@
 import { WeatherAlert, AlertChange } from '../../types/weather';
+import { UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
 
 /**
  * 알림 전송 결과
@@ -28,19 +29,19 @@ export interface NotificationService {
   validateConfig(): boolean;
 
   /**
-   * 단일 날씨 특보 알림 전송
+   * 단일 날씨 특보 알림 전송 (기존 방식 - 전역 전송)
    * @param alert 특보 정보
    */
   sendAlert(alert: WeatherAlert): Promise<NotificationResult>;
 
   /**
-   * 특보 변동 알림 전송
+   * 특보 변동 알림 전송 (기존 방식 - 전역 전송)
    * @param change 변동 정보
    */
   sendAlertChange(change: AlertChange): Promise<NotificationResult>;
 
   /**
-   * 다중 특보 변동 알림 전송 (배치 또는 개별)
+   * 다중 특보 변동 알림 전송 (기존 방식 - 전역 전송)
    * @param changes 변동 정보 배열
    */
   sendAlertChanges(changes: AlertChange[]): Promise<NotificationResult[]>;
@@ -50,6 +51,37 @@ export interface NotificationService {
    * @returns 플랫폼과의 연결 상태
    */
   healthCheck(): Promise<boolean>;
+
+  // ========== 새로운 구독 기반 메서드들 ==========
+
+  /**
+   * 구독 기반 특보 알림 전송 (개별 사용자별)
+   * @param alert 특보 정보
+   * @param subscriptions 해당 특보에 관심있는 구독자 목록
+   */
+  sendAlertToSubscriptions?(alert: WeatherAlert, subscriptions: UserSubscription[]): Promise<SubscriptionNotificationResult[]>;
+
+  /**
+   * 구독 기반 변동 알림 전송 (개별 사용자별)
+   * @param change 변동 정보  
+   * @param subscriptions 해당 변동에 관심있는 구독자 목록
+   */
+  sendAlertChangeToSubscriptions?(change: AlertChange, subscriptions: UserSubscription[]): Promise<SubscriptionNotificationResult[]>;
+
+  /**
+   * 구독 기반 다중 변동 알림 전송 (개별 사용자별)
+   * @param changes 변동 정보 배열
+   * @param subscriptionsByChange 각 변동별 관심있는 구독자 목록
+   */
+  sendAlertChangesToSubscriptions?(changes: AlertChange[], subscriptionsByChange: UserSubscription[][]): Promise<SubscriptionNotificationResult[]>;
+
+  /**
+   * 개별 사용자에게 직접 메시지 전송 (플랫폼이 지원하는 경우)
+   * @param userId 플랫폼별 사용자 ID
+   * @param message 전송할 메시지 내용
+   * @param options 추가 옵션 (플랫폼별)
+   */
+  sendDirectMessage?(userId: string, message: string, options?: any): Promise<NotificationResult>;
 }
 
 /**
@@ -57,6 +89,7 @@ export interface NotificationService {
  */
 export interface PlatformConfig {
   enabled: boolean;
+  targetRegions?: string[]; // 플랫폼별 모니터링 대상 지역 (없으면 전역 설정 사용)
   [key: string]: any;
 }
 

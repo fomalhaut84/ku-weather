@@ -1,6 +1,7 @@
 import { WeatherAlert, AlertChange } from '../../types/weather';
 import { logger } from '../../utils/logger';
 import { NotificationService, NotificationResult } from './interfaces';
+import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
 
 /**
  * 다중 플랫폼 알림 관리 서비스
@@ -9,10 +10,12 @@ import { NotificationService, NotificationResult } from './interfaces';
  */
 export class MultiplatformNotificationService {
   private services: NotificationService[] = [];
+  private subscriptionManager: SubscriptionManager;
 
-  constructor(services: NotificationService[] = []) {
+  constructor(services: NotificationService[] = [], subscriptionManager?: SubscriptionManager) {
     this.services = [...services];
-    logger.info(`MultiplatformNotificationService 초기화: ${this.services.length}개 플랫폼`);
+    this.subscriptionManager = subscriptionManager || new SubscriptionManager();
+    logger.info(`MultiplatformNotificationService 초기화: ${this.services.length}개 플랫폼, 구독 시스템 ${subscriptionManager ? '외부' : '내장'}`);
   }
 
   /**
@@ -253,6 +256,244 @@ export class MultiplatformNotificationService {
         } as NotificationResult;
       }
     });
+  }
+
+  // ========== 구독 기반 알림 메서드들 ==========
+
+  /**
+   * 구독 매니저 반환
+   */
+  getSubscriptionManager(): SubscriptionManager {
+    return this.subscriptionManager;
+  }
+
+  /**
+   * 구독 기반 특보 알림 전송 (개별 사용자별)
+   */
+  async sendAlertToSubscriptions(alert: WeatherAlert): Promise<SubscriptionNotificationResult[]> {
+    const relevantSubscriptions = this.subscriptionManager.getRelevantSubscriptions(alert);
+    
+    if (relevantSubscriptions.length === 0) {
+      logger.debug(`특보 알림: 관심있는 구독자 없음 - ${alert.REG_NAME} ${this.getWarningTypeName(alert.WRN)}`);
+      return [];
+    }
+
+    logger.info(`구독 기반 특보 알림 전송: ${alert.REG_NAME} ${this.getWarningTypeName(alert.WRN)} - ${relevantSubscriptions.length}명 구독자`);
+
+    const results: SubscriptionNotificationResult[] = [];
+
+    // 플랫폼별로 구독자를 그룹화
+    const subscriptionsByPlatform = new Map<string, UserSubscription[]>();
+    for (const subscription of relevantSubscriptions) {
+      if (!subscriptionsByPlatform.has(subscription.platform)) {
+        subscriptionsByPlatform.set(subscription.platform, []);
+      }
+      subscriptionsByPlatform.get(subscription.platform)!.push(subscription);
+    }
+
+    // 각 플랫폼별로 구독 기반 전송
+    for (const [platform, subscriptions] of subscriptionsByPlatform) {
+      const service = this.services.find(s => s.platformName === platform);
+      if (!service) {
+        logger.warn(`플랫폼 서비스를 찾을 수 없음: ${platform}`);
+        for (const sub of subscriptions) {
+          results.push({
+            subscriptionId: sub.id,
+            userId: sub.userId,
+            platform: sub.platform,
+            success: false,
+            error: 'Platform service not found'
+          });
+        }
+        continue;
+      }
+
+      try {
+        if (service.sendAlertToSubscriptions) {
+          // 구독 기반 전송 지원
+          const platformResults = await service.sendAlertToSubscriptions(alert, subscriptions);
+          results.push(...platformResults);
+        } else {
+          // 구독 기반 전송 미지원 - 전역 전송으로 폴백
+          logger.warn(`${platform}는 구독 기반 전송을 지원하지 않음. 전역 전송으로 폴백`);
+          const globalResult = await service.sendAlert(alert);
+          
+          for (const sub of subscriptions) {
+            results.push({
+              subscriptionId: sub.id,
+              userId: sub.userId,
+              platform: sub.platform,
+              success: globalResult.success,
+              error: globalResult.error
+            });
+          }
+        }
+      } catch (error) {
+        logger.error(`${platform} 구독 기반 특보 알림 전송 실패:`, error);
+        for (const sub of subscriptions) {
+          results.push({
+            subscriptionId: sub.id,
+            userId: sub.userId,
+            platform: sub.platform,
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    logger.info(`구독 기반 특보 알림 전송 완료: ${successCount}/${results.length} 성공`);
+
+    return results;
+  }
+
+  /**
+   * 구독 기반 변동 알림 전송 (개별 사용자별)
+   */
+  async sendAlertChangeToSubscriptions(change: AlertChange): Promise<SubscriptionNotificationResult[]> {
+    const relevantSubscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
+    
+    if (relevantSubscriptions.length === 0) {
+      const alert = change.current || change.previous!;
+      logger.debug(`변동 알림: 관심있는 구독자 없음 - ${change.type} ${alert.regionName}`);
+      return [];
+    }
+
+    const alert = change.current || change.previous!;
+    logger.info(`구독 기반 변동 알림 전송: ${change.type} ${alert.regionName} - ${relevantSubscriptions.length}명 구독자`);
+
+    const results: SubscriptionNotificationResult[] = [];
+
+    // 플랫폼별로 구독자를 그룹화
+    const subscriptionsByPlatform = new Map<string, UserSubscription[]>();
+    for (const subscription of relevantSubscriptions) {
+      if (!subscriptionsByPlatform.has(subscription.platform)) {
+        subscriptionsByPlatform.set(subscription.platform, []);
+      }
+      subscriptionsByPlatform.get(subscription.platform)!.push(subscription);
+    }
+
+    // 각 플랫폼별로 구독 기반 전송
+    for (const [platform, subscriptions] of subscriptionsByPlatform) {
+      const service = this.services.find(s => s.platformName === platform);
+      if (!service) {
+        logger.warn(`플랫폼 서비스를 찾을 수 없음: ${platform}`);
+        for (const sub of subscriptions) {
+          results.push({
+            subscriptionId: sub.id,
+            userId: sub.userId,
+            platform: sub.platform,
+            success: false,
+            error: 'Platform service not found'
+          });
+        }
+        continue;
+      }
+
+      try {
+        if (service.sendAlertChangeToSubscriptions) {
+          // 구독 기반 전송 지원
+          const platformResults = await service.sendAlertChangeToSubscriptions(change, subscriptions);
+          results.push(...platformResults);
+        } else {
+          // 구독 기반 전송 미지원 - 전역 전송으로 폴백
+          logger.warn(`${platform}는 구독 기반 변동 알림을 지원하지 않음. 전역 전송으로 폴백`);
+          const globalResult = await service.sendAlertChange(change);
+          
+          for (const sub of subscriptions) {
+            results.push({
+              subscriptionId: sub.id,
+              userId: sub.userId,
+              platform: sub.platform,
+              success: globalResult.success,
+              error: globalResult.error
+            });
+          }
+        }
+      } catch (error) {
+        logger.error(`${platform} 구독 기반 변동 알림 전송 실패:`, error);
+        for (const sub of subscriptions) {
+          results.push({
+            subscriptionId: sub.id,
+            userId: sub.userId,
+            platform: sub.platform,
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    logger.info(`구독 기반 변동 알림 전송 완료: ${successCount}/${results.length} 성공`);
+
+    return results;
+  }
+
+  /**
+   * 구독 기반 다중 변동 알림 전송
+   */
+  async sendAlertChangesToSubscriptions(changes: AlertChange[]): Promise<SubscriptionNotificationResult[]> {
+    if (changes.length === 0) {
+      return [];
+    }
+
+    logger.info(`구독 기반 다중 변동 알림 전송 시작: ${changes.length}개 변동`);
+
+    const allResults: SubscriptionNotificationResult[] = [];
+
+    // 각 변동별로 개별 처리 (사용자별 관심 지역이 다르기 때문)
+    for (const change of changes) {
+      const results = await this.sendAlertChangeToSubscriptions(change);
+      allResults.push(...results);
+    }
+
+    const successCount = allResults.filter(r => r.success).length;
+    logger.info(`구독 기반 다중 변동 알림 전송 완료: ${successCount}/${allResults.length} 성공`);
+
+    return allResults;
+  }
+
+  /**
+   * 구독 추가 (편의 메서드)
+   */
+  addSubscription(
+    platform: string, 
+    userId: string, 
+    targetRegions: string[], 
+    options?: {
+      warningTypes?: string[];
+      displayName?: string;
+      preferences?: UserSubscription['preferences'];
+    }
+  ): string {
+    return this.subscriptionManager.addSubscription({
+      platform,
+      userId,
+      targetRegions,
+      warningTypes: options?.warningTypes,
+      displayName: options?.displayName,
+      preferences: options?.preferences,
+      enabled: true
+    });
+  }
+
+  /**
+   * 구독 제거 (편의 메서드)
+   */
+  removeSubscription(platform: string, userId: string): boolean {
+    const subscription = this.subscriptionManager.getUserSubscription(platform, userId);
+    if (!subscription) return false;
+    
+    return this.subscriptionManager.removeSubscription(subscription.id);
+  }
+
+  /**
+   * 구독 통계 조회
+   */
+  getSubscriptionStatistics() {
+    return this.subscriptionManager.getStatistics();
   }
 
   /**
