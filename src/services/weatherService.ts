@@ -60,9 +60,7 @@ export class WeatherService {
       // 지역 필터링
       if (targetRegIds.length > 0) {
         allAlerts = allAlerts.filter(alert => 
-          targetRegIds.some(regId => 
-            alert.REG_NAME.includes(regId) || alert.REG_KO.includes(regId)
-          )
+          targetRegIds.includes(alert.REG_ID)
         );
       }
 
@@ -99,9 +97,7 @@ export class WeatherService {
       // 지역 필터링
       if (targetRegIds.length > 0) {
         allAlerts = allAlerts.filter(alert => 
-          targetRegIds.some(regId => 
-            alert.REG_NAME.includes(regId) || alert.REG_KO.includes(regId)
-          )
+          targetRegIds.includes(alert.REG_ID)
         );
       }
 
