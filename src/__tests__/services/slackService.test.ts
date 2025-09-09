@@ -209,7 +209,7 @@ describe('SlackService', () => {
           expect.objectContaining({
             title: expect.stringContaining('폭염'),
             fields: expect.arrayContaining([
-              { title: '📍 지역', value: '서울강북', short: true },
+              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%EA%B0%95%EB%B6%81+날씨|서울강북>', short: true },
               { title: '📊 특보수준', value: '주의보', short: true },
               { title: '🏢 상위지역', value: '서울특별시', short: true }
             ])
@@ -463,7 +463,7 @@ describe('SlackService', () => {
           expect.objectContaining({
             color: 'danger',
             fields: expect.arrayContaining([
-              { title: '📍 지역', value: '서울강북', short: true },
+              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%EA%B0%95%EB%B6%81+날씨|서울강북>', short: true },
               { title: '⚠️ 특보종류', value: '폭염', short: true },
               { title: '📊 특보수준', value: '주의보', short: true }
             ])
@@ -749,7 +749,7 @@ describe('SlackService', () => {
       expect(firstAttachment.color).toBe('danger');
       expect(firstAttachment.fields).toEqual(
         expect.arrayContaining([
-          { title: '📍 지역', value: '서울특별시', short: true },
+          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C+날씨|서울특별시>', short: true },
           { title: '⚠️ 특보종류', value: '폭염', short: true },
           { title: '📊 수준', value: '주의보', short: true }
         ])
@@ -761,7 +761,7 @@ describe('SlackService', () => {
       expect(secondAttachment.color).toBe('good');
       expect(secondAttachment.fields).toEqual(
         expect.arrayContaining([
-          { title: '📍 지역', value: '부산광역시', short: true },
+          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EB%B6%80%EC%82%B0%EA%B4%91%EC%97%AD%EC%8B%9C+날씨|부산광역시>', short: true },
           { title: '⚠️ 특보종류', value: '호우', short: true },
           { title: '❌ 해제수준', value: '경보', short: true }
         ])
