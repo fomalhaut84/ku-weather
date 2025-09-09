@@ -26,7 +26,8 @@
       "Bash(gh issue:*)",
       "Bash(timeout 60 npm run start)",
       "Bash(node:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(gh release create:*)"
     ],
     "deny": []
   }
