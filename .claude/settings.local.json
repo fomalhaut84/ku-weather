@@ -28,7 +28,8 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "Bash(gh pr edit:*)",
-      "Bash(gh pr view:*)"
+      "Bash(gh pr view:*)",
+      "Bash(gh release create:*)"
     ],
     "deny": []
   }

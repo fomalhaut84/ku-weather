@@ -161,6 +161,45 @@ describe('SlackService', () => {
     });
   });
 
+  describe('generateWeatherSearchUrl and simplifyRegionName', () => {
+    let slackService: SlackService;
+
+    beforeEach(() => {
+      slackService = new SlackService('https://hooks.slack.com/test');
+    });
+
+    it('should generate correct URL for simplified region names', () => {
+      // 긴 제주 지역명 단순화 테스트
+      const longRegionName = '제주도북부중산간';
+      const url = (slackService as any).generateWeatherSearchUrl(longRegionName);
+      expect(url).toBe('https://search.daum.net/search?w=tot&q=제주+날씨');
+    });
+
+    it('should handle Seoul district names correctly', () => {
+      const seoulRegion = '서울강북';
+      const url = (slackService as any).generateWeatherSearchUrl(seoulRegion);
+      expect(url).toBe('https://search.daum.net/search?w=tot&q=서울+강북구+날씨');
+    });
+
+    it('should simplify sea area names', () => {
+      const seaArea = '서해북부먼바다';
+      const url = (slackService as any).generateWeatherSearchUrl(seaArea);
+      expect(url).toBe('https://search.daum.net/search?w=tot&q=서해+날씨');
+    });
+
+    it('should handle normal region names without change', () => {
+      const normalRegion = '서울특별시';
+      const simplified = (slackService as any).simplifyRegionName(normalRegion);
+      expect(simplified).toBe('서울');
+    });
+
+    it('should handle very long region names by truncating', () => {
+      const veryLongRegion = '매우긴지역명테스트';
+      const simplified = (slackService as any).simplifyRegionName(veryLongRegion);
+      expect(simplified).toBe('매우긴');
+    });
+  });
+
   describe('sendAlert', () => {
     it('should send alert successfully', async () => {
       const mockAlert = createMockAlert();
@@ -209,7 +248,7 @@ describe('SlackService', () => {
           expect.objectContaining({
             title: expect.stringContaining('폭염'),
             fields: expect.arrayContaining([
-              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%EA%B0%95%EB%B6%81+날씨|서울강북>', short: true },
+              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=서울+강북구+날씨|서울강북>', short: true },
               { title: '📊 특보수준', value: '주의보', short: true },
               { title: '🏢 상위지역', value: '서울특별시', short: true }
             ])
@@ -463,7 +502,7 @@ describe('SlackService', () => {
           expect.objectContaining({
             color: 'danger',
             fields: expect.arrayContaining([
-              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%EA%B0%95%EB%B6%81+날씨|서울강북>', short: true },
+              { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=서울+강북구+날씨|서울강북>', short: true },
               { title: '⚠️ 특보종류', value: '폭염', short: true },
               { title: '📊 특보수준', value: '주의보', short: true }
             ])
@@ -749,7 +788,7 @@ describe('SlackService', () => {
       expect(firstAttachment.color).toBe('danger');
       expect(firstAttachment.fields).toEqual(
         expect.arrayContaining([
-          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C+날씨|서울특별시>', short: true },
+          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=서울+날씨|서울특별시>', short: true },
           { title: '⚠️ 특보종류', value: '폭염', short: true },
           { title: '📊 수준', value: '주의보', short: true }
         ])
@@ -761,7 +800,7 @@ describe('SlackService', () => {
       expect(secondAttachment.color).toBe('good');
       expect(secondAttachment.fields).toEqual(
         expect.arrayContaining([
-          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=%EB%B6%80%EC%82%B0%EA%B4%91%EC%97%AD%EC%8B%9C+날씨|부산광역시>', short: true },
+          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=부산+날씨|부산광역시>', short: true },
           { title: '⚠️ 특보종류', value: '호우', short: true },
           { title: '❌ 해제수준', value: '경보', short: true }
         ])
