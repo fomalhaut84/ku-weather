@@ -18,14 +18,27 @@ export class SlackService {
 
   /**
    * 환경별 메시지 접두사를 반환합니다.
+   * production 환경에서는 접두사를 표시하지 않습니다.
    */
   private getEnvironmentPrefix(): string {
+    // production 환경에서는 접두사 없음
+    if (this.environment === 'production' || process.env.NODE_ENV === 'production') {
+      return '';
+    }
+    
     const prefixes: Record<string, string> = {
       'development': '[DEV] ',
-      'staging': '[STAGING] ',
-      'production': ''
+      'staging': '[STAGING] '
     };
     return prefixes[this.environment] || `[${this.environment.toUpperCase()}] `;
+  }
+
+  /**
+   * 지역명으로 다음 날씨 검색 URL을 생성합니다.
+   */
+  private generateWeatherSearchUrl(regionName: string): string {
+    const encodedRegionName = encodeURIComponent(regionName);
+    return `https://search.daum.net/search?w=tot&q=${encodedRegionName}+날씨`;
   }
 
   /**
@@ -87,10 +100,11 @@ export class SlackService {
           {
             color: config.color,
             title: change.description,
+            title_link: this.generateWeatherSearchUrl(alert.regionName),
             fields: [
               {
                 title: '📍 지역',
-                value: alert.regionName,
+                value: `<${this.generateWeatherSearchUrl(alert.regionName)}|${alert.regionName}>`,
                 short: true
               },
               {
@@ -187,10 +201,11 @@ export class SlackService {
         const attachment: any = {
           color: config.color,
           title: `${config.emoji} ${change.description}`,
+          title_link: this.generateWeatherSearchUrl(alert.regionName),
           fields: [
             {
               title: '📍 지역',
-              value: alert.regionName,
+              value: `<${this.generateWeatherSearchUrl(alert.regionName)}|${alert.regionName}>`,
               short: true
             },
             {
@@ -435,10 +450,11 @@ export class SlackService {
           {
             color: alert.LVL === '1' ? 'danger' : 'warning',
             title: `${this.getWarningTypeName(alert.WRN)} ${this.getWarningCommand(alert.CMD)}`,
+            title_link: this.generateWeatherSearchUrl(alert.REG_NAME),
             fields: [
               {
                 title: '📍 지역',
-                value: alert.REG_NAME,
+                value: `<${this.generateWeatherSearchUrl(alert.REG_NAME)}|${alert.REG_NAME}>`,
                 short: true
               },
               {
