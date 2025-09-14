@@ -50,8 +50,8 @@ export class WeatherService {
         allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, sevenDaysAgo, subcd);
       } else {
         logger.debug('증분 업데이트: 마지막 확인 이후 데이터만 조회');
-        // 증분 업데이트: 마지막 확인 시점 + 안전 마진 (해제 알림 누락 개선을 위해 10분에서 20분으로 확대)
-        const safetyMarginMinutes = 20;
+        // 증분 업데이트: 마지막 확인 시점 + 안전 마진 (해제 알림 누락 개선을 위해 10분에서 30분으로 확대)
+        const safetyMarginMinutes = 30;
         const fromTime = new Date(this.lastCheckTime!.getTime() - safetyMarginMinutes * 60 * 1000);
         
         allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, fromTime, subcd);
