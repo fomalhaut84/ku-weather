@@ -49,12 +49,11 @@ export class WeatherService {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, sevenDaysAgo, subcd);
       } else {
-        logger.debug('증분 업데이트: 마지막 확인 이후 데이터만 조회');
-        // 증분 업데이트: 마지막 확인 시점 + 안전 마진
-        const safetyMarginMinutes = 10;
-        const fromTime = new Date(this.lastCheckTime!.getTime() - safetyMarginMinutes * 60 * 1000);
+        logger.debug('증분 업데이트: 최근 2시간 데이터 조회 (해제 알림 누락 방지를 위한 고정 범위)');
+        // 증분 업데이트: 현재 시점에서 2시간 전까지의 데이터를 항상 조회 (예측 가능하고 안정적)
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
         
-        allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, fromTime, subcd);
+        allAlerts = await this.fetchWeatherAlertsFromTime(targetRegIds, warningTypes, twoHoursAgo, subcd);
       }
 
       // 지역 필터링
