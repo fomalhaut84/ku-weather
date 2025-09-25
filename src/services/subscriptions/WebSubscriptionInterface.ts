@@ -82,7 +82,7 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
         logger.debug(`웹 토큰 인증 성공: ${authToken.platform}/${authToken.userId}`);
       }
 
-      return subscription;
+      return subscription || null;
 
     } catch (error) {
       logger.error('웹 토큰 인증 실패:', error);
@@ -121,7 +121,10 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
           `${this.getPlatformDisplayName(authToken.platform)} 사용자`,
         preferences: {
           ...existingSubscription?.preferences,
-          ...updateRequest.preferences
+          ...(updateRequest.preferences && {
+            ...updateRequest.preferences,
+            quietHours: updateRequest.preferences.quietHours || undefined
+          })
         }
       };
 

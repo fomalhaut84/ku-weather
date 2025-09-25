@@ -90,11 +90,11 @@ export class HybridSubscriptionDemo {
     logger.info('=== Telegram Bot 명령어 데모 ===');
 
     const telegramCommands = [
-      { command: 'subscribe', platform: 'telegram', userId: 'telegram_user_123', args: ['seoul', 'heat'] },
-      { command: 'subscribe', platform: 'telegram', userId: 'telegram_user_456', args: ['busan', 'rain'] },
-      { command: 'quiet', platform: 'telegram', userId: 'telegram_user_123', args: ['22:00', '08:00'] },
-      { command: 'list', platform: 'telegram', userId: 'telegram_user_123', args: [] },
-      { command: 'status', platform: 'telegram', userId: 'telegram_user_456', args: [] }
+      { command: 'subscribe' as const, platform: 'telegram', userId: 'telegram_user_123', args: ['seoul', 'heat'] },
+      { command: 'subscribe' as const, platform: 'telegram', userId: 'telegram_user_456', args: ['busan', 'rain'] },
+      { command: 'quiet' as const, platform: 'telegram', userId: 'telegram_user_123', args: ['22:00', '08:00'] },
+      { command: 'list' as const, platform: 'telegram', userId: 'telegram_user_123', args: [] },
+      { command: 'status' as const, platform: 'telegram', userId: 'telegram_user_456', args: [] }
     ];
 
     for (const cmd of telegramCommands) {
@@ -114,10 +114,10 @@ export class HybridSubscriptionDemo {
     logger.info('=== Email 명령어 데모 ===');
 
     const emailCommands = [
-      { command: 'subscribe', platform: 'email', userId: 'user1@example.com', args: ['jeju', 'typhoon'] },
-      { command: 'subscribe', platform: 'email', userId: 'user2@example.com', args: ['all'] },
-      { command: 'status', platform: 'email', userId: 'user1@example.com', args: [] },
-      { command: 'unsubscribe', platform: 'email', userId: 'user2@example.com', args: ['jeju'] }
+      { command: 'subscribe' as const, platform: 'email', userId: 'user1@example.com', args: ['jeju', 'typhoon'] },
+      { command: 'subscribe' as const, platform: 'email', userId: 'user2@example.com', args: ['all'] },
+      { command: 'status' as const, platform: 'email', userId: 'user1@example.com', args: [] },
+      { command: 'unsubscribe' as const, platform: 'email', userId: 'user2@example.com', args: ['jeju'] }
     ];
 
     for (const cmd of emailCommands) {
@@ -140,11 +140,9 @@ export class HybridSubscriptionDemo {
     const telegramToken = await this.hybridManager.generateUserToken('telegram', 'web_demo_user');
     logger.info(`🔑 웹 토큰 생성: ${telegramToken.token.substring(0, 20)}...`);
 
-    // 2. 웹 인터페이스에 토큰 등록
+    // 2. 웹 인터페이스를 통한 구독 설정 업데이트
     const webInterface = this.hybridManager['webInterface'];
     if (webInterface) {
-      webInterface.registerToken(telegramToken);
-      
       // 3. 웹에서 구독 설정 업데이트
       const updateResult = await webInterface.updateSubscription(telegramToken.token, {
         targetRegions: ['L1100000', 'L5010000'], // 서울 + 제주
@@ -424,6 +422,4 @@ export async function runHybridSubscriptionDemo() {
 // 직접 실행 시 데모 시작
 if (require.main === module) {
   runHybridSubscriptionDemo().catch(console.error);
-}
-`;
 }
