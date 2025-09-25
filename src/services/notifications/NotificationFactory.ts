@@ -9,6 +9,7 @@ import {
 } from './interfaces';
 import { SlackNotificationService } from './SlackNotificationService';
 import { MultiplatformNotificationService } from './MultiplatformNotificationService';
+import { TelegramNotificationService } from './TelegramNotificationService';
 
 /**
  * 알림 서비스 팩토리
@@ -120,10 +121,19 @@ export class NotificationFactory {
       logger.info('Telegram 알림이 비활성화되어 있습니다');
       return null;
     }
+    try {
+      const service = new TelegramNotificationService(config);
+      
+      if (!service.validateConfig()) {
+        logger.error('Telegram 설정 검증 실패');
+        return null;
+      }
 
-    // TODO: Phase 2에서 구현 예정
-    logger.warn('Telegram 서비스는 아직 구현되지 않았습니다 (Phase 2 예정)');
-    return null;
+      return service;
+    } catch (error) {
+      logger.error('Telegram 서비스 생성 중 오류:', error);
+      return null;
+    }
   }
 
   /**

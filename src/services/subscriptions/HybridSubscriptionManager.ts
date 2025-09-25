@@ -103,16 +103,16 @@ export class HybridSubscriptionManager implements IHybridSubscriptionManager {
   /**
    * 플랫폼별 구독 인터페이스 등록
    */
-  registerPlatformInterface(platform: string, interface: PlatformSubscriptionInterface): void {
-    this.platformInterfaces.set(platform, interface);
-    logger.info(`플랫폼 인터페이스 등록: ${platform} (${interface.constructor.name})`);
+  registerPlatformInterface(platform: string, platformInterface: PlatformSubscriptionInterface): void {
+    this.platformInterfaces.set(platform, platformInterface);
+    logger.info(`플랫폼 인터페이스 등록: ${platform} (${platformInterface.constructor.name})`);
   }
 
   /**
    * 웹 인터페이스 등록
    */
-  registerWebInterface(interface: WebSubscriptionInterface): void {
-    this.webInterface = interface;
+  registerWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
     logger.info('웹 인터페이스 등록 완료');
   }
 
@@ -184,7 +184,7 @@ export class HybridSubscriptionManager implements IHybridSubscriptionManager {
       logger.info('구독 설정 동기화 시작');
       
       // 모든 플랫폼별 인터페이스에 동기화 알림
-      for (const [platform, interface] of this.platformInterfaces) {
+      for (const [platform, platformInterface] of this.platformInterfaces) {
         try {
           // 플랫폼별 동기화 로직이 있다면 실행
           // 현재는 로깅만 수행
@@ -263,12 +263,12 @@ export class HybridSubscriptionManager implements IHybridSubscriptionManager {
    * 플랫폼별 도움말 메시지 생성
    */
   async getHelpMessage(platform: string): Promise<string> {
-    const interface = this.platformInterfaces.get(platform);
-    if (!interface) {
+    const platformInterface = this.platformInterfaces.get(platform);
+    if (!platformInterface) {
       return `지원하지 않는 플랫폼입니다: ${platform}`;
     }
     
-    return interface.getHelpMessage();
+    return platformInterface.getHelpMessage();
   }
 
   // Private helper methods

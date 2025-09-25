@@ -177,12 +177,12 @@ export interface HybridSubscriptionManager {
   /**
    * 플랫폼별 구독 인터페이스 등록
    */
-  registerPlatformInterface(platform: string, interface: PlatformSubscriptionInterface): void;
+  registerPlatformInterface(platform: string, platformInterface: PlatformSubscriptionInterface): void;
   
   /**
    * 웹 인터페이스 등록
    */
-  registerWebInterface(interface: WebSubscriptionInterface): void;
+  registerWebInterface(webInterface: WebSubscriptionInterface): void;
   
   /**
    * 구독 명령어 처리 (모든 플랫폼 통합)

@@ -30,7 +30,8 @@
       "Bash(gh pr edit:*)",
       "Bash(gh pr view:*)",
       "Bash(gh release create:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(npm run test:ci:*)"
     ],
     "deny": []
   }

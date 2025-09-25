@@ -234,7 +234,9 @@ describe('Config', () => {
         nodeEnv: 'test',
         debug: true,
         environment: 'development',
-        slackBatchMode: true
+        slackBatchMode: true,
+        enabledPlatforms: ['slack'],
+        telegramEnabled: false
       });
     });
 
@@ -254,7 +256,9 @@ describe('Config', () => {
         nodeEnv: 'development',
         debug: false,
         environment: 'development',
-        slackBatchMode: true
+        slackBatchMode: true,
+        enabledPlatforms: ['slack'],
+        telegramEnabled: false
       });
     });
   });

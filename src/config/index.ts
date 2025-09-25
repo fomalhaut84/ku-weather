@@ -15,6 +15,10 @@ export interface Config {
   debug: boolean;
   environment: string;
   slackBatchMode: boolean;
+  // Telegram 설정
+  telegramBotToken: string;
+  telegramChatId: string;
+  telegramEnabled: boolean;
   // 새로운 다중 플랫폼 설정
   notificationConfig: NotificationConfig;
 }
@@ -31,6 +35,11 @@ function validateConfig(): Config {
   const environment = process.env.ENVIRONMENT || 'development';
   const slackBatchMode = process.env.SLACK_BATCH_MODE !== 'false'; // 기본값: true (배치 모드)
 
+  // Telegram 설정
+  const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
+  const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
+  const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
+
   if (!weatherApiKey) {
     throw new Error('WEATHER_API_KEY 환경변수가 설정되지 않았습니다');
   }
@@ -44,13 +53,41 @@ function validateConfig(): Config {
   }
 
   // 다중 플랫폼 알림 설정 생성
-  const notificationConfig: NotificationConfig = {
-    platforms: ['slack'], // 현재는 Slack만 지원 (Phase 1)
+  const platforms: string[] = ['slack'];
+  if (telegramEnabled) {
+    platforms.push('telegram');
+  }
+
+  // const notificationConfig: NotificationConfig = {
+  //   platforms,
+  //   environment,
+  //   slack: {
+  //     enabled: true,
+  //     webhookUrl: slackWebhookUrl,
+  //     batchMode: slackBatchMode
+  //   },
+  //   telegram: telegramEnabled ? {
+  //     enabled: true,
+  //     botToken: telegramBotToken,
+  //     chatId: telegramChatId
+  //   } : {
+  //     enabled: false,
+  //     botToken: '',
+  //     chatId: ''
+  //   }
+  // };
+    const notificationConfig: NotificationConfig = {
+    platforms,
     environment,
     slack: {
       enabled: true,
       webhookUrl: slackWebhookUrl,
       batchMode: slackBatchMode
+    },
+    telegram: {
+      enabled: telegramEnabled,
+      botToken: telegramBotToken,
+      chatId: telegramChatId
     }
   };
 
@@ -65,6 +102,9 @@ function validateConfig(): Config {
     debug,
     environment,
     slackBatchMode,
+    telegramBotToken,
+    telegramChatId,
+    telegramEnabled,
     notificationConfig
   };
 
@@ -76,7 +116,9 @@ function validateConfig(): Config {
     nodeEnv: config.nodeEnv,
     debug: config.debug,
     environment: config.environment,
-    slackBatchMode: config.slackBatchMode
+    slackBatchMode: config.slackBatchMode,
+    telegramEnabled: config.telegramEnabled,
+    enabledPlatforms: config.notificationConfig.platforms
   });
 
   return config;

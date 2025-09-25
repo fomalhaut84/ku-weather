@@ -96,7 +96,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     if (params.args.length < 1) {
       return {
         success: false,
-        message: '지역을 지정해주세요.\n사용법: /subscribe <지역> [특보종류]\n예시: /subscribe seoul heat',
+        message: '지역을 지정해주세요\\.\n사용법: /subscribe \\<지역\\> \\[특보종류\\]\n예시: /subscribe seoul heat',
         error: 'MISSING_REGION'
       };
     }
@@ -190,7 +190,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     if (!existingSubscription) {
       return {
         success: false,
-        message: '구독 중인 알림이 없습니다.\n새로 구독하려면 /subscribe <지역>을 입력하세요.',
+        message: '구독 중인 알림이 없습니다\\.\n새로 구독하려면 /subscribe \\<지역\\>을 입력하세요\\.',
         error: 'NO_SUBSCRIPTION'
       };
     }
@@ -201,7 +201,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
         this.subscriptionManager.removeSubscription(existingSubscription.id);
         return {
           success: true,
-          message: '✅ 모든 구독이 해제되었습니다.\n새로 구독하려면 /subscribe <지역>을 입력하세요.'
+          message: '✅ 모든 구독이 해제되었습니다\\.\n새로 구독하려면 /subscribe \\<지역\\>을 입력하세요\\.'
         };
       }
 
@@ -266,7 +266,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     if (!subscription) {
       return {
         success: true,
-        message: '📭 구독 중인 알림이 없습니다.\n\n새로 구독하려면:\n/subscribe <지역> [특보종류]\n\n예시:\n/subscribe seoul heat\n/subscribe busan'
+        message: '📭 구독 중인 알림이 없습니다\\.\n\n새로 구독하려면:\n/subscribe \\<지역\\> \\[특보종류\\]\n\n예시:\n/subscribe seoul heat\n/subscribe busan'
       };
     }
 
@@ -276,7 +276,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
       
       return {
         success: true,
-        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\nhttps://weather.starryjeju.net/subscribe?token=${webToken}\n\n📝 명령어로 설정 변경:\n/subscribe <지역> - 지역 추가\n/unsubscribe <지역> - 지역 해제\n/quiet <시작> <끝> - 조용시간 설정`
+        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\nhttps://weather.starryjeju.net/subscribe?token=${this.escapeMarkdown(webToken)}\n\n📝 명령어로 설정 변경:\n/subscribe \\<지역\\> \\- 지역 추가\n/unsubscribe \\<지역\\> \\- 지역 해제\n/quiet \\<시작\\> \\<끝\\> \\- 조용시간 설정`
       };
 
     } catch (error) {
@@ -297,7 +297,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     if (params.args.length < 2) {
       return {
         success: false,
-        message: '시작시간과 종료시간을 입력해주세요.\n사용법: /quiet <시작시간> <종료시간>\n예시: /quiet 22:00 08:00',
+        message: '시작시간과 종료시간을 입력해주세요\\.\n사용법: /quiet \\<시작시간\\> \\<종료시간\\>\n예시: /quiet 22:00 08:00',
         error: 'MISSING_TIME_ARGS'
       };
     }
@@ -318,7 +318,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     if (!existingSubscription) {
       return {
         success: false,
-        message: '먼저 알림을 구독해야 합니다.\n/subscribe <지역>으로 구독을 추가하세요.',
+        message: '먼저 알림을 구독해야 합니다\\.\n/subscribe \\<지역\\>으로 구독을 추가하세요\\.',
         error: 'NO_SUBSCRIPTION'
       };
     }
@@ -466,5 +466,13 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     // 실제 Telegram Bot API 호출 로직
     // 현재는 로깅만 수행 (Phase 2에서 실제 구현)
     logger.info(`[Telegram API] ${userId}: ${message}`);
+  }
+
+  /**
+   * Telegram Markdown에서 특수 문자 이스케이프
+   */
+  private escapeMarkdown(text: string): string {
+    // Telegram Markdown에서 이스케이프가 필요한 문자들
+    return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
   }
 }
