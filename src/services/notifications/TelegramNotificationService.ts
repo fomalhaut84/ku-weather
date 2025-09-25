@@ -16,7 +16,13 @@ export class TelegramNotificationService implements NotificationService {
   private isInitialized: boolean = false;
 
   constructor(private config: TelegramConfig) {
-    this.bot = new TelegramBot(config.botToken, { polling: true });
+    // 수동 폴링 제어로 409 Conflict 방지
+    this.bot = new TelegramBot(config.botToken, {
+      polling: {
+        autoStart: false,
+        params: { timeout: 10 }
+      }
+    });
     this.chatId = config.chatId;
 
     // Initialize subscription manager
@@ -31,6 +37,9 @@ export class TelegramNotificationService implements NotificationService {
 
   async initialize(): Promise<void> {
     try {
+      // 수동으로 폴링 시작
+      await this.bot.startPolling();
+
       const me = await this.bot.getMe();
       logger.info(`Telegram Bot initialized: @${me.username}`);
       this.isInitialized = true;
@@ -49,8 +58,6 @@ export class TelegramNotificationService implements NotificationService {
 
       const chatId = msg.chat.id.toString();
       const userId = msg.from?.id.toString() || chatId;
-      const username = msg.from?.username;
-      const fullName = `${msg.from?.first_name || ''} ${msg.from?.last_name || ''}`.trim();
 
       // Parse command
       const [command, ...args] = msg.text.slice(1).split(' ');
@@ -115,6 +122,13 @@ export class TelegramNotificationService implements NotificationService {
     // Handle polling errors
     this.bot.on('polling_error', (error) => {
       logger.error('Telegram Bot polling error:', error);
+
+      // 409 Conflict 감지 시 자동 폴링 중지
+      if ('code' in error && error.code === 'ETELEGRAM' &&
+          'response' in error && (error as any).response?.statusCode === 409) {
+        logger.warn('Telegram 봇 409 충돌 감지, 폴링을 중지합니다.');
+        this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' });
+      }
     });
   }
 
