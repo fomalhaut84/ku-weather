@@ -129,18 +129,16 @@ export class HttpServer {
           return res.status(500).json({ ok: false, error: 'Service not available' });
         }
 
-        // Telegram 서비스 찾기
-        const telegramService = (this.notificationService as any).services?.find(
-          (s: any) => s.platformName === 'telegram'
-        );
+        // Telegram 서비스 찾기 (타입 안전)
+        const telegramService = this.notificationService.getService('telegram');
 
-        if (!telegramService || !telegramService.processWebhookUpdate) {
+        if (!telegramService || !('processWebhookUpdate' in telegramService)) {
           logger.error('Telegram service not found or does not support webhooks');
           return res.status(500).json({ ok: false, error: 'Telegram service not available' });
         }
 
         // 업데이트 처리 (비동기, 응답은 즉시 반환)
-        telegramService.processWebhookUpdate(update)
+        (telegramService as any).processWebhookUpdate(update)
           .catch((error: Error) => {
             logger.error('Error in background webhook processing:', error);
           });
