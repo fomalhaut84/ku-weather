@@ -51,6 +51,13 @@ export class MultiplatformNotificationService {
   }
 
   /**
+   * 특정 플랫폼의 서비스 반환
+   */
+  getService(platformName: string): NotificationService | undefined {
+    return this.services.find(service => service.platformName === platformName);
+  }
+
+  /**
    * 모든 플랫폼에 단일 특보 알림 전송
    */
   async sendAlert(alert: WeatherAlert): Promise<NotificationResult[]> {

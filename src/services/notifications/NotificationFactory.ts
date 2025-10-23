@@ -208,6 +208,9 @@ export class NotificationFactory {
             if (!config.telegram.chatId) {
               errors.push('Telegram chatId가 설정되지 않았습니다');
             }
+            if (config.telegram.webhookUrl && !config.telegram.webhookSecret) {
+              errors.push('Telegram webhookSecret이 설정되지 않았습니다');
+            }
           }
           break;
           

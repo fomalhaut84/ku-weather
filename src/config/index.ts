@@ -19,6 +19,11 @@ export interface Config {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  telegramWebhookSecret?: string;
+  // HTTP 서버 설정
+  serverPort: number;
+  serverEnabled: boolean;
+  corsOrigin?: string;
   // 새로운 다중 플랫폼 설정
   notificationConfig: NotificationConfig;
 }
@@ -38,7 +43,23 @@ function validateConfig(): Config {
   // Telegram 설정
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
+  const telegramWebhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
   const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
+  const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+
+  // HTTP 서버 설정
+  const serverPort = parseInt(process.env.PORT || '3000', 10);
+  const serverEnabled = process.env.SERVER_ENABLED !== 'false'; // 기본값: true
+  const corsOrigin = process.env.CORS_ORIGIN;
+
+  // Telegram Webhook 모드 검증
+  if (telegramEnabled && !telegramWebhookUrl) {
+    throw new Error('TELEGRAM_WEBHOOK_URL 환경변수가 설정되지 않았습니다. Telegram 알림이 활성화된 경우 Webhook URL은 필수입니다.');
+  }
+
+  if (telegramEnabled && telegramWebhookUrl && !telegramWebhookSecret) {
+    throw new Error('TELEGRAM_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다');
+  }
 
   if (!weatherApiKey) {
     throw new Error('WEATHER_API_KEY 환경변수가 설정되지 않았습니다');
@@ -87,7 +108,9 @@ function validateConfig(): Config {
     telegram: {
       enabled: telegramEnabled,
       botToken: telegramBotToken,
-      chatId: telegramChatId
+      chatId: telegramChatId,
+      webhookUrl: telegramWebhookUrl,
+      webhookSecret: telegramWebhookSecret
     }
   };
 
@@ -105,6 +128,10 @@ function validateConfig(): Config {
     telegramBotToken,
     telegramChatId,
     telegramEnabled,
+    telegramWebhookSecret,
+    serverPort,
+    serverEnabled,
+    corsOrigin,
     notificationConfig
   };
 
@@ -118,6 +145,8 @@ function validateConfig(): Config {
     environment: config.environment,
     slackBatchMode: config.slackBatchMode,
     telegramEnabled: config.telegramEnabled,
+    serverPort: config.serverPort,
+    serverEnabled: config.serverEnabled,
     enabledPlatforms: config.notificationConfig.platforms
   });
 

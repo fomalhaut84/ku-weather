@@ -107,6 +107,9 @@ export interface SlackConfig extends PlatformConfig {
 export interface TelegramConfig extends PlatformConfig {
   botToken: string;
   chatId: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  nodeEnv?: string;
 }
 
 /**

@@ -3,17 +3,19 @@ import { Config } from '../../../config';
 import { WeatherAlert, AlertChange } from '../../../types/weather';
 import { TelegramConfig } from '../../../services/notifications';
 
-// Mock node-telegram-bot-api
+// Mock node-telegram-bot-api (Webhook 모드)
 jest.mock('node-telegram-bot-api', () => {
   return jest.fn().mockImplementation(() => ({
-    on: jest.fn(),
     getMe: jest.fn().mockResolvedValue({ username: 'test_bot' }),
     sendMessage: jest.fn().mockResolvedValue({ message_id: 123 }),
     answerCallbackQuery: jest.fn().mockResolvedValue(true),
     editMessageText: jest.fn().mockResolvedValue(true),
-    startPolling: jest.fn().mockResolvedValue(true),
-    isPolling: jest.fn().mockReturnValue(false),
-    stopPolling: jest.fn().mockResolvedValue(true)
+    setWebHook: jest.fn().mockResolvedValue(true),
+    deleteWebHook: jest.fn().mockResolvedValue(true),
+    getWebHookInfo: jest.fn().mockResolvedValue({
+      url: 'https://test.com/webhook',
+      pending_update_count: 0
+    })
   }));
 });
 

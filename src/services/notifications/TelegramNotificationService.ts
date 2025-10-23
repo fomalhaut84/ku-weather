@@ -13,21 +13,17 @@ export class TelegramNotificationService implements NotificationService {
   private subscriptionInterface: TelegramSubscriptionInterface;
   private subscriptionManager: SubscriptionManager;
   private isInitialized: boolean = false;
-  private initializationPromise: Promise<void> | null = null;
-  private pollingRetryCount: number = 0;
-  private maxPollingRetries: number = 3;
-  private pollingRetryDelay: number = 5000; // 5초
-  private isPollingErrorHandling: boolean = false;
+  private webhookUrl?: string;
+  private webhookSecret?: string;
 
-  constructor(private config: TelegramConfig) {
-    // 수동 폴링 제어로 409 Conflict 방지
+  constructor(private config: TelegramConfig & { webhookUrl?: string }) {
+    // Webhook 모드로 초기화 (polling 비활성화)
     this.bot = new TelegramBot(config.botToken, {
-      polling: {
-        autoStart: false,
-        params: { timeout: 10 }
-      }
+      polling: false
     });
     this.chatId = config.chatId;
+    this.webhookUrl = config.webhookUrl;
+    this.webhookSecret = config.webhookSecret;
 
     // Initialize subscription manager
     this.subscriptionManager = new SubscriptionManager();
@@ -35,43 +31,32 @@ export class TelegramNotificationService implements NotificationService {
       this.subscriptionManager,
       config.botToken
     );
-
-    this.setupBotHandlers();
   }
 
   async initialize(): Promise<void> {
-    // 이미 초기화되었으면 건너뛰기
     if (this.isInitialized) {
       logger.info('Telegram Bot already initialized, skipping...');
       return;
     }
 
-    // 초기화가 진행 중이면 기존 Promise 재사용 (직렬화)
-    if (this.initializationPromise) {
-      logger.info('Telegram Bot initialization already in progress, waiting...');
-      return this.initializationPromise;
-    }
-
-    // 새로운 초기화 프로세스 시작
-    this.initializationPromise = this.doInitialize();
-
     try {
-      await this.initializationPromise;
-    } finally {
-      // 초기화 완료 또는 실패 후 Promise 정리
-      this.initializationPromise = null;
-    }
-  }
+      // Webhook URL이 설정된 경우에만 setWebhook 호출
+      if (this.webhookUrl) {
+        const webhookOptions: TelegramBot.SetWebHookOptions = {};
+        if (this.webhookSecret) {
+          webhookOptions.secret_token = this.webhookSecret;
+        }
 
-  private async doInitialize(): Promise<void> {
-    try {
-      // 수동으로 폴링 시작 (중복 방지)
-      if (!this.bot.isPolling()) {
-        await this.bot.startPolling();
+        await this.bot.setWebHook(this.webhookUrl, webhookOptions);
+        logger.info(`Telegram Bot webhook set to: ${this.webhookUrl}`);
+      } else {
+        // Webhook URL이 없으면 기존 webhook 제거
+        await this.bot.deleteWebHook();
+        logger.warn('Telegram Bot webhook URL not configured, webhook disabled');
       }
 
       const me = await this.bot.getMe();
-      logger.info(`Telegram Bot initialized: @${me.username}`);
+      logger.info(`Telegram Bot initialized: @${me.username} (Webhook mode)`);
       this.isInitialized = true;
     } catch (error) {
       logger.error('Failed to initialize Telegram Bot:', error);
@@ -79,166 +64,86 @@ export class TelegramNotificationService implements NotificationService {
     }
   }
 
-  private async handleEFATALRetry(): Promise<void> {
-    if (this.isPollingErrorHandling) {
-      logger.debug('EFATAL retry already in progress, skipping...');
-      return;
-    }
-
-    this.isPollingErrorHandling = true;
-    this.pollingRetryCount++;
-
-    logger.warn(`Telegram 봇 EFATAL 재시도 시작 (${this.pollingRetryCount}/${this.maxPollingRetries})`);
-
+  /**
+   * Webhook으로 수신한 업데이트 처리
+   * HTTP 서버의 /telegram/webhook 엔드포인트에서 호출
+   */
+  async processWebhookUpdate(update: TelegramBot.Update): Promise<void> {
     try {
-      this.isInitialized = false;
-      this.initializationPromise = null;
-      await this.initialize();
-      logger.info('Telegram Bot polling 재시작 성공');
-      this.pollingRetryCount = 0; // 성공 시 카운터 리셋
-      this.isPollingErrorHandling = false;
-    } catch (retryError) {
-      logger.error(`Telegram Bot polling 재시작 실패 (${this.pollingRetryCount}/${this.maxPollingRetries}):`, retryError);
-      this.isPollingErrorHandling = false;
-
-      // 재시도 횟수가 남아있으면 재귀적으로 재시도
-      if (this.pollingRetryCount < this.maxPollingRetries) {
-        const nextDelay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
-        logger.info(`${nextDelay/1000}초 후 다시 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
-
-        setTimeout(() => {
-          this.handleEFATALRetry();
-        }, nextDelay);
-      } else {
-        logger.error('Telegram Bot polling 최대 재시도 횟수 초과. 봇을 비활성화합니다.');
+      // Handle text messages (commands)
+      if (update.message && update.message.text) {
+        await this.handleMessage(update.message);
       }
+
+      // Handle callback queries (inline keyboard buttons)
+      if (update.callback_query) {
+        await this.handleCallbackQuery(update.callback_query);
+      }
+    } catch (error) {
+      logger.error('Error processing Telegram webhook update:', error);
     }
   }
 
-  private setupBotHandlers(): void {
-    // Handle text messages (commands)
-    this.bot.on('message', async (msg) => {
-      if (!msg.text || !msg.text.startsWith('/')) {
-        return;
-      }
+  private async handleMessage(msg: TelegramBot.Message): Promise<void> {
+    if (!msg.text || !msg.text.startsWith('/')) {
+      return;
+    }
 
-      const chatId = msg.chat.id.toString();
-      const userId = msg.from?.id.toString() || chatId;
+    const chatId = msg.chat.id.toString();
+    const userId = msg.from?.id.toString() || chatId;
 
-      // Parse command
-      const [command, ...args] = msg.text.slice(1).split(' ');
+    // Parse command
+    const [command, ...args] = msg.text.slice(1).split(' ');
 
-      const params: SubscriptionCommandParams = {
+    const params: SubscriptionCommandParams = {
+      platform: 'telegram',
+      userId,
+      command: command as any,
+      args,
+      rawMessage: msg.text
+    };
+
+    try {
+      const result = await this.subscriptionInterface.handleCommand(params);
+      await this.bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      logger.error('Error handling Telegram command:', error);
+      await this.bot.sendMessage(chatId, '❌ 명령어 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    }
+  }
+
+  private async handleCallbackQuery(query: TelegramBot.CallbackQuery): Promise<void> {
+    if (!query.data) return;
+
+    const chatId = query.message?.chat.id.toString();
+    const userId = query.from.id.toString();
+
+    if (!chatId) return;
+
+    try {
+      await this.bot.answerCallbackQuery(query.id);
+
+      // Parse callback data (format: "action:param1:param2")
+      const [action, ...params] = query.data.split(':');
+
+      const commandParams: SubscriptionCommandParams = {
         platform: 'telegram',
         userId,
-        command: command as any, // Cast to handle potential command types
-        args,
-        rawMessage: msg.text
+        command: action as any,
+        args: params,
+        rawMessage: query.data
       };
 
-      try {
-        const result = await this.subscriptionInterface.handleCommand(params);
-        await this.bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
-      } catch (error) {
-        logger.error('Error handling Telegram command:', error);
-        await this.bot.sendMessage(chatId, '❌ 명령어 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      const result = await this.subscriptionInterface.handleCommand(commandParams);
+
+      // Send new message with result
+      await this.bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      logger.error('Error handling Telegram callback:', error);
+      if (chatId) {
+        await this.bot.sendMessage(chatId, '❌ 요청 처리 중 오류가 발생했습니다.');
       }
-    });
-
-    // Handle callback queries (inline keyboard buttons)
-    this.bot.on('callback_query', async (query) => {
-      if (!query.data) return;
-
-      const chatId = query.message?.chat.id.toString();
-      const userId = query.from.id.toString();
-
-      if (!chatId) return;
-
-      try {
-        await this.bot.answerCallbackQuery(query.id);
-
-        // Parse callback data (format: "action:param1:param2")
-        const [action, ...params] = query.data.split(':');
-
-        const commandParams: SubscriptionCommandParams = {
-          platform: 'telegram',
-          userId,
-          command: action as any, // Cast to handle potential command types
-          args: params,
-          rawMessage: query.data
-        };
-
-        const result = await this.subscriptionInterface.handleCommand(commandParams);
-
-        // Send new message with result
-        await this.bot.sendMessage(chatId, result.message, { parse_mode: 'Markdown' });
-      } catch (error) {
-        logger.error('Error handling Telegram callback:', error);
-        if (chatId) {
-          await this.bot.sendMessage(chatId, '❌ 요청 처리 중 오류가 발생했습니다.');
-        }
-      }
-    });
-
-    // Handle errors
-    this.bot.on('error', (error) => {
-      logger.error('Telegram Bot error:', error);
-    });
-
-    // Handle polling errors
-    this.bot.on('polling_error', async (error) => {
-      logger.error('Telegram Bot polling error:', error);
-
-      // 이미 에러 처리 중이면 중복 처리 방지
-      if (this.isPollingErrorHandling) {
-        logger.debug('Polling error already being handled, skipping...');
-        return;
-      }
-
-      // EFATAL 에러 처리 (중복 폴링 감지)
-      if ('code' in error && error.code === 'EFATAL') {
-        logger.warn(`Telegram 봇 EFATAL 에러 감지`);
-
-        try {
-          // 폴링 중지
-          if (this.bot.isPolling()) {
-            await this.bot.stopPolling({ cancel: true, reason: 'EFATAL - Duplicate polling detected' });
-            logger.info('Telegram Bot polling stopped due to EFATAL');
-          }
-
-          // 재시도 로직 시작
-          const delay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
-          logger.info(`${delay/1000}초 후 폴링 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
-
-          setTimeout(() => {
-            this.handleEFATALRetry();
-          }, delay);
-        } catch (err) {
-          logger.error('Failed to handle EFATAL error:', err);
-          this.isPollingErrorHandling = false;
-        }
-        return;
-      }
-
-      // 409 Conflict 감지 시 자동 폴링 중지
-      if ('code' in error && error.code === 'ETELEGRAM' &&
-          'response' in error && (error as any).response?.statusCode === 409) {
-        this.isPollingErrorHandling = true;
-        logger.warn('Telegram 봇 409 충돌 감지, 폴링을 중지합니다.');
-
-        try {
-          if (this.bot.isPolling()) {
-            await this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' });
-            logger.info('Telegram Bot polling stopped due to 409 Conflict');
-          }
-          this.isInitialized = false;
-        } catch (err) {
-          logger.error('Failed to stop polling after 409:', err);
-        } finally {
-          this.isPollingErrorHandling = false;
-        }
-      }
-    });
+    }
   }
 
   async healthCheck(): Promise<boolean> {
@@ -248,7 +153,11 @@ export class TelegramNotificationService implements NotificationService {
       }
 
       const me = await this.bot.getMe();
+      const webhookInfo = await this.bot.getWebHookInfo();
+
       logger.info(`Telegram Bot health check passed: @${me.username}`);
+      logger.debug(`Webhook info: ${webhookInfo.url || 'not set'}, pending updates: ${webhookInfo.pending_update_count}`);
+
       return true;
     } catch (error) {
       logger.error('Telegram Bot health check failed:', error);
@@ -604,15 +513,12 @@ _한국 기상청_`;
 
   async stop(): Promise<void> {
     try {
-      if (this.bot.isPolling()) {
-        await this.bot.stopPolling({ cancel: true, reason: 'Service stopped' });
-        this.isInitialized = false;
-        logger.info('Telegram Bot stopped successfully');
-      } else {
-        logger.info('Telegram Bot was not polling, nothing to stop');
-      }
+      // Webhook 모드에서는 webhook만 제거
+      await this.bot.deleteWebHook();
+      this.isInitialized = false;
+      logger.info('Telegram Bot webhook removed successfully');
     } catch (error) {
-      logger.error('Error stopping Telegram Bot:', error);
+      logger.error('Error removing Telegram Bot webhook:', error);
     }
   }
 }
