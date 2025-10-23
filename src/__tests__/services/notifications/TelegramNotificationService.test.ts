@@ -11,6 +11,8 @@ jest.mock('node-telegram-bot-api', () => {
     sendMessage: jest.fn().mockResolvedValue({ message_id: 123 }),
     answerCallbackQuery: jest.fn().mockResolvedValue(true),
     editMessageText: jest.fn().mockResolvedValue(true),
+    startPolling: jest.fn().mockResolvedValue(true),
+    isPolling: jest.fn().mockReturnValue(false),
     stopPolling: jest.fn().mockResolvedValue(true)
   }));
 });
@@ -79,6 +81,31 @@ describe('TelegramNotificationService', () => {
   describe('platformName', () => {
     it('should return telegram as platform name', () => {
       expect(service.platformName).toBe('telegram');
+    });
+  });
+
+  describe('initialize', () => {
+    it('should initialize bot successfully', async () => {
+      await service.initialize();
+      // Should not throw error
+    });
+
+    it('should handle concurrent initialization calls safely', async () => {
+      // 동시에 여러 번 초기화 호출
+      const promises = [
+        service.initialize(),
+        service.initialize(),
+        service.initialize()
+      ];
+
+      // 모든 호출이 성공적으로 완료되어야 함
+      await expect(Promise.all(promises)).resolves.not.toThrow();
+    });
+
+    it('should skip initialization if already initialized', async () => {
+      await service.initialize();
+      await service.initialize(); // 두 번째 호출은 건너뛰어야 함
+      // Should not throw error
     });
   });
 

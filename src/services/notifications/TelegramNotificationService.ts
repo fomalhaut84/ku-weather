@@ -13,6 +13,7 @@ export class TelegramNotificationService implements NotificationService {
   private subscriptionInterface: TelegramSubscriptionInterface;
   private subscriptionManager: SubscriptionManager;
   private isInitialized: boolean = false;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(private config: TelegramConfig) {
     // 수동 폴링 제어로 409 Conflict 방지
@@ -41,6 +42,24 @@ export class TelegramNotificationService implements NotificationService {
       return;
     }
 
+    // 초기화가 진행 중이면 기존 Promise 재사용 (직렬화)
+    if (this.initializationPromise) {
+      logger.info('Telegram Bot initialization already in progress, waiting...');
+      return this.initializationPromise;
+    }
+
+    // 새로운 초기화 프로세스 시작
+    this.initializationPromise = this.doInitialize();
+
+    try {
+      await this.initializationPromise;
+    } finally {
+      // 초기화 완료 또는 실패 후 Promise 정리
+      this.initializationPromise = null;
+    }
+  }
+
+  private async doInitialize(): Promise<void> {
     try {
       // 수동으로 폴링 시작 (중복 방지)
       if (!this.bot.isPolling()) {
