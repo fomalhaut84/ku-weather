@@ -209,6 +209,31 @@ describe('Config', () => {
         require('../../config/index');
       }).toThrow('CHECK_INTERVAL_MINUTES는 양수여야 합니다');
     });
+
+    it('should throw error when TELEGRAM_ENABLED is true but TELEGRAM_WEBHOOK_URL is missing', () => {
+      process.env.WEATHER_API_KEY = 'test-api-key';
+      process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
+      process.env.TELEGRAM_ENABLED = 'true';
+      process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+      process.env.TELEGRAM_CHAT_ID = 'test-chat-id';
+
+      expect(() => {
+        require('../../config/index');
+      }).toThrow('TELEGRAM_WEBHOOK_URL 환경변수가 설정되지 않았습니다. Telegram 알림이 활성화된 경우 Webhook URL은 필수입니다.');
+    });
+
+    it('should throw error when TELEGRAM_WEBHOOK_URL is set but TELEGRAM_WEBHOOK_SECRET is missing', () => {
+      process.env.WEATHER_API_KEY = 'test-api-key';
+      process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
+      process.env.TELEGRAM_ENABLED = 'true';
+      process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+      process.env.TELEGRAM_CHAT_ID = 'test-chat-id';
+      process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/webhook';
+
+      expect(() => {
+        require('../../config/index');
+      }).toThrow('TELEGRAM_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다');
+    });
   });
 
   describe('config logging', () => {
@@ -236,7 +261,9 @@ describe('Config', () => {
         environment: 'development',
         slackBatchMode: true,
         enabledPlatforms: ['slack'],
-        telegramEnabled: false
+        telegramEnabled: false,
+        serverPort: 3000,
+        serverEnabled: true
       });
     });
 
@@ -258,7 +285,9 @@ describe('Config', () => {
         environment: 'development',
         slackBatchMode: true,
         enabledPlatforms: ['slack'],
-        telegramEnabled: false
+        telegramEnabled: false,
+        serverPort: 3000,
+        serverEnabled: true
       });
     });
   });

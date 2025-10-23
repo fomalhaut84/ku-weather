@@ -52,6 +52,11 @@ function validateConfig(): Config {
   const serverEnabled = process.env.SERVER_ENABLED !== 'false'; // 기본값: true
   const corsOrigin = process.env.CORS_ORIGIN;
 
+  // Telegram Webhook 모드 검증
+  if (telegramEnabled && !telegramWebhookUrl) {
+    throw new Error('TELEGRAM_WEBHOOK_URL 환경변수가 설정되지 않았습니다. Telegram 알림이 활성화된 경우 Webhook URL은 필수입니다.');
+  }
+
   if (telegramEnabled && telegramWebhookUrl && !telegramWebhookSecret) {
     throw new Error('TELEGRAM_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다');
   }
