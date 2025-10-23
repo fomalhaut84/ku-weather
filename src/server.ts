@@ -1,5 +1,6 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import { timingSafeEqual } from 'crypto';
 import { logger } from './utils/logger';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { WeatherService } from './services/weatherService';
@@ -91,7 +92,19 @@ export class HttpServer {
         }
 
         const providedSecret = req.get('x-telegram-bot-api-secret-token');
-        if (!providedSecret || providedSecret !== configuredSecret) {
+        if (!providedSecret) {
+          logger.warn('Missing Telegram webhook secret token');
+          return res.status(403).json({ ok: false, error: 'Invalid webhook token' });
+        }
+
+        const providedSecretBuffer = Buffer.from(providedSecret, 'utf8');
+        const configuredSecretBuffer = Buffer.from(configuredSecret, 'utf8');
+
+        const secretsMatch =
+          providedSecretBuffer.length === configuredSecretBuffer.length &&
+          timingSafeEqual(providedSecretBuffer, configuredSecretBuffer);
+
+        if (!secretsMatch) {
           logger.warn('Invalid Telegram webhook secret token received');
           return res.status(403).json({ ok: false, error: 'Invalid webhook token' });
         }
