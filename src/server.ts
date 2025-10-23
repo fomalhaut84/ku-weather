@@ -8,6 +8,7 @@ export interface ServerConfig {
   port: number;
   environment: string;
   corsOrigin?: string;
+  telegramWebhookSecret?: string;
 }
 
 /**
@@ -82,6 +83,19 @@ export class HttpServer {
     // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
       try {
+        // Telegram webhook secret 검증
+        const configuredSecret = this.config.telegramWebhookSecret;
+        if (!configuredSecret) {
+          logger.error('Telegram webhook secret is not configured. Rejecting request.');
+          return res.status(500).json({ ok: false, error: 'Webhook not configured' });
+        }
+
+        const providedSecret = req.get('x-telegram-bot-api-secret-token');
+        if (!providedSecret || providedSecret !== configuredSecret) {
+          logger.warn('Invalid Telegram webhook secret token received');
+          return res.status(403).json({ ok: false, error: 'Invalid webhook token' });
+        }
+
         const update = req.body;
 
         // Telegram update 검증

@@ -14,6 +14,7 @@ export class TelegramNotificationService implements NotificationService {
   private subscriptionManager: SubscriptionManager;
   private isInitialized: boolean = false;
   private webhookUrl?: string;
+  private webhookSecret?: string;
 
   constructor(private config: TelegramConfig & { webhookUrl?: string }) {
     // Webhook 모드로 초기화 (polling 비활성화)
@@ -22,6 +23,7 @@ export class TelegramNotificationService implements NotificationService {
     });
     this.chatId = config.chatId;
     this.webhookUrl = config.webhookUrl;
+    this.webhookSecret = config.webhookSecret;
 
     // Initialize subscription manager
     this.subscriptionManager = new SubscriptionManager();
@@ -40,7 +42,12 @@ export class TelegramNotificationService implements NotificationService {
     try {
       // Webhook URL이 설정된 경우에만 setWebhook 호출
       if (this.webhookUrl) {
-        await this.bot.setWebHook(this.webhookUrl);
+        const webhookOptions: TelegramBot.SetWebHookOptions = {};
+        if (this.webhookSecret) {
+          webhookOptions.secret_token = this.webhookSecret;
+        }
+
+        await this.bot.setWebHook(this.webhookUrl, webhookOptions);
         logger.info(`Telegram Bot webhook set to: ${this.webhookUrl}`);
       } else {
         // Webhook URL이 없으면 기존 webhook 제거

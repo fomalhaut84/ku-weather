@@ -19,6 +19,7 @@ export interface Config {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  telegramWebhookSecret?: string;
   // HTTP 서버 설정
   serverPort: number;
   serverEnabled: boolean;
@@ -44,11 +45,16 @@ function validateConfig(): Config {
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
   const telegramWebhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
   const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
+  const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
 
   // HTTP 서버 설정
   const serverPort = parseInt(process.env.PORT || '3000', 10);
   const serverEnabled = process.env.SERVER_ENABLED !== 'false'; // 기본값: true
   const corsOrigin = process.env.CORS_ORIGIN;
+
+  if (telegramEnabled && telegramWebhookUrl && !telegramWebhookSecret) {
+    throw new Error('TELEGRAM_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다');
+  }
 
   if (!weatherApiKey) {
     throw new Error('WEATHER_API_KEY 환경변수가 설정되지 않았습니다');
@@ -98,7 +104,8 @@ function validateConfig(): Config {
       enabled: telegramEnabled,
       botToken: telegramBotToken,
       chatId: telegramChatId,
-      webhookUrl: telegramWebhookUrl
+      webhookUrl: telegramWebhookUrl,
+      webhookSecret: telegramWebhookSecret
     }
   };
 
@@ -116,6 +123,7 @@ function validateConfig(): Config {
     telegramBotToken,
     telegramChatId,
     telegramEnabled,
+    telegramWebhookSecret,
     serverPort,
     serverEnabled,
     corsOrigin,

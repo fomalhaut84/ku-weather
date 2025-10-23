@@ -87,7 +87,8 @@ async function main() {
       const httpServer = new HttpServer({
         port: config.serverPort,
         environment: config.environment,
-        corsOrigin: config.corsOrigin
+        corsOrigin: config.corsOrigin,
+        telegramWebhookSecret: config.telegramWebhookSecret
       });
 
       // 서비스 인스턴스 주입
