@@ -1,10 +1,9 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { NotificationService, NotificationResult, TelegramConfig } from './interfaces';
 import { WeatherAlert, AlertChange, AlertChangeType } from '../../types/weather';
-import { Config } from '../../config';
 import { logger } from '../../utils/logger';
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
-import { SubscriptionCommandParams, SubscriptionCommandResult } from '../subscriptions/interfaces';
+import { SubscriptionCommandParams } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
 
 export class TelegramNotificationService implements NotificationService {
@@ -36,9 +35,17 @@ export class TelegramNotificationService implements NotificationService {
   }
 
   async initialize(): Promise<void> {
+    // 이미 초기화되었으면 건너뛰기
+    if (this.isInitialized) {
+      logger.info('Telegram Bot already initialized, skipping...');
+      return;
+    }
+
     try {
-      // 수동으로 폴링 시작
-      await this.bot.startPolling();
+      // 수동으로 폴링 시작 (중복 방지)
+      if (!this.bot.isPolling()) {
+        await this.bot.startPolling();
+      }
 
       const me = await this.bot.getMe();
       logger.info(`Telegram Bot initialized: @${me.username}`);
@@ -495,8 +502,13 @@ _한국 기상청_`;
 
   async stop(): Promise<void> {
     try {
-      await this.bot.stopPolling();
-      logger.info('Telegram Bot stopped successfully');
+      if (this.bot.isPolling()) {
+        await this.bot.stopPolling({ cancel: true, reason: 'Service stopped' });
+        this.isInitialized = false;
+        logger.info('Telegram Bot stopped successfully');
+      } else {
+        logger.info('Telegram Bot was not polling, nothing to stop');
+      }
     } catch (error) {
       logger.error('Error stopping Telegram Bot:', error);
     }
