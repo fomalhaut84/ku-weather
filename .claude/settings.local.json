@@ -31,7 +31,11 @@
       "Bash(gh pr view:*)",
       "Bash(gh release create:*)",
       "Bash(git rebase:*)",
-      "Bash(npm run test:ci:*)"
+      "Bash(npm run test:ci:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh api:*)",
+      "Bash(git branch:*)",
+      "Bash(git stash:*)"
     ],
     "deny": []
   }

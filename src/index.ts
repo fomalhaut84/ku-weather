@@ -3,6 +3,7 @@ import { logger } from './utils/logger';
 import { config } from './config';
 import { NotificationFactory } from './services/notifications/NotificationFactory';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
+import { HttpServer } from './server';
 
 // UTF-8 출력 설정
 process.stdout.setDefaultEncoding('utf8');
@@ -68,21 +69,39 @@ function formatDateTime(dateTimeStr: string): string {
 async function main() {
   try {
     logger.info('기상특보 모니터링 시작');
-    
+
     const weatherService = new WeatherService(config.weatherApiKey);
-    
+
     // 새로운 다중 플랫폼 알림 서비스 초기화
     const notificationService = NotificationFactory.createMultiplatformService(config.notificationConfig);
-    
+
     // 설정 유효성 검사
     const validation = NotificationFactory.validateConfig(config.notificationConfig);
     if (!validation.valid) {
       logger.error('알림 설정 검증 실패:', validation.errors);
       throw new Error('알림 설정이 올바르지 않습니다');
     }
-    
+
+    // HTTP 서버 초기화 및 시작 (선택적)
+    if (config.serverEnabled) {
+      const httpServer = new HttpServer({
+        port: config.serverPort,
+        environment: config.environment,
+        corsOrigin: config.corsOrigin
+      });
+
+      // 서비스 인스턴스 주입
+      httpServer.setServices(notificationService, weatherService);
+
+      // 서버 시작 (백그라운드)
+      await httpServer.start();
+    } else {
+      logger.info('HTTP 서버가 비활성화되어 있습니다 (SERVER_ENABLED=false)');
+    }
+
+    // 기상특보 모니터링 시작 (백그라운드)
     await startMonitoring(weatherService, notificationService);
-    
+
   } catch (error) {
     logger.error('애플리케이션 시작 중 오류 발생:', error);
     process.exit(1);

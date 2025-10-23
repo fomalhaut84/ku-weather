@@ -19,6 +19,10 @@ export interface Config {
   telegramBotToken: string;
   telegramChatId: string;
   telegramEnabled: boolean;
+  // HTTP 서버 설정
+  serverPort: number;
+  serverEnabled: boolean;
+  corsOrigin?: string;
   // 새로운 다중 플랫폼 설정
   notificationConfig: NotificationConfig;
 }
@@ -39,6 +43,11 @@ function validateConfig(): Config {
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
   const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
+
+  // HTTP 서버 설정
+  const serverPort = parseInt(process.env.PORT || '3000', 10);
+  const serverEnabled = process.env.SERVER_ENABLED !== 'false'; // 기본값: true
+  const corsOrigin = process.env.CORS_ORIGIN;
 
   if (!weatherApiKey) {
     throw new Error('WEATHER_API_KEY 환경변수가 설정되지 않았습니다');
@@ -105,6 +114,9 @@ function validateConfig(): Config {
     telegramBotToken,
     telegramChatId,
     telegramEnabled,
+    serverPort,
+    serverEnabled,
+    corsOrigin,
     notificationConfig
   };
 
@@ -118,6 +130,8 @@ function validateConfig(): Config {
     environment: config.environment,
     slackBatchMode: config.slackBatchMode,
     telegramEnabled: config.telegramEnabled,
+    serverPort: config.serverPort,
+    serverEnabled: config.serverEnabled,
     enabledPlatforms: config.notificationConfig.platforms
   });
 
