@@ -79,6 +79,42 @@ export class TelegramNotificationService implements NotificationService {
     }
   }
 
+  private async handleEFATALRetry(): Promise<void> {
+    if (this.isPollingErrorHandling) {
+      logger.debug('EFATAL retry already in progress, skipping...');
+      return;
+    }
+
+    this.isPollingErrorHandling = true;
+    this.pollingRetryCount++;
+
+    logger.warn(`Telegram 봇 EFATAL 재시도 시작 (${this.pollingRetryCount}/${this.maxPollingRetries})`);
+
+    try {
+      this.isInitialized = false;
+      this.initializationPromise = null;
+      await this.initialize();
+      logger.info('Telegram Bot polling 재시작 성공');
+      this.pollingRetryCount = 0; // 성공 시 카운터 리셋
+      this.isPollingErrorHandling = false;
+    } catch (retryError) {
+      logger.error(`Telegram Bot polling 재시작 실패 (${this.pollingRetryCount}/${this.maxPollingRetries}):`, retryError);
+      this.isPollingErrorHandling = false;
+
+      // 재시도 횟수가 남아있으면 재귀적으로 재시도
+      if (this.pollingRetryCount < this.maxPollingRetries) {
+        const nextDelay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
+        logger.info(`${nextDelay/1000}초 후 다시 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
+
+        setTimeout(() => {
+          this.handleEFATALRetry();
+        }, nextDelay);
+      } else {
+        logger.error('Telegram Bot polling 최대 재시도 횟수 초과. 봇을 비활성화합니다.');
+      }
+    }
+  }
+
   private setupBotHandlers(): void {
     // Handle text messages (commands)
     this.bot.on('message', async (msg) => {
@@ -161,8 +197,7 @@ export class TelegramNotificationService implements NotificationService {
 
       // EFATAL 에러 처리 (중복 폴링 감지)
       if ('code' in error && error.code === 'EFATAL') {
-        this.isPollingErrorHandling = true;
-        logger.warn(`Telegram 봇 EFATAL 에러 감지 (시도 ${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
+        logger.warn(`Telegram 봇 EFATAL 에러 감지`);
 
         try {
           // 폴링 중지
@@ -171,31 +206,13 @@ export class TelegramNotificationService implements NotificationService {
             logger.info('Telegram Bot polling stopped due to EFATAL');
           }
 
-          // 재시도 로직
-          if (this.pollingRetryCount < this.maxPollingRetries) {
-            this.pollingRetryCount++;
-            const delay = this.pollingRetryDelay * this.pollingRetryCount; // Exponential backoff
+          // 재시도 로직 시작
+          const delay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
+          logger.info(`${delay/1000}초 후 폴링 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
 
-            logger.info(`${delay/1000}초 후 폴링 재시도... (${this.pollingRetryCount}/${this.maxPollingRetries})`);
-
-            setTimeout(async () => {
-              try {
-                this.isInitialized = false;
-                this.initializationPromise = null;
-                await this.initialize();
-                logger.info('Telegram Bot polling 재시작 성공');
-                this.pollingRetryCount = 0; // 성공 시 카운터 리셋
-              } catch (retryError) {
-                logger.error('Telegram Bot polling 재시작 실패:', retryError);
-              } finally {
-                this.isPollingErrorHandling = false;
-              }
-            }, delay);
-          } else {
-            logger.error('Telegram Bot polling 최대 재시도 횟수 초과. 봇을 비활성화합니다.');
-            this.isInitialized = false;
-            this.isPollingErrorHandling = false;
-          }
+          setTimeout(() => {
+            this.handleEFATALRetry();
+          }, delay);
         } catch (err) {
           logger.error('Failed to handle EFATAL error:', err);
           this.isPollingErrorHandling = false;
