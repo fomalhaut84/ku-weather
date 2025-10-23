@@ -98,8 +98,8 @@ describe('TelegramNotificationService', () => {
         service.initialize()
       ];
 
-      // 모든 호출이 성공적으로 완료되어야 함
-      await expect(Promise.all(promises)).resolves.not.toThrow();
+      // 모든 호출이 성공적으로 완료되어야 함 (에러 없이 resolve)
+      await expect(Promise.all(promises)).resolves.toEqual([undefined, undefined, undefined]);
     });
 
     it('should skip initialization if already initialized', async () => {
