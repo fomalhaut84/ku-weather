@@ -14,6 +14,10 @@ export class TelegramNotificationService implements NotificationService {
   private subscriptionManager: SubscriptionManager;
   private isInitialized: boolean = false;
   private initializationPromise: Promise<void> | null = null;
+  private pollingRetryCount: number = 0;
+  private maxPollingRetries: number = 3;
+  private pollingRetryDelay: number = 5000; // 5초
+  private isPollingErrorHandling: boolean = false;
 
   constructor(private config: TelegramConfig) {
     // 수동 폴링 제어로 409 Conflict 방지
@@ -72,6 +76,42 @@ export class TelegramNotificationService implements NotificationService {
     } catch (error) {
       logger.error('Failed to initialize Telegram Bot:', error);
       throw new Error(`Telegram Bot initialization failed: ${error}`);
+    }
+  }
+
+  private async handleEFATALRetry(): Promise<void> {
+    if (this.isPollingErrorHandling) {
+      logger.debug('EFATAL retry already in progress, skipping...');
+      return;
+    }
+
+    this.isPollingErrorHandling = true;
+    this.pollingRetryCount++;
+
+    logger.warn(`Telegram 봇 EFATAL 재시도 시작 (${this.pollingRetryCount}/${this.maxPollingRetries})`);
+
+    try {
+      this.isInitialized = false;
+      this.initializationPromise = null;
+      await this.initialize();
+      logger.info('Telegram Bot polling 재시작 성공');
+      this.pollingRetryCount = 0; // 성공 시 카운터 리셋
+      this.isPollingErrorHandling = false;
+    } catch (retryError) {
+      logger.error(`Telegram Bot polling 재시작 실패 (${this.pollingRetryCount}/${this.maxPollingRetries}):`, retryError);
+      this.isPollingErrorHandling = false;
+
+      // 재시도 횟수가 남아있으면 재귀적으로 재시도
+      if (this.pollingRetryCount < this.maxPollingRetries) {
+        const nextDelay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
+        logger.info(`${nextDelay/1000}초 후 다시 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
+
+        setTimeout(() => {
+          this.handleEFATALRetry();
+        }, nextDelay);
+      } else {
+        logger.error('Telegram Bot polling 최대 재시도 횟수 초과. 봇을 비활성화합니다.');
+      }
     }
   }
 
@@ -146,35 +186,57 @@ export class TelegramNotificationService implements NotificationService {
     });
 
     // Handle polling errors
-    this.bot.on('polling_error', (error) => {
+    this.bot.on('polling_error', async (error) => {
       logger.error('Telegram Bot polling error:', error);
+
+      // 이미 에러 처리 중이면 중복 처리 방지
+      if (this.isPollingErrorHandling) {
+        logger.debug('Polling error already being handled, skipping...');
+        return;
+      }
 
       // EFATAL 에러 처리 (중복 폴링 감지)
       if ('code' in error && error.code === 'EFATAL') {
-        logger.warn('Telegram 봇 EFATAL 에러 감지 (중복 폴링), 폴링을 중지합니다.');
-        this.bot.stopPolling({ cancel: true, reason: 'EFATAL - Duplicate polling detected' })
-          .then(() => {
-            this.isInitialized = false;
+        logger.warn(`Telegram 봇 EFATAL 에러 감지`);
+
+        try {
+          // 폴링 중지
+          if (this.bot.isPolling()) {
+            await this.bot.stopPolling({ cancel: true, reason: 'EFATAL - Duplicate polling detected' });
             logger.info('Telegram Bot polling stopped due to EFATAL');
-          })
-          .catch(err => {
-            logger.error('Failed to stop polling after EFATAL:', err);
-          });
+          }
+
+          // 재시도 로직 시작
+          const delay = this.pollingRetryDelay * (this.pollingRetryCount + 1);
+          logger.info(`${delay/1000}초 후 폴링 재시도... (${this.pollingRetryCount + 1}/${this.maxPollingRetries})`);
+
+          setTimeout(() => {
+            this.handleEFATALRetry();
+          }, delay);
+        } catch (err) {
+          logger.error('Failed to handle EFATAL error:', err);
+          this.isPollingErrorHandling = false;
+        }
         return;
       }
 
       // 409 Conflict 감지 시 자동 폴링 중지
       if ('code' in error && error.code === 'ETELEGRAM' &&
           'response' in error && (error as any).response?.statusCode === 409) {
+        this.isPollingErrorHandling = true;
         logger.warn('Telegram 봇 409 충돌 감지, 폴링을 중지합니다.');
-        this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' })
-          .then(() => {
-            this.isInitialized = false;
+
+        try {
+          if (this.bot.isPolling()) {
+            await this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' });
             logger.info('Telegram Bot polling stopped due to 409 Conflict');
-          })
-          .catch(err => {
-            logger.error('Failed to stop polling after 409:', err);
-          });
+          }
+          this.isInitialized = false;
+        } catch (err) {
+          logger.error('Failed to stop polling after 409:', err);
+        } finally {
+          this.isPollingErrorHandling = false;
+        }
       }
     });
   }

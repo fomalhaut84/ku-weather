@@ -2,6 +2,31 @@
 
 이 파일은 Claude Code (claude.ai/code)가 이 저장소에서 작업할 때 참고할 가이드를 제공합니다.
 
+## 작업 규칙 (Work Rules)
+
+### 기본 원칙
+- **대화 언어**: 모든 대화는 한국어로 진행
+- **기본 브랜치**: 특별한 언급이 없는 한 모든 PR의 base 브랜치는 `dev`
+- **코드 리뷰**: PR 생성 후 항상 `@codex`에게 댓글로 리뷰 요청
+
+### PR 생성 워크플로우
+1. 피처 브랜치 생성 및 작업 완료
+2. `dev` 브랜치를 base로 PR 생성
+3. PR 생성 직후 `@codex` 멘션으로 리뷰 요청 댓글 작성
+4. 리뷰 피드백 반영 및 머지
+
+### 예시
+```bash
+# 브랜치 생성
+git checkout -b feature/new-feature
+
+# 작업 완료 후 PR 생성 (base: dev)
+gh pr create --base dev --title "..." --body "..."
+
+# PR에 리뷰 요청 댓글
+gh pr comment <PR_NUMBER> --body "@codex 리뷰 부탁드립니다."
+```
+
 ## 프로젝트 개요
 
 한국 기상청 공공API를 활용하여 특정 지역의 기상특보 정보를 모니터링하고, 특보 또는 예비특보 발생 시 다중 플랫폼으로 알림을 전송하는 Node.js 기반 프로젝트입니다.
