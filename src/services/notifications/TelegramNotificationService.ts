@@ -197,6 +197,7 @@ export class TelegramNotificationService implements NotificationService {
 
       // EFATAL 에러 처리 (중복 폴링 감지)
       if ('code' in error && error.code === 'EFATAL') {
+        this.isPollingErrorHandling = true; // 플래그 설정으로 중복 처리 방지
         logger.warn(`Telegram 봇 EFATAL 에러 감지`);
 
         try {
@@ -204,6 +205,14 @@ export class TelegramNotificationService implements NotificationService {
           if (this.bot.isPolling()) {
             await this.bot.stopPolling({ cancel: true, reason: 'EFATAL - Duplicate polling detected' });
             logger.info('Telegram Bot polling stopped due to EFATAL');
+          }
+
+          // 최대 재시도 횟수 체크
+          if (this.pollingRetryCount >= this.maxPollingRetries) {
+            logger.error('Telegram Bot polling 최대 재시도 횟수 초과. 봇을 비활성화합니다.');
+            this.isInitialized = false;
+            this.isPollingErrorHandling = false;
+            return;
           }
 
           // 재시도 로직 시작
