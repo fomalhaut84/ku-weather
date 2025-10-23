@@ -42,6 +42,7 @@ function validateConfig(): Config {
   // Telegram 설정
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
   const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
+  const telegramWebhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
   const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
 
   // HTTP 서버 설정
@@ -96,7 +97,8 @@ function validateConfig(): Config {
     telegram: {
       enabled: telegramEnabled,
       botToken: telegramBotToken,
-      chatId: telegramChatId
+      chatId: telegramChatId,
+      webhookUrl: telegramWebhookUrl
     }
   };
 

@@ -79,15 +79,46 @@ export class HttpServer {
       });
     });
 
-    // Telegram Webhook 엔드포인트 (Phase C에서 구현 예정)
+    // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
       try {
-        logger.info('Telegram webhook received:', req.body);
+        const update = req.body;
 
-        // TODO: Phase C에서 구현
-        // - Telegram Bot API 메시지 처리
-        // - 명령어 파싱 및 응답
+        // Telegram update 검증
+        if (!update || typeof update !== 'object') {
+          logger.warn('Invalid Telegram webhook update received');
+          return res.status(400).json({ ok: false, error: 'Invalid update' });
+        }
 
+        logger.debug('Telegram webhook update received:', {
+          update_id: update.update_id,
+          has_message: !!update.message,
+          has_callback_query: !!update.callback_query
+        });
+
+        // NotificationService가 주입되어 있는지 확인
+        if (!this.notificationService) {
+          logger.error('NotificationService not injected');
+          return res.status(500).json({ ok: false, error: 'Service not available' });
+        }
+
+        // Telegram 서비스 찾기
+        const telegramService = (this.notificationService as any).services?.find(
+          (s: any) => s.platformName === 'telegram'
+        );
+
+        if (!telegramService || !telegramService.processWebhookUpdate) {
+          logger.error('Telegram service not found or does not support webhooks');
+          return res.status(500).json({ ok: false, error: 'Telegram service not available' });
+        }
+
+        // 업데이트 처리 (비동기, 응답은 즉시 반환)
+        telegramService.processWebhookUpdate(update)
+          .catch((error: Error) => {
+            logger.error('Error in background webhook processing:', error);
+          });
+
+        // Telegram에 즉시 200 OK 응답 (필수)
         res.json({ ok: true });
       } catch (error) {
         logger.error('Error processing Telegram webhook:', error);
