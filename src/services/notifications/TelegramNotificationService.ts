@@ -149,11 +149,32 @@ export class TelegramNotificationService implements NotificationService {
     this.bot.on('polling_error', (error) => {
       logger.error('Telegram Bot polling error:', error);
 
+      // EFATAL 에러 처리 (중복 폴링 감지)
+      if ('code' in error && error.code === 'EFATAL') {
+        logger.warn('Telegram 봇 EFATAL 에러 감지 (중복 폴링), 폴링을 중지합니다.');
+        this.bot.stopPolling({ cancel: true, reason: 'EFATAL - Duplicate polling detected' })
+          .then(() => {
+            this.isInitialized = false;
+            logger.info('Telegram Bot polling stopped due to EFATAL');
+          })
+          .catch(err => {
+            logger.error('Failed to stop polling after EFATAL:', err);
+          });
+        return;
+      }
+
       // 409 Conflict 감지 시 자동 폴링 중지
       if ('code' in error && error.code === 'ETELEGRAM' &&
           'response' in error && (error as any).response?.statusCode === 409) {
         logger.warn('Telegram 봇 409 충돌 감지, 폴링을 중지합니다.');
-        this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' });
+        this.bot.stopPolling({ cancel: true, reason: 'Conflict detected' })
+          .then(() => {
+            this.isInitialized = false;
+            logger.info('Telegram Bot polling stopped due to 409 Conflict');
+          })
+          .catch(err => {
+            logger.error('Failed to stop polling after 409:', err);
+          });
       }
     });
   }
