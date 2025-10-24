@@ -221,7 +221,10 @@ export class TelegramNotificationService implements NotificationService {
       }
 
       // 구독 기반 전송: 관련 구독자 조회
-      const subscriptions = this.subscriptionManager.getRelevantSubscriptions(alert);
+      const allSubscriptions = this.subscriptionManager.getRelevantSubscriptions(alert);
+
+      // Telegram 플랫폼만 필터링
+      const subscriptions = allSubscriptions.filter(sub => sub.platform === 'telegram');
 
       if (subscriptions.length === 0) {
         logger.warn(`Telegram 알림: 구독자 없음 - ${alert.REG_NAME} ${alert.WRN}`);
@@ -291,7 +294,10 @@ export class TelegramNotificationService implements NotificationService {
       }
 
       // 구독 기반 전송: 관련 구독자 조회
-      const subscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
+      const allSubscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
+
+      // Telegram 플랫폼만 필터링
+      const subscriptions = allSubscriptions.filter(sub => sub.platform === 'telegram');
 
       if (subscriptions.length === 0) {
         logger.warn(`Telegram 변동 알림: 구독자 없음 - ${change.type} ${change.current?.regionName || change.previous?.regionName}`);
