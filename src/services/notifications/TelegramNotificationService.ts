@@ -18,8 +18,12 @@ export class TelegramNotificationService implements NotificationService {
 
   constructor(private config: TelegramConfig & { webhookUrl?: string }) {
     // Webhook 모드로 초기화 (polling 비활성화)
+    // request 옵션으로 타임아웃 설정 추가 (TLS 연결 안정성 향상)
     this.bot = new TelegramBot(config.botToken, {
-      polling: false
+      polling: false,
+      request: {
+        timeout: 60000  // 60 second timeout
+      } as any  // Type assertion for request library options
     });
     this.chatId = config.chatId;
     this.webhookUrl = config.webhookUrl;
