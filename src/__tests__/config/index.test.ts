@@ -215,7 +215,7 @@ describe('Config', () => {
       process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
       process.env.TELEGRAM_ENABLED = 'true';
       process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
-      process.env.TELEGRAM_CHAT_ID = 'test-chat-id';
+      // chatId is now optional - not required for this test
 
       expect(() => {
         require('../../config/index');
@@ -227,12 +227,46 @@ describe('Config', () => {
       process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
       process.env.TELEGRAM_ENABLED = 'true';
       process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
-      process.env.TELEGRAM_CHAT_ID = 'test-chat-id';
+      // chatId is now optional - not required for this test
       process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/webhook';
 
       expect(() => {
         require('../../config/index');
       }).toThrow('TELEGRAM_WEBHOOK_SECRET 환경변수가 설정되지 않았습니다');
+    });
+
+    it('should enable Telegram without chatId (subscription-based system)', () => {
+      process.env.WEATHER_API_KEY = 'test-api-key';
+      process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
+      process.env.TELEGRAM_ENABLED = 'true';
+      process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+      process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/webhook';
+      process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
+      // No TELEGRAM_CHAT_ID - should work with subscription system
+
+      const { config } = require('../../config/index');
+
+      expect(config.telegramEnabled).toBe(true);
+      expect(config.telegramBotToken).toBe('test-bot-token');
+      expect(config.telegramChatId).toBeUndefined();
+      expect(config.notificationConfig.telegram?.enabled).toBe(true);
+      expect(config.notificationConfig.telegram?.chatId).toBeUndefined();
+    });
+
+    it('should still support legacy chatId (backward compatibility)', () => {
+      process.env.WEATHER_API_KEY = 'test-api-key';
+      process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.com/test';
+      process.env.TELEGRAM_ENABLED = 'true';
+      process.env.TELEGRAM_BOT_TOKEN = 'test-bot-token';
+      process.env.TELEGRAM_CHAT_ID = 'legacy-chat-id';
+      process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/webhook';
+      process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
+
+      const { config } = require('../../config/index');
+
+      expect(config.telegramEnabled).toBe(true);
+      expect(config.telegramChatId).toBe('legacy-chat-id');
+      expect(config.notificationConfig.telegram?.chatId).toBe('legacy-chat-id');
     });
   });
 
