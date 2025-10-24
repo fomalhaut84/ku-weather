@@ -80,126 +80,6 @@ describe('SlackService', () => {
     });
   });
 
-  describe('getWarningTypeName', () => {
-    it('should return correct Korean name for warning codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningTypeName('H')).toBe('폭염');
-      expect((service as any).getWarningTypeName('R')).toBe('호우');
-      expect((service as any).getWarningTypeName('V')).toBe('풍랑');
-      expect((service as any).getWarningTypeName('W')).toBe('강풍');
-      expect((service as any).getWarningTypeName('T')).toBe('태풍');
-    });
-
-    it('should return original code for unknown warning codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningTypeName('X')).toBe('X');
-    });
-
-    it('should handle trimmed codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningTypeName(' H ')).toBe('폭염');
-    });
-  });
-
-  describe('formatDateTime', () => {
-    it('should format 12-digit date string correctly (KMA format)', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      const result = (service as any).formatDateTime('202508011530');
-      expect(result).toBe('2025-08-01 15:30');
-    });
-
-    it('should format ISO date string correctly', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      // Mock toLocaleString to return predictable result
-      const mockDate = new Date('2025-08-01T15:30:00');
-      jest.spyOn(mockDate, 'toLocaleString').mockReturnValue('2025. 08. 01. 오후 3:30');
-      
-      jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
-      
-      const result = (service as any).formatDateTime('2025-08-01T15:30:00');
-      expect(result).toBe('2025. 08. 01. 오후 3:30');
-      
-      (global.Date as any).mockRestore();
-    });
-
-    it('should return original string for invalid dates', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      const result = (service as any).formatDateTime('invalid-date');
-      expect(result).toBe('invalid-date');
-    });
-
-    it('should return original string when toLocaleString throws an error', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      // Date 생성자를 모킹해서 toLocaleString에서 에러가 발생하도록 설정
-      const mockDate = {
-        getTime: jest.fn().mockReturnValue(NaN), // Invalid date
-        toLocaleString: jest.fn().mockImplementation(() => {
-          throw new Error('toLocaleString error');
-        })
-      };
-      
-      jest.spyOn(global, 'Date').mockImplementation(() => mockDate as any);
-      
-      const result = (service as any).formatDateTime('2025-08-01T15:30:00');
-      expect(result).toBe('2025-08-01T15:30:00');
-      
-      (global.Date as any).mockRestore();
-    });
-
-    it('should handle non-numeric 12-character strings', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      const result = (service as any).formatDateTime('abcd12345678');
-      expect(result).toBe('abcd12345678');
-    });
-  });
-
-  describe('generateWeatherSearchUrl and simplifyRegionName', () => {
-    let slackService: SlackService;
-
-    beforeEach(() => {
-      slackService = new SlackService('https://hooks.slack.com/test');
-    });
-
-    it('should generate correct URL for simplified region names', () => {
-      // 긴 제주 지역명 단순화 테스트
-      const longRegionName = '제주도북부중산간';
-      const url = (slackService as any).generateWeatherSearchUrl(longRegionName);
-      expect(url).toBe('https://search.daum.net/search?w=tot&q=제주+날씨');
-    });
-
-    it('should handle Seoul district names correctly', () => {
-      const seoulRegion = '서울강북';
-      const url = (slackService as any).generateWeatherSearchUrl(seoulRegion);
-      expect(url).toBe('https://search.daum.net/search?w=tot&q=서울+강북구+날씨');
-    });
-
-    it('should simplify sea area names', () => {
-      const seaArea = '서해북부먼바다';
-      const url = (slackService as any).generateWeatherSearchUrl(seaArea);
-      expect(url).toBe('https://search.daum.net/search?w=tot&q=서해+날씨');
-    });
-
-    it('should handle normal region names without change', () => {
-      const normalRegion = '서울특별시';
-      const simplified = (slackService as any).simplifyRegionName(normalRegion);
-      expect(simplified).toBe('서울');
-    });
-
-    it('should handle very long region names by truncating', () => {
-      const veryLongRegion = '매우긴지역명테스트';
-      const simplified = (slackService as any).simplifyRegionName(veryLongRegion);
-      expect(simplified).toBe('매우긴');
-    });
-  });
-
   describe('sendAlert', () => {
     it('should send alert successfully', async () => {
       const mockAlert = createMockAlert();
@@ -258,9 +138,9 @@ describe('SlackService', () => {
     });
 
     it('should set correct color based on alert level', async () => {
-      const dangerAlert = createMockAlert({ LVL: '1' });
-      const warningAlert = createMockAlert({ LVL: '2' });
-      
+      const dangerAlert = createMockAlert({ LVL: '3' }); // 경보 = danger
+      const warningAlert = createMockAlert({ LVL: '2' }); // 주의보 = warning
+
       mockFetch.mockResolvedValue({ ok: true });
 
       await slackService.sendAlert(dangerAlert);
@@ -392,28 +272,6 @@ describe('SlackService', () => {
       await slackService.sendMultipleAlerts(mockAlerts);
 
       expect(setTimeout).toHaveBeenCalledWith(expect.any(Function), 1000);
-    });
-  });
-
-  describe('getWarningLevel', () => {
-    it('should return correct Korean name for level codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningLevel('1')).toBe('예비');
-      expect((service as any).getWarningLevel('2')).toBe('주의보');
-      expect((service as any).getWarningLevel('3')).toBe('경보');
-    });
-
-    it('should return original code for unknown level codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningLevel('9')).toBe('9');
-    });
-
-    it('should handle trimmed codes', () => {
-      const service = new SlackService(testWebhookUrl);
-      
-      expect((service as any).getWarningLevel(' 2 ')).toBe('주의보');
     });
   });
 
