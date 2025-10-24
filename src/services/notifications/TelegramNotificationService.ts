@@ -122,14 +122,15 @@ export class TelegramNotificationService implements NotificationService {
     }
 
     const chatId = msg.chat.id.toString();
-    const userId = msg.from?.id.toString() || chatId;
+    // Use chatId (not user ID) for subscriptions to support group chats
+    // This ensures notifications are sent to the chat room, not individual users
 
     // Parse command
     const [command, ...args] = msg.text.slice(1).split(' ');
 
     const params: SubscriptionCommandParams = {
       platform: 'telegram',
-      userId,
+      userId: chatId, // Use chatId for group chat support
       command: command as any,
       args,
       rawMessage: msg.text
@@ -148,7 +149,7 @@ export class TelegramNotificationService implements NotificationService {
     if (!query.data) return;
 
     const chatId = query.message?.chat.id.toString();
-    const userId = query.from.id.toString();
+    // Use chatId (not user ID) for subscriptions to support group chats
 
     if (!chatId) return;
 
@@ -160,7 +161,7 @@ export class TelegramNotificationService implements NotificationService {
 
       const commandParams: SubscriptionCommandParams = {
         platform: 'telegram',
-        userId,
+        userId: chatId, // Use chatId for group chat support
         command: action as any,
         args: params,
         rawMessage: query.data
