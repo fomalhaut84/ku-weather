@@ -205,9 +205,8 @@ export class NotificationFactory {
             if (!config.telegram.botToken) {
               errors.push('Telegram botToken이 설정되지 않았습니다');
             }
-            if (!config.telegram.chatId) {
-              errors.push('Telegram chatId가 설정되지 않았습니다');
-            }
+            // chatId는 이제 선택적 (deprecated) - 구독 시스템 사용 권장
+            // 레거시 chatId 사용 시에도 경고하지 않고 자동 전환됨
             if (config.telegram.webhookUrl && !config.telegram.webhookSecret) {
               errors.push('Telegram webhookSecret이 설정되지 않았습니다');
             }
