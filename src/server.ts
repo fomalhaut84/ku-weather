@@ -4,6 +4,7 @@ import { timingSafeEqual } from 'crypto';
 import { logger } from './utils/logger';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { WeatherService } from './services/weatherService';
+import { CachedAlert } from './types/weather';
 
 export interface ServerConfig {
   port: number;
@@ -76,7 +77,9 @@ export class HttpServer {
         endpoints: {
           health: '/health',
           telegram: '/telegram/webhook',
-          alerts: '/api/alerts'
+          alerts: '/api/alerts',
+          alertsFiltered: '/api/alerts?region={regionId}&type={warningType}',
+          subscriptions: '/api/subscriptions/{token}'
         }
       });
     });
@@ -151,20 +154,119 @@ export class HttpServer {
       }
     });
 
-    // 웹 대시보드 API: 현재 특보 현황 (Phase D에서 구현 예정)
+    // 웹 대시보드 API: 현재 특보 현황
     this.app.get('/api/alerts', async (req: Request, res: Response) => {
       try {
-        // TODO: Phase D에서 구현
-        // - AlertCache에서 현재 특보 목록 조회
-        // - 지역별/종류별 필터링
+        // WeatherService가 주입되어 있는지 확인
+        if (!this.weatherService) {
+          logger.error('WeatherService not injected');
+          return res.status(500).json({ error: 'Service not available' });
+        }
+
+        // AlertCache에서 현재 활성 특보 목록 조회
+        const cachedAlerts = this.weatherService.getCachedAlerts();
+        const cacheStatus = this.weatherService.getCacheStatus();
+
+        // 쿼리 파라미터로 필터링 지원
+        const regionFilter = req.query.region as string | undefined;
+        const warningTypeFilter = req.query.type as string | undefined;
+
+        let filteredAlerts = cachedAlerts;
+
+        // 지역별 필터링
+        if (regionFilter) {
+          filteredAlerts = filteredAlerts.filter((alert: CachedAlert) =>
+            alert.regionId === regionFilter ||
+            alert.regionName.includes(regionFilter)
+          );
+        }
+
+        // 특보 종류별 필터링
+        if (warningTypeFilter) {
+          filteredAlerts = filteredAlerts.filter((alert: CachedAlert) =>
+            alert.warningType === warningTypeFilter.toUpperCase()
+          );
+        }
 
         res.json({
-          alerts: [],
-          lastUpdated: new Date().toISOString()
+          success: true,
+          count: filteredAlerts.length,
+          alerts: filteredAlerts,
+          lastUpdated: cacheStatus.lastUpdated,
+          filters: {
+            region: regionFilter || null,
+            warningType: warningTypeFilter || null
+          }
         });
       } catch (error) {
         logger.error('Error fetching alerts:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error'
+        });
+      }
+    });
+
+    // 웹 대시보드 API: 사용자 구독 정보 조회
+    this.app.get('/api/subscriptions/:token', async (req: Request, res: Response) => {
+      try {
+        // NotificationService가 주입되어 있는지 확인
+        if (!this.notificationService) {
+          logger.error('NotificationService not injected');
+          return res.status(500).json({
+            success: false,
+            error: 'Service not available'
+          });
+        }
+
+        const token = req.params.token;
+
+        // 토큰 형식 검증
+        if (!token || token.length < 10) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid token format'
+          });
+        }
+
+        // 토큰에서 플랫폼 추출 (예: TG_timestamp_hash_random -> telegram)
+        const platform = this.extractPlatformFromToken(token);
+        if (!platform) {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid token format'
+          });
+        }
+
+        // 플랫폼별 서비스 조회
+        const service = this.notificationService.getService(platform);
+        if (!service) {
+          return res.status(404).json({
+            success: false,
+            error: 'Platform service not found'
+          });
+        }
+
+        // SubscriptionManager에서 모든 구독 정보 조회
+        // 실제로는 토큰을 검증하고 해당 사용자의 구독만 반환해야 하지만
+        // 현재는 간단하게 통계 정보만 반환
+        const subscriptionStats = {
+          token: token.substring(0, 10) + '...',
+          platform,
+          // TODO: 실제 사용자 구독 정보 조회 구현
+          message: 'Subscription lookup requires user ID mapping from token'
+        };
+
+        res.json({
+          success: true,
+          subscription: subscriptionStats
+        });
+      } catch (error) {
+        logger.error('Error fetching subscription:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error'
+        });
       }
     });
 
@@ -175,6 +277,22 @@ export class HttpServer {
         path: req.path
       });
     });
+  }
+
+  /**
+   * 토큰에서 플랫폼 추출
+   * @param token 사용자 인증 토큰
+   * @returns 플랫폼 이름 또는 null
+   */
+  private extractPlatformFromToken(token: string): string | null {
+    // 토큰 형식: TG_timestamp_hash_random (Telegram)
+    if (token.startsWith('TG_')) {
+      return 'telegram';
+    }
+    // 향후 다른 플랫폼 추가 가능
+    // DC_... -> discord
+    // EMAIL_... -> email
+    return null;
   }
 
   /**
