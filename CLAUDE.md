@@ -14,8 +14,8 @@
 2. **로컬에서 Codex 리뷰 실행**: `codex review`
 3. 리뷰 피드백 반영 및 수정
 4. `dev` 브랜치를 base로 PR 생성 및 푸시
-5. **로컬에서 PR 리뷰 실행**: `codex review --pr {PR번호}`
-6. 최종 리뷰 피드백 반영
+5. **GitHub에서 Codex 리뷰 자동 실행** (PR 생성 시)
+6. **Codex 피드백 반영**: 커밋 메시지에 `@codex` 멘션하여 자동 리뷰 트리거
 7. PR 승인 및 머지
 
 ### Codex CLI 사용법
@@ -35,28 +35,76 @@ codex review src/services/notifications/
 codex review HEAD~3..HEAD
 ```
 
-#### PR 생성 후 리뷰
+#### PR 생성 후 워크플로우
 ```bash
-# 브랜치 생성 및 작업
+# 1. 브랜치 생성 및 작업
 git checkout -b feature/new-feature
 # ... 코딩 작업 ...
 
-# 로컬 Codex 리뷰
+# 2. 로컬 Codex 리뷰
 codex review
 
-# 피드백 반영 후 PR 생성
+# 3. 피드백 반영 후 PR 생성
 gh pr create --base dev --title "..." --body "..."
 
-# PR 번호로 리뷰 (예: PR #53)
-codex review --pr 53
+# 4. GitHub에서 Codex가 자동으로 PR 리뷰 시작
 
-# 리뷰 피드백 반영 및 추가 커밋
-# ... 수정 작업 ...
-codex review  # 다시 로컬 리뷰
+# 5. Codex 피드백 반영 시 커밋 메시지에 @codex 멘션
+git commit -m "fix: [문제 설명]
 
-# 머지
+@codex 해당 피드백 반영 완료. 다시 리뷰 부탁드립니다.
+
+[변경사항 설명]
+"
+git push  # 자동으로 Codex 리뷰 트리거됨
+
+# 6. 머지
 gh pr merge <PR_NUMBER>
 ```
+
+#### 로컬 PR 리뷰 (선택사항)
+```bash
+# PR 번호로 로컬 리뷰 실행 (예: PR #53)
+codex review --pr 53
+```
+
+#### Codex 피드백 반영 워크플로우
+
+**GitHub PR에서 Codex 피드백을 받은 경우**:
+
+```bash
+# 1. Codex 피드백 확인
+gh pr view <PR_NUMBER> --comments
+
+# 2. 피드백 반영 및 수정
+# ... 코드 수정 ...
+
+# 3. 테스트 실행
+npm test
+
+# 4. 커밋 메시지에 @codex 멘션
+git add .
+git commit -m "fix: [Codex 피드백 내용 요약]
+
+@codex 해당 피드백 반영 완료. 다시 리뷰 부탁드립니다.
+
+## 변경사항
+- [구체적인 수정 내용 1]
+- [구체적인 수정 내용 2]
+
+## 테스트 결과
+✓ [관련 테스트] 통과
+"
+
+# 5. Push (자동으로 Codex 리뷰 트리거)
+git push
+```
+
+**장점**:
+- ✅ 별도의 `gh pr comment` 명령어 불필요
+- ✅ 커밋 히스토리에 피드백 반영 내역이 명확히 남음
+- ✅ Push와 동시에 Codex 리뷰 자동 트리거
+- ✅ 리뷰 컨텍스트가 커밋과 함께 보존됨
 
 #### 고급 옵션
 ```bash

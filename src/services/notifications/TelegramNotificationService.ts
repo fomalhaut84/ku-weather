@@ -9,7 +9,10 @@ import { SubscriptionManager } from './SubscriptionManager';
 export class TelegramNotificationService implements NotificationService {
   readonly platformName = 'telegram';
   private bot: TelegramBot;
-  private chatId: string;
+  /**
+   * @deprecated 단일 chatId는 deprecated됩니다. 구독 시스템을 사용하세요.
+   */
+  private legacyChatId?: string;
   private subscriptionInterface: TelegramSubscriptionInterface;
   private subscriptionManager: SubscriptionManager;
   private isInitialized: boolean = false;
@@ -31,7 +34,13 @@ export class TelegramNotificationService implements NotificationService {
         }
       } as any  // Type assertion for request library options
     });
-    this.chatId = config.chatId;
+
+    // Legacy chatId support (하위 호환성)
+    if (config.chatId) {
+      this.legacyChatId = config.chatId;
+      logger.warn('Telegram chatId is deprecated. Please use subscription system instead.');
+    }
+
     this.webhookUrl = config.webhookUrl;
     this.webhookSecret = config.webhookSecret;
 
@@ -41,6 +50,19 @@ export class TelegramNotificationService implements NotificationService {
       this.subscriptionManager,
       config.botToken
     );
+
+    // Legacy chatId를 자동으로 구독으로 전환
+    if (this.legacyChatId) {
+      this.subscriptionManager.addSubscription({
+        platform: 'telegram',
+        userId: this.legacyChatId,
+        targetRegions: [], // 전체 지역
+        warningTypes: [],  // 모든 특보
+        enabled: true,
+        displayName: 'Legacy Chat (자동 전환)'
+      });
+      logger.info(`Legacy chatId ${this.legacyChatId} automatically converted to subscription`);
+    }
   }
 
   async initialize(): Promise<void> {
@@ -100,14 +122,15 @@ export class TelegramNotificationService implements NotificationService {
     }
 
     const chatId = msg.chat.id.toString();
-    const userId = msg.from?.id.toString() || chatId;
+    // Use chatId (not user ID) for subscriptions to support group chats
+    // This ensures notifications are sent to the chat room, not individual users
 
     // Parse command
     const [command, ...args] = msg.text.slice(1).split(' ');
 
     const params: SubscriptionCommandParams = {
       platform: 'telegram',
-      userId,
+      userId: chatId, // Use chatId for group chat support
       command: command as any,
       args,
       rawMessage: msg.text
@@ -126,7 +149,7 @@ export class TelegramNotificationService implements NotificationService {
     if (!query.data) return;
 
     const chatId = query.message?.chat.id.toString();
-    const userId = query.from.id.toString();
+    // Use chatId (not user ID) for subscriptions to support group chats
 
     if (!chatId) return;
 
@@ -138,7 +161,7 @@ export class TelegramNotificationService implements NotificationService {
 
       const commandParams: SubscriptionCommandParams = {
         platform: 'telegram',
-        userId,
+        userId: chatId, // Use chatId for group chat support
         command: action as any,
         args: params,
         rawMessage: query.data
@@ -176,9 +199,14 @@ export class TelegramNotificationService implements NotificationService {
   }
 
   validateConfig(): boolean {
-    if (!this.config.botToken || !this.config.chatId) {
-      logger.error('Telegram configuration missing: botToken or chatId not provided');
+    if (!this.config.botToken) {
+      logger.error('Telegram configuration missing: botToken not provided');
       return false;
+    }
+
+    // chatId is now optional (deprecated)
+    if (this.config.chatId) {
+      logger.warn('Telegram chatId is deprecated. It will be automatically converted to subscription.');
     }
 
     logger.info('Telegram configuration validated successfully');
@@ -191,6 +219,21 @@ export class TelegramNotificationService implements NotificationService {
     try {
       if (!this.isInitialized) {
         await this.initialize();
+      }
+
+      // 구독 기반 전송: 관련 구독자 조회
+      const allSubscriptions = this.subscriptionManager.getRelevantSubscriptions(alert);
+
+      // Telegram 플랫폼만 필터링
+      const subscriptions = allSubscriptions.filter(sub => sub.platform === 'telegram');
+
+      if (subscriptions.length === 0) {
+        logger.warn(`Telegram 알림: 구독자 없음 - ${alert.REG_NAME} ${alert.WRN}`);
+        return {
+          success: true,
+          platform: 'telegram',
+          responseTime: Date.now() - startTime
+        };
       }
 
       const message = this.formatWeatherAlert(alert);
@@ -207,15 +250,28 @@ export class TelegramNotificationService implements NotificationService {
         }
       };
 
-      await this.bot.sendMessage(this.chatId, message, options);
+      // 모든 구독자에게 전송
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const subscription of subscriptions) {
+        try {
+          await this.bot.sendMessage(subscription.userId, message, options);
+          successCount++;
+        } catch (error) {
+          logger.error(`Telegram 알림 전송 실패 (userId: ${subscription.userId}):`, error);
+          failureCount++;
+        }
+      }
 
       const responseTime = Date.now() - startTime;
-      logger.info(`Telegram 알림 전송 완료: ${alert.REG_NAME} ${alert.WRN} (${responseTime}ms)`);
+      logger.info(`Telegram 알림 전송 완료: ${alert.REG_NAME} ${alert.WRN} - 성공 ${successCount}/${subscriptions.length} (${responseTime}ms)`);
 
       return {
-        success: true,
+        success: failureCount === 0,
         platform: 'telegram',
-        responseTime
+        responseTime,
+        error: failureCount > 0 ? `${failureCount}/${subscriptions.length} 전송 실패` : undefined
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
@@ -238,6 +294,21 @@ export class TelegramNotificationService implements NotificationService {
         await this.initialize();
       }
 
+      // 구독 기반 전송: 관련 구독자 조회
+      const allSubscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
+
+      // Telegram 플랫폼만 필터링
+      const subscriptions = allSubscriptions.filter(sub => sub.platform === 'telegram');
+
+      if (subscriptions.length === 0) {
+        logger.warn(`Telegram 변동 알림: 구독자 없음 - ${change.type} ${change.current?.regionName || change.previous?.regionName}`);
+        return {
+          success: true,
+          platform: 'telegram',
+          responseTime: Date.now() - startTime
+        };
+      }
+
       const message = this.formatAlertChange(change);
       const color = this.getChangeColor(change.type);
 
@@ -253,15 +324,28 @@ export class TelegramNotificationService implements NotificationService {
         }
       };
 
-      await this.bot.sendMessage(this.chatId, `${color} ${message}`, options);
+      // 모든 구독자에게 전송
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const subscription of subscriptions) {
+        try {
+          await this.bot.sendMessage(subscription.userId, `${color} ${message}`, options);
+          successCount++;
+        } catch (error) {
+          logger.error(`Telegram 변동 알림 전송 실패 (userId: ${subscription.userId}):`, error);
+          failureCount++;
+        }
+      }
 
       const responseTime = Date.now() - startTime;
-      logger.info(`Telegram 변동 알림 전송 완료: ${change.type} - ${change.current?.regionName || change.previous?.regionName} (${responseTime}ms)`);
+      logger.info(`Telegram 변동 알림 전송 완료: ${change.type} - ${change.current?.regionName || change.previous?.regionName} - 성공 ${successCount}/${subscriptions.length} (${responseTime}ms)`);
 
       return {
-        success: true,
+        success: failureCount === 0,
         platform: 'telegram',
-        responseTime
+        responseTime,
+        error: failureCount > 0 ? `${failureCount}/${subscriptions.length} 전송 실패` : undefined
       };
     } catch (error) {
       const responseTime = Date.now() - startTime;
@@ -297,30 +381,68 @@ export class TelegramNotificationService implements NotificationService {
         return [await this.sendAlertChange(changes[0])];
       }
 
-      // Multiple changes - use batch format
-      const message = this.formatBatchAlertChanges(changes);
+      // Multiple changes - build per-subscriber filtered messages
+      // Map userId -> relevant changes for that subscriber
+      const subscriberChanges = new Map<string, AlertChange[]>();
 
-      const options = {
-        parse_mode: 'Markdown' as const,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: `📊 전체현황 (${changes.length}건)`, url: 'https://weather.starryjeju.net' },
-              { text: '🔔 알림설정', callback_data: 'settings:notifications' }
-            ]
-          ]
+      for (const change of changes) {
+        const subscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
+        for (const sub of subscriptions) {
+          if (sub.platform === 'telegram') {
+            if (!subscriberChanges.has(sub.userId)) {
+              subscriberChanges.set(sub.userId, []);
+            }
+            subscriberChanges.get(sub.userId)!.push(change);
+          }
         }
-      };
+      }
 
-      await this.bot.sendMessage(this.chatId, message, options);
+      if (subscriberChanges.size === 0) {
+        logger.warn(`Telegram 배치 변동 알림: 구독자 없음 - ${changes.length}건`);
+        return [{
+          success: true,
+          platform: 'telegram',
+          responseTime: Date.now() - startTime
+        }];
+      }
+
+      // 각 구독자에게 해당 구독자의 관심사에 맞는 변경사항만 포함된 배치 메시지 전송
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const [userId, userChanges] of subscriberChanges.entries()) {
+        try {
+          // 해당 구독자의 관련 변경사항만으로 메시지 생성
+          const message = this.formatBatchAlertChanges(userChanges);
+
+          const options = {
+            parse_mode: 'Markdown' as const,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `📊 전체현황 (${userChanges.length}건)`, url: 'https://weather.starryjeju.net' },
+                  { text: '🔔 알림설정', callback_data: 'settings:notifications' }
+                ]
+              ]
+            }
+          };
+
+          await this.bot.sendMessage(userId, message, options);
+          successCount++;
+        } catch (error) {
+          logger.error(`Telegram 배치 변동 알림 전송 실패 (userId: ${userId}):`, error);
+          failureCount++;
+        }
+      }
 
       const responseTime = Date.now() - startTime;
-      logger.info(`Telegram 배치 변동 알림 전송 완료: ${changes.length}건 (${responseTime}ms)`);
+      logger.info(`Telegram 배치 변동 알림 전송 완료: ${changes.length}건, 수신자 ${successCount}/${subscriberChanges.size} (${responseTime}ms)`);
 
       return [{
-        success: true,
+        success: failureCount === 0,
         platform: 'telegram',
-        responseTime
+        responseTime,
+        error: failureCount > 0 ? `${failureCount}/${subscriberChanges.size} 전송 실패` : undefined
       }];
     } catch (error) {
       const responseTime = Date.now() - startTime;

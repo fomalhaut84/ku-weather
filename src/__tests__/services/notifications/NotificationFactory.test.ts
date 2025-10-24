@@ -70,7 +70,7 @@ describe('NotificationFactory', () => {
       expect(services).toHaveLength(0);
     });
 
-    test('Telegram 서비스는 아직 구현되지 않음 (Phase 2)', () => {
+    test('Telegram 서비스 생성 성공', () => {
       const config: NotificationConfig = {
         platforms: ['telegram'],
         environment: 'development',
@@ -82,8 +82,10 @@ describe('NotificationFactory', () => {
       };
 
       const services = NotificationFactory.createServices(config);
-      
-      expect(services).toHaveLength(0); // Phase 2에서 구현 예정
+
+      expect(services).toHaveLength(1);
+      expect(services[0].platformName).toBe('telegram');
+      expect(services[0].validateConfig()).toBe(true);
     });
   });
 
@@ -104,7 +106,7 @@ describe('NotificationFactory', () => {
       expect(multiService.getPlatformNames()).toEqual(['slack']);
     });
 
-    test('다중 플랫폼 서비스 생성 (향후 지원 예정)', () => {
+    test('다중 플랫폼 서비스 생성', () => {
       const config: NotificationConfig = {
         platforms: ['slack', 'telegram', 'discord'],
         environment: 'development',
@@ -125,9 +127,9 @@ describe('NotificationFactory', () => {
       };
 
       const multiService = NotificationFactory.createMultiplatformService(config);
-      
-      // Phase 1에서는 Slack만 지원
-      expect(multiService.getPlatformNames()).toEqual(['slack']);
+
+      // Slack과 Telegram은 지원, Discord는 향후 구현 예정
+      expect(multiService.getPlatformNames()).toEqual(['slack', 'telegram']);
     });
   });
 
@@ -191,20 +193,35 @@ describe('NotificationFactory', () => {
       expect(validation.errors).toContain('유효하지 않은 Slack webhook URL입니다');
     });
 
-    test('Telegram 설정 검증 (향후 구현)', () => {
+    test('Telegram botToken 누락 검증', () => {
       const config: NotificationConfig = {
         platforms: ['telegram'],
         telegram: {
           enabled: true,
-          botToken: '',
-          chatId: 'test-chat'
+          botToken: ''
         }
       };
 
       const validation = NotificationFactory.validateConfig(config);
-      
+
       expect(validation.valid).toBe(false);
       expect(validation.errors).toContain('Telegram botToken이 설정되지 않았습니다');
+    });
+
+    test('Telegram 유효한 설정 (chatId 없이)', () => {
+      const config: NotificationConfig = {
+        platforms: ['telegram'],
+        telegram: {
+          enabled: true,
+          botToken: 'test-bot-token'
+          // chatId는 이제 선택적 - 구독 시스템 사용
+        }
+      };
+
+      const validation = NotificationFactory.validateConfig(config);
+
+      expect(validation.valid).toBe(true);
+      expect(validation.errors).toEqual([]);
     });
 
     test('Discord 설정 검증 (향후 구현)', () => {
