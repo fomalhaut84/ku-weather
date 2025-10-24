@@ -7,24 +7,67 @@
 ### 기본 원칙
 - **대화 언어**: 모든 대화는 한국어로 진행
 - **기본 브랜치**: 특별한 언급이 없는 한 모든 PR의 base 브랜치는 `dev`
-- **코드 리뷰**: PR 생성 후 항상 `@codex`에게 댓글로 리뷰 요청
+- **코드 리뷰**: Codex CLI를 사용한 로컬 리뷰 우선
 
 ### PR 생성 워크플로우
 1. 피처 브랜치 생성 및 작업 완료
-2. `dev` 브랜치를 base로 PR 생성
-3. PR 생성 직후 `@codex` 멘션으로 리뷰 요청 댓글 작성
-4. 리뷰 피드백 반영 및 머지
+2. **로컬에서 Codex 리뷰 실행**: `codex review`
+3. 리뷰 피드백 반영 및 수정
+4. `dev` 브랜치를 base로 PR 생성 및 푸시
+5. **로컬에서 PR 리뷰 실행**: `codex review --pr {PR번호}`
+6. 최종 리뷰 피드백 반영
+7. PR 승인 및 머지
 
-### 예시
+### Codex CLI 사용법
+
+#### 기본 리뷰 명령어
 ```bash
-# 브랜치 생성
-git checkout -b feature/new-feature
+# 현재 브랜치의 모든 변경사항 리뷰
+codex review
 
-# 작업 완료 후 PR 생성 (base: dev)
+# 특정 파일만 리뷰
+codex review src/server.ts
+
+# 특정 디렉토리 리뷰
+codex review src/services/notifications/
+
+# 커밋 범위 지정 리뷰
+codex review HEAD~3..HEAD
+```
+
+#### PR 생성 후 리뷰
+```bash
+# 브랜치 생성 및 작업
+git checkout -b feature/new-feature
+# ... 코딩 작업 ...
+
+# 로컬 Codex 리뷰
+codex review
+
+# 피드백 반영 후 PR 생성
 gh pr create --base dev --title "..." --body "..."
 
-# PR에 리뷰 요청 댓글
-gh pr comment <PR_NUMBER> --body "@codex 리뷰 부탁드립니다."
+# PR 번호로 리뷰 (예: PR #53)
+codex review --pr 53
+
+# 리뷰 피드백 반영 및 추가 커밋
+# ... 수정 작업 ...
+codex review  # 다시 로컬 리뷰
+
+# 머지
+gh pr merge <PR_NUMBER>
+```
+
+#### 고급 옵션
+```bash
+# 상세한 리뷰 (보안, 성능, 베스트 프랙티스)
+codex review --detailed
+
+# 리뷰 결과를 파일로 저장
+codex review --output review-report.md
+
+# 브랜치 간 diff 리뷰
+codex review main..dev
 ```
 
 ## 프로젝트 개요
