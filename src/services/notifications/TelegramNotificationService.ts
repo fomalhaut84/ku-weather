@@ -18,11 +18,17 @@ export class TelegramNotificationService implements NotificationService {
 
   constructor(private config: TelegramConfig & { webhookUrl?: string }) {
     // Webhook 모드로 초기화 (polling 비활성화)
-    // request 옵션으로 타임아웃 설정 추가 (TLS 연결 안정성 향상)
+    // IPv4 강제 사용 + 타임아웃 설정으로 연결 안정성 향상
+    // 이유: Node.js의 Happy Eyeballs 알고리즘이 IPv6를 먼저 시도하다가
+    // ENETUNREACH로 실패하고 짧은 타임아웃(기본 5초)으로 인해 IPv4도 ETIMEDOUT 발생
     this.bot = new TelegramBot(config.botToken, {
       polling: false,
       request: {
-        timeout: 60000  // 60 second timeout
+        timeout: 60000,  // 60 second timeout
+        family: 4,       // Force IPv4 only (no IPv6)
+        agentOptions: {
+          family: 4      // Ensure HTTP agent also uses IPv4
+        }
       } as any  // Type assertion for request library options
     });
     this.chatId = config.chatId;
