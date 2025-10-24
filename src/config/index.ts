@@ -17,7 +17,11 @@ export interface Config {
   slackBatchMode: boolean;
   // Telegram 설정
   telegramBotToken: string;
-  telegramChatId: string;
+  /**
+   * @deprecated chatId는 deprecated됩니다. 구독 시스템을 사용하세요.
+   * 설정 시 자동으로 구독으로 전환됩니다.
+   */
+  telegramChatId?: string;
   telegramEnabled: boolean;
   telegramWebhookSecret?: string;
   // HTTP 서버 설정
@@ -42,9 +46,9 @@ function validateConfig(): Config {
 
   // Telegram 설정
   const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  const telegramChatId = process.env.TELEGRAM_CHAT_ID || '';
+  const telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim() || undefined; // Optional - deprecated, auto-converted to subscription
   const telegramWebhookUrl = process.env.TELEGRAM_WEBHOOK_URL;
-  const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken && !!telegramChatId;
+  const telegramEnabled = process.env.TELEGRAM_ENABLED === 'true' && !!telegramBotToken; // chatId no longer required
   const telegramWebhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
 
   // HTTP 서버 설정
@@ -108,9 +112,10 @@ function validateConfig(): Config {
     telegram: {
       enabled: telegramEnabled,
       botToken: telegramBotToken,
-      chatId: telegramChatId,
+      chatId: telegramChatId || undefined, // Optional - only set if provided
       webhookUrl: telegramWebhookUrl,
-      webhookSecret: telegramWebhookSecret
+      webhookSecret: telegramWebhookSecret,
+      nodeEnv
     }
   };
 
