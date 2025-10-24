@@ -34,7 +34,31 @@ jest.mock('../../../services/notifications/SubscriptionManager', () => ({
   SubscriptionManager: jest.fn().mockImplementation(() => ({
     addSubscription: jest.fn(),
     removeSubscription: jest.fn(),
-    getSubscriptions: jest.fn().mockReturnValue([])
+    getSubscriptions: jest.fn().mockReturnValue([]),
+    getRelevantSubscriptions: jest.fn().mockReturnValue([
+      {
+        id: 'telegram:test-chat-id',
+        platform: 'telegram',
+        userId: 'test-chat-id',
+        targetRegions: [],
+        warningTypes: [],
+        enabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]),
+    getRelevantSubscriptionsForChange: jest.fn().mockReturnValue([
+      {
+        id: 'telegram:test-chat-id',
+        platform: 'telegram',
+        userId: 'test-chat-id',
+        targetRegions: [],
+        warningTypes: [],
+        enabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ])
   }))
 }));
 
@@ -73,10 +97,10 @@ describe('TelegramNotificationService', () => {
       expect(service.validateConfig()).toBe(false);
     });
 
-    it('should return false when chat id is missing', () => {
-      mockConfig.chatId = '';
+    it('should return true when chat id is missing (chatId is now optional)', () => {
+      delete mockConfig.chatId;
       service = new TelegramNotificationService(mockConfig);
-      expect(service.validateConfig()).toBe(false);
+      expect(service.validateConfig()).toBe(true);
     });
   });
 

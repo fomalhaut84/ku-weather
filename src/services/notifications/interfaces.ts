@@ -106,7 +106,11 @@ export interface SlackConfig extends PlatformConfig {
  */
 export interface TelegramConfig extends PlatformConfig {
   botToken: string;
-  chatId: string;
+  /**
+   * @deprecated 단일 chatId 사용은 deprecated됩니다. 구독 시스템을 사용하세요.
+   * 하위 호환성을 위해 유지되며, 설정 시 자동으로 구독으로 전환됩니다.
+   */
+  chatId?: string;
   webhookUrl?: string;
   webhookSecret?: string;
   nodeEnv?: string;
