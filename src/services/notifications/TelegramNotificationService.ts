@@ -380,19 +380,23 @@ export class TelegramNotificationService implements NotificationService {
         return [await this.sendAlertChange(changes[0])];
       }
 
-      // Multiple changes - collect all relevant subscriptions
-      // Use Set to avoid sending duplicate messages to same user
-      const subscriberIds = new Set<string>();
+      // Multiple changes - build per-subscriber filtered messages
+      // Map userId -> relevant changes for that subscriber
+      const subscriberChanges = new Map<string, AlertChange[]>();
+
       for (const change of changes) {
         const subscriptions = this.subscriptionManager.getRelevantSubscriptionsForChange(change);
         for (const sub of subscriptions) {
           if (sub.platform === 'telegram') {
-            subscriberIds.add(sub.userId);
+            if (!subscriberChanges.has(sub.userId)) {
+              subscriberChanges.set(sub.userId, []);
+            }
+            subscriberChanges.get(sub.userId)!.push(change);
           }
         }
       }
 
-      if (subscriberIds.size === 0) {
+      if (subscriberChanges.size === 0) {
         logger.warn(`Telegram 배치 변동 알림: 구독자 없음 - ${changes.length}건`);
         return [{
           success: true,
@@ -401,27 +405,27 @@ export class TelegramNotificationService implements NotificationService {
         }];
       }
 
-      // Multiple changes - use batch format
-      const message = this.formatBatchAlertChanges(changes);
-
-      const options = {
-        parse_mode: 'Markdown' as const,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: `📊 전체현황 (${changes.length}건)`, url: 'https://weather.starryjeju.net' },
-              { text: '🔔 알림설정', callback_data: 'settings:notifications' }
-            ]
-          ]
-        }
-      };
-
-      // 모든 구독자에게 배치 메시지 전송
+      // 각 구독자에게 해당 구독자의 관심사에 맞는 변경사항만 포함된 배치 메시지 전송
       let successCount = 0;
       let failureCount = 0;
 
-      for (const userId of subscriberIds) {
+      for (const [userId, userChanges] of subscriberChanges.entries()) {
         try {
+          // 해당 구독자의 관련 변경사항만으로 메시지 생성
+          const message = this.formatBatchAlertChanges(userChanges);
+
+          const options = {
+            parse_mode: 'Markdown' as const,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: `📊 전체현황 (${userChanges.length}건)`, url: 'https://weather.starryjeju.net' },
+                  { text: '🔔 알림설정', callback_data: 'settings:notifications' }
+                ]
+              ]
+            }
+          };
+
           await this.bot.sendMessage(userId, message, options);
           successCount++;
         } catch (error) {
@@ -431,13 +435,13 @@ export class TelegramNotificationService implements NotificationService {
       }
 
       const responseTime = Date.now() - startTime;
-      logger.info(`Telegram 배치 변동 알림 전송 완료: ${changes.length}건, 수신자 ${successCount}/${subscriberIds.size} (${responseTime}ms)`);
+      logger.info(`Telegram 배치 변동 알림 전송 완료: ${changes.length}건, 수신자 ${successCount}/${subscriberChanges.size} (${responseTime}ms)`);
 
       return [{
         success: failureCount === 0,
         platform: 'telegram',
         responseTime,
-        error: failureCount > 0 ? `${failureCount}/${subscriberIds.size} 전송 실패` : undefined
+        error: failureCount > 0 ? `${failureCount}/${subscriberChanges.size} 전송 실패` : undefined
       }];
     } catch (error) {
       const responseTime = Date.now() - startTime;
