@@ -2,6 +2,14 @@ import TelegramBot from 'node-telegram-bot-api';
 import { NotificationService, NotificationResult, TelegramConfig } from './interfaces';
 import { WeatherAlert, AlertChange, AlertChangeType } from '../../types/weather';
 import { logger } from '../../utils/logger';
+import {
+  formatDateTime,
+  getWarningTypeName,
+  getWarningTypeEmoji,
+  getWarningLevelName,
+  getWarningLevelEmoji,
+  generateWeatherSearchUrl
+} from '../../utils/messageFormatter';
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
 import { SubscriptionCommandParams } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
@@ -461,17 +469,19 @@ export class TelegramNotificationService implements NotificationService {
     const env = this.config.nodeEnv === 'development' ? '[DEV] ' :
                this.config.nodeEnv === 'staging' ? '[STAGING] ' : '';
 
-    const emoji = this.getWeatherEmoji(alert.WRN);
-    const levelEmoji = alert.LVL === '경보' ? '🚨' : '⚠️';
-    const warningTypeName = this.getWarningTypeName(alert.WRN);
+    const weatherEmoji = getWarningTypeEmoji(alert.WRN);
+    const levelEmoji = getWarningLevelEmoji(alert.LVL);
+    const warningTypeName = getWarningTypeName(alert.WRN);
+    const levelName = getWarningLevelName(alert.LVL);
+    const weatherUrl = generateWeatherSearchUrl(alert.REG_NAME);
 
-    return `${env}${emoji} *기상특보 발표*
+    return `${env}${weatherEmoji} *기상특보 발표*
 
-📍 *지역*: ${alert.REG_NAME}
+📍 *지역*: [${alert.REG_NAME}](${weatherUrl})
 ⚠️ *특보종류*: ${warningTypeName}
-📊 *수준*: ${levelEmoji} ${alert.LVL}
-📅 *발표*: ${this.formatDate(alert.TM_FC)}
-🕐 *발효*: ${this.formatDate(alert.TM_EF)}
+📊 *수준*: ${levelEmoji} ${levelName}
+📅 *발표*: ${formatDateTime(alert.TM_FC)}
+🕐 *발효*: ${formatDateTime(alert.TM_EF)}
 
 _한국 기상청 제공_`;
   }
@@ -485,28 +495,53 @@ _한국 기상청 제공_`;
 
     const regionName = change.current?.regionName || change.previous?.regionName || '알 수 없음';
     const warningType = change.current?.warningType || change.previous?.warningType || '알 수 없음';
+    const warningTypeName = getWarningTypeName(warningType);
+    const weatherUrl = generateWeatherSearchUrl(regionName);
 
-    let details = `📍 *지역*: ${regionName}\n⚠️ *특보종류*: ${warningType}`;
+    let details = `📍 *지역*: [${regionName}](${weatherUrl})\n⚠️ *특보종류*: ${warningTypeName}`;
 
     switch (change.type) {
       case 'NEW':
-        details += `\n📊 *수준*: ${change.current?.level}`;
+        if (change.current) {
+          const levelEmoji = getWarningLevelEmoji(change.current.level);
+          const levelName = getWarningLevelName(change.current.level);
+          details += `\n📊 *수준*: ${levelEmoji} ${levelName}`;
+        }
         break;
       case 'RESOLVED':
-        details += `\n❌ *해제수준*: ${change.previous?.level}`;
+        if (change.previous) {
+          const levelEmoji = getWarningLevelEmoji(change.previous.level);
+          const levelName = getWarningLevelName(change.previous.level);
+          details += `\n❌ *해제수준*: ${levelEmoji} ${levelName}`;
+        }
         break;
       case 'LEVEL_UP':
       case 'LEVEL_DOWN':
-        details += `\n📈 *수준변화*: ${change.previous?.level} → ${change.current?.level}`;
+        if (change.previous && change.current) {
+          const prevLevelName = getWarningLevelName(change.previous.level);
+          const currLevelName = getWarningLevelName(change.current.level);
+          details += `\n📈 *수준변화*: ${prevLevelName} → ${currLevelName}`;
+        }
         break;
       case 'TIME_EXTENDED':
         if (change.current) {
-          details += `\n⏰ *발효시각*: ${this.formatDate(change.current.effectiveAt)}`;
+          details += `\n⏰ *발효시각*: ${formatDateTime(change.current.effectiveAt)}`;
         }
         break;
       case 'MODIFIED':
-        details += `\n📊 *수준*: ${change.current?.level}`;
+        if (change.current) {
+          const levelEmoji = getWarningLevelEmoji(change.current.level);
+          const levelName = getWarningLevelName(change.current.level);
+          details += `\n📊 *수준*: ${levelEmoji} ${levelName}`;
+        }
         break;
+    }
+
+    // 발표시각과 발효시각 추가 (Slack과 일관성 유지)
+    const alert = change.current || change.previous;
+    if (alert) {
+      details += `\n📅 *발표*: ${formatDateTime(alert.announcedAt)}`;
+      details += `\n🕐 *발효*: ${formatDateTime(alert.effectiveAt)}`;
     }
 
     return `${env}${emoji} *${title}*
@@ -527,26 +562,44 @@ _한국 기상청_`;
       const title = this.getChangeTitle(change.type);
       const regionName = change.current?.regionName || change.previous?.regionName || '알 수 없음';
       const warningType = change.current?.warningType || change.previous?.warningType || '알 수 없음';
+      const warningTypeName = getWarningTypeName(warningType);
+      const weatherUrl = generateWeatherSearchUrl(regionName);
 
       message += `${emoji} *${title}*\n`;
-      message += `📍 ${regionName} | ⚠️ ${warningType}`;
+      message += `📍 [${regionName}](${weatherUrl}) | ⚠️ ${warningTypeName}`;
 
       switch (change.type) {
         case 'NEW':
-          message += ` | 📊 ${change.current?.level}`;
+          if (change.current) {
+            const levelEmoji = getWarningLevelEmoji(change.current.level);
+            const levelName = getWarningLevelName(change.current.level);
+            message += ` | 📊 ${levelEmoji} ${levelName}`;
+          }
           break;
         case 'RESOLVED':
-          message += ` | ❌ 해제수준: ${change.previous?.level}`;
+          if (change.previous) {
+            const levelEmoji = getWarningLevelEmoji(change.previous.level);
+            const levelName = getWarningLevelName(change.previous.level);
+            message += ` | ❌ 해제수준: ${levelEmoji} ${levelName}`;
+          }
           break;
         case 'LEVEL_UP':
         case 'LEVEL_DOWN':
-          message += ` | 📈 ${change.previous?.level} → ${change.current?.level}`;
+          if (change.previous && change.current) {
+            const prevLevelName = getWarningLevelName(change.previous.level);
+            const currLevelName = getWarningLevelName(change.current.level);
+            message += ` | 📈 ${prevLevelName} → ${currLevelName}`;
+          }
           break;
         case 'TIME_EXTENDED':
           message += ` | ⏰ 시간연장`;
           break;
         case 'MODIFIED':
-          message += ` | 🔄 내용변경`;
+          if (change.current) {
+            const levelEmoji = getWarningLevelEmoji(change.current.level);
+            const levelName = getWarningLevelName(change.current.level);
+            message += ` | 📊 ${levelEmoji} ${levelName}`;
+          }
           break;
       }
 
@@ -557,43 +610,6 @@ _한국 기상청_`;
 
     message += `\n\n_한국 기상청_`;
     return message;
-  }
-
-  private getWarningTypeName(warningCode: string): string {
-    const warningTypes: Record<string, string> = {
-      'W': '강풍',
-      'R': '호우',
-      'C': '한파',
-      'D': '건조',
-      'O': '해일',
-      'N': '지진해일',
-      'V': '풍랑',
-      'T': '태풍',
-      'S': '대설',
-      'Y': '황사',
-      'H': '폭염',
-      'F': '안개'
-    };
-    return warningTypes[warningCode.trim()] || warningCode;
-  }
-
-  private getWeatherEmoji(warningCode: string): string {
-    const warningTypeName = this.getWarningTypeName(warningCode);
-    const emojiMap: Record<string, string> = {
-      '강풍': '💨',
-      '호우': '🌧️',
-      '한파': '🥶',
-      '건조': '🏜️',
-      '해일': '🌊',
-      '지진해일': '🌊',
-      '풍랑': '🌊',
-      '태풍': '🌀',
-      '대설': '❄️',
-      '황사': '🌫️',
-      '폭염': '🔥',
-      '안개': '🌫️'
-    };
-    return emojiMap[warningTypeName] || '⚠️';
   }
 
   private getChangeEmoji(type: AlertChangeType): string {
@@ -623,24 +639,6 @@ _한국 기상청_`;
   private getChangeColor(type: AlertChangeType): string {
     // Telegram doesn't support colors, so we use emojis for visual distinction
     return this.getChangeEmoji(type);
-  }
-
-  private formatDate(dateString: string): string {
-    try {
-      const date = new Date(dateString);
-      const kstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
-      return kstDate.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: 'Asia/Seoul'
-      });
-    } catch (error) {
-      logger.error('Date formatting error:', error);
-      return dateString;
-    }
   }
 
   async stop(): Promise<void> {

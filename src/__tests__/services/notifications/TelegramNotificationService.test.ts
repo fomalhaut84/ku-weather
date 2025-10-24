@@ -155,7 +155,7 @@ describe('TelegramNotificationService', () => {
         TM_IN: '2025-01-28T12:00:00.000Z',
         STN: '108',
         WRN: 'H',
-        LVL: '주의보',
+        LVL: '2', // 주의보 = 2
         CMD: '1',
         GRD: '',
         CNT: '1',
@@ -185,8 +185,8 @@ describe('TelegramNotificationService', () => {
           key: 'test-key',
           regionId: '11B00000',
           regionName: '서울특별시',
-          warningType: '폭염',
-          level: '주의보',
+          warningType: 'H',
+          level: '2', // 주의보 = 2
           command: '1',
           announcedAt: '2025-01-28T12:00:00.000Z',
           effectiveAt: '2025-01-28T13:00:00.000Z',
@@ -212,8 +212,8 @@ describe('TelegramNotificationService', () => {
             key: 'test-key-1',
             regionId: '11B00000',
             regionName: '서울특별시',
-            warningType: '폭염',
-            level: '주의보',
+            warningType: 'H',
+            level: '2', // 주의보 = 2
             command: '1',
             announcedAt: '202501281200',
             effectiveAt: '202501281300',
@@ -227,8 +227,8 @@ describe('TelegramNotificationService', () => {
             key: 'test-key-2',
             regionId: '26110000',
             regionName: '부산광역시',
-            warningType: '호우',
-            level: '주의보',
+            warningType: 'R',
+            level: '2', // 주의보 = 2
             command: '3',
             announcedAt: '2025-01-28T08:00:00.000Z',
             effectiveAt: '2025-01-28T09:00:00.000Z',
@@ -253,8 +253,8 @@ describe('TelegramNotificationService', () => {
           key: 'test-key',
           regionId: '11B00000',
           regionName: '서울특별시',
-          warningType: '폭염',
-          level: '주의보',
+          warningType: 'H',
+          level: '2', // 주의보 = 2
           command: '1',
           announcedAt: '2025-01-28T12:00:00.000Z',
           effectiveAt: '2025-01-28T13:00:00.000Z',
@@ -289,12 +289,12 @@ describe('TelegramNotificationService', () => {
         REG_KO: '서울',
         REG_UP_KO: '서울특별시',
         REG_NAME: '서울특별시',
-        TM_FC: '2025-01-28T12:00:00.000Z',
-        TM_EF: '2025-01-28T13:00:00.000Z',
+        TM_FC: '202501282100',
+        TM_EF: '202501282200',
         TM_IN: '2025-01-28T12:00:00.000Z',
         STN: '108',
         WRN: 'H',
-        LVL: '경보',
+        LVL: '3', // 경보 = 3
         CMD: '1',
         GRD: '',
         CNT: '1',
@@ -313,7 +313,8 @@ describe('TelegramNotificationService', () => {
 
       // Test environment should not have prefix, so just check for basic content
       expect(formattedMessage).toContain('서울특별시');
-      expect(formattedMessage).toContain('🚨'); // 경보 emoji
+      expect(formattedMessage).toContain('🔴'); // 경보 level emoji
+      expect(formattedMessage).toContain('🔥'); // 폭염 warning type emoji
       expect(formattedMessage).toContain('한국 기상청 제공');
     });
 
@@ -324,8 +325,8 @@ describe('TelegramNotificationService', () => {
           key: 'test-key',
           regionId: '11B00000',
           regionName: '서울특별시',
-          warningType: '폭염',
-          level: '경보',
+          warningType: 'H',
+          level: '3', // 경보 = 3
           command: '2',
           announcedAt: '202501281200',
           effectiveAt: '202501281300',
@@ -335,8 +336,8 @@ describe('TelegramNotificationService', () => {
           key: 'test-key',
           regionId: '11B00000',
           regionName: '서울특별시',
-          warningType: '폭염',
-          level: '주의보',
+          warningType: 'H',
+          level: '2', // 주의보 = 2
           command: '1',
           announcedAt: '2025-01-28T12:00:00.000Z',
           effectiveAt: '2025-01-28T13:00:00.000Z',
