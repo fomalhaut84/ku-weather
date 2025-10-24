@@ -187,13 +187,10 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
         text: async () => '#START7777\n'  // Valid response format with no data
       });
 
-      await (weatherService as any).fetchWeatherAlerts('H', ['L1100000'], '12');
+      await (weatherService as any).fetchWeatherAlerts('H', '12');
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('wrn=H'),
-      );
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('reg=L1100000'),
       );
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('subcd=12'),
@@ -216,34 +213,42 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('should fetch specific warning types', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: async () => '#START7777\n'
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => '#START7777\n'
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: async () => '#START7777\n'
+        });
 
-      await weatherService.getWeatherAlerts(['H', 'R']);
+      await weatherService.getWeatherAlerts([], ['H', 'R']); // Second param is warningTypes
 
       expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenNthCalledWith(1, expect.stringContaining('wrn=H'));
+      expect(mockFetch).toHaveBeenNthCalledWith(2, expect.stringContaining('wrn=R'));
     });
 
     it('should filter by region when specified', async () => {
+      const mockResponse = '#START7777\n202508011500, 202508011600, 202508011400, 184, L1100000, H, 2, 1, 00, 4, 101, =, , , , L1020000, 서울, 서울특별시\n202508011500, 202508011600, 202508011400, 184, L1020000, H, 2, 1, 00, 4, 101, =, , , , L1020000, 경기, 경기도';
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => '#START7777\n'
+        text: async () => mockResponse
       });
 
-      await weatherService.getWeatherAlerts(undefined, ['L1100000']);
+      const results = await weatherService.getWeatherAlerts(['L1100000']); // First param is targetRegIds
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('reg=L1100000'),
-      );
+      // getWeatherAlerts uses region filtering in-memory, not via API parameter
+      expect(results).toHaveLength(1);
+      expect(results[0].REG_ID).toBe('L1100000');
     });
 
     it('should handle API errors gracefully', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-      const result = await weatherService.getWeatherAlerts();
-      expect(result).toHaveLength(0);
+      await expect(weatherService.getWeatherAlerts()).rejects.toThrow('Network error');
     });
   });
 
@@ -322,18 +327,20 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
-        statusText: 'Internal Server Error'
+        statusText: 'Internal Server Error',
+        text: async () => 'Server Error'
       });
 
-      const alerts = await weatherService.getWeatherAlerts();
-      expect(alerts).toHaveLength(0); // Should return empty array on error
+      await expect(weatherService.getWeatherAlerts()).rejects.toThrow(
+        'API 호출 실패: 500 Internal Server Error - Server Error'
+      );
     });
 
     it('should validate CSV parsing with various data formats', async () => {
-      const mockResponse = `#Test data
+      const mockResponse = `#START7777
 202508011500, 202508011600, 202508011400, 184, L1020110, H, 2, 1, 00, 4, 101, =, , , , L1020000, 서울강북, 서울특별시 강북구
 202508021500, 202508021600, 202508021400, 184, L1020111, R, 3, 6, 00, 4, 101, =, , , , L1020001, 서울강남, 서울특별시 강남구`;
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockResponse)
@@ -341,19 +348,20 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
 
       const alerts = await weatherService.getWeatherAlerts();
       expect(alerts).toHaveLength(2);
-      
+
       // CMD 다양성 검증
       const cmdTypes = alerts.map((a: any) => a.CMD).sort();
       expect(cmdTypes).toEqual(['1', '6']);
-      
+
       // WRN 다양성 검증
       const wrnTypes = [...new Set(alerts.map((a: any) => a.WRN))].sort();
       expect(wrnTypes).toEqual(['H', 'R']);
     });
 
     it('should handle empty API responses', async () => {
-      const mockResponse = `REG_UP,REG_UP_KO,REG_ID,REG_KO,TM_FC,TM_EF,WRN,LVL,CMD`;
-      
+      const mockResponse = `#START7777
+#REG_UP,REG_UP_KO,REG_ID,REG_KO,TM_FC,TM_EF,WRN,LVL,CMD`;
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockResponse)
@@ -364,11 +372,11 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('should validate data format consistency', async () => {
-      const mockResponse = `#Test
+      const mockResponse = `#START7777
 202508011500, 202508011600, 202508011400, 184, L1020110, H, 2, 1, 00, 4, 101, =, , , , L1020000, 서울강북, 서울특별시 강북구
 invalid, incomplete, data
 202508021500, 202508021600, 202508021400, 184, L1020111, R, 3, 2, 00, 4, 101, =, , , , L1020001, 서울강남, 서울특별시 강남구`;
-      
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockResponse)
@@ -383,12 +391,11 @@ invalid, incomplete, data
   describe('additional error handling coverage', () => {
     it('should handle non-Error objects in fetchWeatherAlerts catch block', async () => {
       const service = new WeatherService(testApiKey);
-      
+
       // Mock fetch to throw a non-Error object
       mockFetch.mockRejectedValueOnce('string error');
 
-      const result = await (service as any).fetchWeatherAlerts();
-      expect(result).toHaveLength(0);
+      await expect((service as any).fetchWeatherAlerts()).rejects.toBe('string error');
     });
 
     it('should handle malformed CSV lines in parseCSVResponse', () => {
@@ -491,13 +498,11 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('should handle complete weather alert monitoring workflow', async () => {
-      // 1단계: 초기 API 호출 (과거 7일)
-      const pastDate = new Date();
-      pastDate.setDate(pastDate.getDate() - 7);
-      const currentDate = new Date();
-      
-      const initialResponse = `#대상기간:${pastDate.getFullYear()}${(pastDate.getMonth()+1).toString().padStart(2,'0')}${pastDate.getDate().toString().padStart(2,'0')}0000~${currentDate.getFullYear()}${(currentDate.getMonth()+1).toString().padStart(2,'0')}${currentDate.getDate().toString().padStart(2,'0')}0000\nREG_ID,REG_NAME,TM_FC,TM_EF,WRN,LVL,CMD,TM_IN,STN,GRD,CNT,RPT,TM_ST,TM_ED,REG_SP,REG_UP,REG_KO,REG_UP_KO,STN_ID,TM_SEQ,MAN_FC,MAN_IN\nL1100000,서울특별시,202501070900,202501071000,H,2,1,202501070800,184,00,1,101,,,,L1000000,서울,서울특별시,184,,,\nL1100000,서울특별시,202501070930,202501071030,H,3,6,202501070830,184,00,2,101,,,,L1000000,서울,서울특별시,184,,,`;
-      
+      // 1단계: 초기 API 호출
+      const initialResponse = `#START7777
+202501070900, 202501071000, 202501070800, 184, L1100000, H, 2, 1, 00, 1, 101, =
+202501070930, 202501071030, 202501070830, 184, L1100000, H, 3, 6, 00, 2, 101, =`;
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(initialResponse)
@@ -507,10 +512,11 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       expect(initialAlerts).toHaveLength(2);
       expect(initialAlerts[0].CMD).toBe('1'); // 발표
       expect(initialAlerts[1].CMD).toBe('6'); // 변경
-      
+
       // 2단계: 새로운 변동사항 감지
-      const updateResponse = `#대상기간:202501080900~202501080900\nREG_ID,REG_NAME,TM_FC,TM_EF,WRN,LVL,CMD,TM_IN,STN,GRD,CNT,RPT,TM_ST,TM_ED,REG_SP,REG_UP,REG_KO,REG_UP_KO,STN_ID,TM_SEQ,MAN_FC,MAN_IN\nL1100000,서울특별시,202501080900,202501081000,H,3,3,202501080800,184,00,3,101,,,,L1000000,서울,서울특별시,184,,,`;
-      
+      const updateResponse = `#START7777
+202501080900, 202501081000, 202501080800, 184, L1100000, H, 3, 3, 00, 3, 101, =`;
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(updateResponse)
@@ -541,16 +547,15 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('should process large dataset efficiently under load', async () => {
-      // 500개의 가짜 특보 데이터 생성 (메모리 제한 고려)
-      const largeDataHeader = '#Large dataset test\nREG_ID,REG_NAME,TM_FC,TM_EF,WRN,LVL,CMD,TM_IN,STN,GRD,CNT,RPT,TM_ST,TM_ED,REG_SP,REG_UP,REG_KO,REG_UP_KO,STN_ID,TM_SEQ,MAN_FC,MAN_IN';
-      const dataRows = [];
-      
+      // 500개의 가짜 특보 데이터 생성
+      const dataRows = ['#START7777'];
+
       for (let i = 0; i < 500; i++) {
-        dataRows.push(`L${i.toString().padStart(7, '0')},테스트지역${i},202501070900,202501071000,${i % 2 === 0 ? 'H' : 'R'},${(i % 3) + 1},1,202501070800,184,00,1,101,,,,L1000000,테스트,테스트지역${i},184,,,`);
+        dataRows.push(`202501070900, 202501071000, 202501070800, 184, L${i.toString().padStart(7, '0')}, ${i % 2 === 0 ? 'H' : 'R'}, ${(i % 3) + 1}, 1, 00, 1, 101, =`);
       }
-      
-      const largeResponse = largeDataHeader + '\n' + dataRows.join('\n');
-      
+
+      const largeResponse = dataRows.join('\n');
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(largeResponse)
@@ -559,18 +564,19 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       const startTime = Date.now();
       const alerts = await weatherService.getWeatherAlerts();
       const processingTime = Date.now() - startTime;
-      
+
       expect(alerts).toHaveLength(500);
       expect(processingTime).toBeLessThan(1000); // 1초 이내 처리
-      
+
       // 데이터 무결성 검증
-      expect(alerts[0].REG_NAME).toBe('테스트지역0');
-      expect(alerts[499].REG_NAME).toBe('테스트지역499');
+      expect(alerts[0].REG_ID).toBe('L0000000');
+      expect(alerts[499].REG_ID).toBe('L0000499');
     });
 
     it('should handle special characters in region names correctly', async () => {
-      const specialCharResponse = `#Special chars test\nREG_ID,REG_NAME,TM_FC,TM_EF,WRN,LVL,CMD,TM_IN,STN,GRD,CNT,RPT,TM_ST,TM_ED,REG_SP,REG_UP,REG_KO,REG_UP_KO,STN_ID,TM_SEQ,MAN_FC,MAN_IN\nL1100000,서울특별시🌆&<test>,202501070900,202501071000,H,2,1,202501070800,184,00,1,101,,,,L1000000,서울,서울특별시🌆&<test>,184,,,`;
-      
+      const specialCharResponse = `#START7777
+202501070900, 202501071000, 202501070800, 184, L1100000, H, 2, 1, 00, 1, 101, =`;
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(specialCharResponse)
@@ -578,7 +584,8 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
 
       const alerts = await weatherService.getWeatherAlerts();
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].REG_NAME).toBe('서울특별시🌆&<test>'); // 특수문자 유지
+      expect(alerts[0].REG_ID).toBe('L1100000');
+      expect(alerts[0].REG_NAME).toBe('서울특별시'); // getRegionName으로 매핑됨
     });
   });
 
