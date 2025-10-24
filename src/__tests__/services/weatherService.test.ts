@@ -46,7 +46,7 @@ describe('WeatherService', () => {
 
   describe('constructor', () => {
     it('should throw error when API key is not provided', () => {
-      expect(() => new WeatherService('')).toThrow('API 키가 제공되지 않았습니다');
+      expect(() => new WeatherService('')).toThrow('WEATHER_API_KEY가 제공되지 않았습니다');
     });
 
     it('should create instance with valid API key', () => {
@@ -162,18 +162,19 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
-        statusText: 'Internal Server Error'
+        statusText: 'Internal Server Error',
+        text: async () => 'Server Error'
       });
 
       await expect((weatherService as any).fetchWeatherAlerts()).rejects.toThrow(
-        'API 요청 실패: 500 Internal Server Error'
+        'API 호출 실패: 500 Internal Server Error - Server Error'
       );
     });
 
     it('should handle invalid response format', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => 'invalid response'
+        text: async () => '#STARTinvalid response'
       });
 
       const result = await (weatherService as any).fetchWeatherAlerts();
@@ -183,11 +184,11 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     it('should build correct API URL with parameters', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => '#No data'
+        text: async () => '#START7777\n'  // Valid response format with no data
       });
 
       await (weatherService as any).fetchWeatherAlerts('H', ['L1100000'], '12');
-      
+
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('wrn=H'),
       );
@@ -204,35 +205,35 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     it('should fetch all warning types when none specified', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => '#No data'
+        text: async () => '#START7777\n'
       });
 
       await weatherService.getWeatherAlerts();
-      
+
       expect(mockFetch).toHaveBeenCalledWith(
         expect.not.stringContaining('wrn='),
       );
     });
 
     it('should fetch specific warning types', async () => {
-      mockFetch.mockResolvedValueOnce({
+      mockFetch.mockResolvedValue({
         ok: true,
-        text: async () => '#No data'
+        text: async () => '#START7777\n'
       });
 
       await weatherService.getWeatherAlerts(['H', 'R']);
-      
+
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('should filter by region when specified', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => '#No data'
+        text: async () => '#START7777\n'
       });
 
       await weatherService.getWeatherAlerts(undefined, ['L1100000']);
-      
+
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('reg=L1100000'),
       );
