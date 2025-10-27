@@ -499,26 +499,56 @@ describe('SlackService', () => {
 
     it('should send multiple changes via sendBatchedAlertChanges when batch mode enabled', async () => {
       const mockChanges = [
-        createMockAlertChange({ description: '서울강북 변동' }),
-        createMockAlertChange({ description: '서울강남 변동' }),
-        createMockAlertChange({ description: '부산 변동' })
+        createMockAlertChange({
+          description: '서울강북 변동',
+          current: {
+            regionName: '서울강북',
+            upperRegion: '서울특별시',
+            warningType: 'H',
+            level: '2'
+          } as any
+        }),
+        createMockAlertChange({
+          description: '서울강남 변동',
+          current: {
+            regionName: '서울강남',
+            upperRegion: '서울특별시',
+            warningType: 'H',
+            level: '2'
+          } as any
+        }),
+        createMockAlertChange({
+          description: '부산 변동',
+          current: {
+            regionName: '부산광역시',
+            upperRegion: '부산광역시',
+            warningType: 'H',
+            level: '2'
+          } as any
+        })
       ];
-      
+
       mockFetch.mockResolvedValue({ ok: true });
 
       await slackService.sendAlertChanges(mockChanges);
 
       // 배치 모드에서는 1번의 fetch 호출로 모든 변동사항을 전송
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      
+
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(payload.text).toContain('기상특보 변동 알림 (3건)');
-      expect(payload.attachments).toHaveLength(3);
-      
-      // 각 attachment가 올바른 변동사항을 포함하는지 확인
-      expect(payload.attachments[0].title).toContain('서울강북 변동');
-      expect(payload.attachments[1].title).toContain('서울강남 변동');
-      expect(payload.attachments[2].title).toContain('부산 변동');
+
+      // 그루핑 로직 적용: 동일 수준/종류는 하나로 묶임
+      // 주의보 헤더 1개 + 폭염주의보 그룹 1개 = 총 2개
+      expect(payload.attachments).toHaveLength(2);
+
+      // 첫 번째: 주의보 섹션 헤더
+      expect(payload.attachments[0].text).toContain('주의보');
+
+      // 두 번째: 폭염주의보 그룹 (서울, 부산 포함)
+      expect(payload.attachments[1].text).toContain('폭염');
+      expect(payload.attachments[1].text).toContain('서울특별시');
+      expect(payload.attachments[1].text).toContain('부산광역시');
     });
 
     it('should handle errors gracefully', async () => {
@@ -599,11 +629,12 @@ describe('SlackService', () => {
 
     it('should send all changes in a single batched message', async () => {
       const mockChanges = [
-        createMockAlertChange({ 
-          type: 'NEW', 
+        createMockAlertChange({
+          type: 'NEW',
           description: '서울 폭염 신규 발표',
           current: {
             regionName: '서울특별시',
+            upperRegion: '서울특별시',
             warningType: 'H',
             level: '2',
             command: '1',
@@ -616,6 +647,7 @@ describe('SlackService', () => {
           description: '부산 호우 해제',
           previous: {
             regionName: '부산광역시',
+            upperRegion: '부산광역시',
             warningType: 'R',
             level: '3',
             command: '3',
@@ -625,50 +657,45 @@ describe('SlackService', () => {
           current: undefined
         } as AlertChange
       ];
-      
+
       mockFetch.mockResolvedValue({ ok: true });
 
       await slackService.sendBatchedAlertChanges(mockChanges);
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      
+
       const payload = JSON.parse(mockFetch.mock.calls[0][1].body);
-      
+
       // 헤더 메시지 확인
       expect(payload.text).toContain('[DEV] 🌦️ 기상특보 변동 알림 (2건)');
-      
-      // attachments 구조 확인
-      expect(payload.attachments).toHaveLength(2);
-      
-      // 첫 번째 변동 (NEW) 확인
-      const firstAttachment = payload.attachments[0];
-      expect(firstAttachment.title).toBe('🆕 서울 폭염 신규 발표');
-      expect(firstAttachment.color).toBe('danger');
-      expect(firstAttachment.fields).toEqual(
-        expect.arrayContaining([
-          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=서울+날씨|서울특별시>', short: true },
-          { title: '⚠️ 특보종류', value: '폭염', short: true },
-          { title: '📊 수준', value: '주의보', short: true }
-        ])
-      );
-      
-      // 두 번째 변동 (RESOLVED) 확인
-      const secondAttachment = payload.attachments[1];
-      expect(secondAttachment.title).toBe('✅ 부산 호우 해제');
-      expect(secondAttachment.color).toBe('good');
-      expect(secondAttachment.fields).toEqual(
-        expect.arrayContaining([
-          { title: '📍 지역', value: '<https://search.daum.net/search?w=tot&q=부산+날씨|부산광역시>', short: true },
-          { title: '⚠️ 특보종류', value: '호우', short: true },
-          { title: '❌ 해제수준', value: '경보', short: true }
-        ])
-      );
-      
+
+      // attachments 구조 확인 (그루핑 로직 적용)
+      // 경보 (level=3): 헤더 1개 + 호우 해제 1개 = 2개
+      // 주의보 (level=2): 헤더 1개 + 폭염 신규 1개 = 2개
+      // 총 4개 attachment
+      expect(payload.attachments).toHaveLength(4);
+
+      // 첫 번째: 경보 섹션 헤더
+      expect(payload.attachments[0].text).toContain('🔴');
+      expect(payload.attachments[0].text).toContain('경보');
+
+      // 두 번째: 호우 해제 (경보)
+      expect(payload.attachments[1].text).toContain('호우');
+      expect(payload.attachments[1].text).toContain('해제');
+      expect(payload.attachments[1].text).toContain('부산광역시');
+
+      // 세 번째: 주의보 섹션 헤더
+      expect(payload.attachments[2].text).toContain('🟠');
+      expect(payload.attachments[2].text).toContain('주의보');
+
+      // 네 번째: 폭염 신규 (주의보)
+      expect(payload.attachments[3].text).toContain('폭염');
+      expect(payload.attachments[3].text).toContain('신규 발표');
+      expect(payload.attachments[3].text).toContain('서울특별시');
+
       // 마지막 attachment에만 footer와 timestamp가 있는지 확인
-      expect(firstAttachment.footer).toBe('');
-      expect(firstAttachment.ts).toBeUndefined();
-      expect(secondAttachment.footer).toBe('한국 기상청');
-      expect(secondAttachment.ts).toBeDefined();
+      expect(payload.attachments[3].footer).toBe('한국 기상청');
+      expect(payload.attachments[3].ts).toBeDefined();
     });
 
     it('should handle API errors in batch mode', async () => {
