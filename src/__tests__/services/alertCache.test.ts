@@ -1013,6 +1013,56 @@ describe('AlertCache', () => {
       expect(secondSeen).toBeDefined();
       expect(new Date(secondSeen!).getTime()).toBeGreaterThan(new Date(firstSeen!).getTime());
     });
+
+    it('should treat new alerts within grace period as NEW (Codex P1 feedback)', () => {
+      // Codex P1: Grace period 내 진짜 신규 특보는 MODIFIED가 아닌 NEW로 처리해야 함
+
+      // T+0: 특보A 발표 (TM_FC=202501070900, CMD=1)
+      const alertA = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501070900' };
+      const changes1 = alertCache.detectChanges([alertA]);
+
+      expect(changes1).toHaveLength(1);
+      expect(changes1[0].type).toBe('NEW');
+
+      // T+10분: API 응답에서 사라짐 (grace period 내)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes2 = alertCache.detectChanges([]);
+
+      expect(changes2).toHaveLength(0); // 변동 없음
+      expect(alertCache.getCacheStatus().count).toBe(1); // 캐시 유지
+
+      // T+20분: 새로운 특보B 발표 (TM_FC=202501071000, CMD=1, 완전히 다른 특보)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const alertB = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501071000' };
+      const changes3 = alertCache.detectChanges([alertB]);
+
+      // 진짜 신규 특보이므로 NEW로 감지되어야 함 ✅
+      expect(changes3).toHaveLength(1);
+      expect(changes3[0].type).toBe('NEW');
+      expect(changes3[0].description).toContain('신규 발표');
+      expect(alertCache.getCacheStatus().count).toBe(1);
+    });
+
+    it('should treat alerts with different command within grace period as NEW', () => {
+      // Grace period 내 다른 명령(CMD)을 가진 특보는 신규로 간주
+
+      // T+0: 특보A 발표 (CMD=1)
+      const alertA = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501070900' };
+      alertCache.detectChanges([alertA]);
+
+      // T+10분: API 응답에서 사라짐
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      alertCache.detectChanges([]);
+
+      // T+20분: 다른 명령의 특보B 발표 (CMD=6, 변경)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const alertB = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '6', TM_FC: '202501070900' };
+      const changes = alertCache.detectChanges([alertB]);
+
+      // CMD가 다르므로 변동으로 감지
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('MODIFIED'); // CMD 변경
+    });
   });
 
   describe('SlackService 메시지 포맷 테스트', () => {
