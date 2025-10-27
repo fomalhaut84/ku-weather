@@ -31,6 +31,7 @@ export class AlertCache {
       key,
       regionId: alert.REG_ID,
       regionName: alert.REG_NAME,
+      upperRegion: alert.REG_UP_KO,  // 상위 특보구역명 (메시지 그루핑용)
       warningType: alert.WRN,
       level: alert.LVL,
       command: alert.CMD,
