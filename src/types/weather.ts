@@ -93,6 +93,8 @@ export interface CachedAlert {
   effectiveAt: string;
   /** 마지막 업데이트 시각 (ISO string) */
   lastUpdated: string;
+  /** 마지막으로 API에서 확인된 시각 (ISO string, 중복 알림 방지용) */
+  lastSeenAt?: string;
 }
 
 /**
