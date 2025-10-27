@@ -26,6 +26,7 @@ export class AlertCache {
    */
   private toCachedAlert(alert: WeatherAlert): CachedAlert {
     const key = this.generateAlertKey(alert);
+    const now = new Date().toISOString();
     return {
       key,
       regionId: alert.REG_ID,
@@ -35,7 +36,8 @@ export class AlertCache {
       command: alert.CMD,
       announcedAt: alert.TM_FC,
       effectiveAt: alert.TM_EF,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: now,
+      lastSeenAt: now  // API에서 확인된 현재 시각
     };
   }
 
@@ -47,7 +49,8 @@ export class AlertCache {
   detectChanges(currentAlerts: WeatherAlert[]): AlertChange[] {
     const changes: AlertChange[] = [];
     const currentCachedAlerts = new Map<string, CachedAlert>();
-    
+    const now = new Date().toISOString();
+
     // 현재 특보들을 캐시용 객체로 변환
     currentAlerts.forEach(alert => {
       const cached = this.toCachedAlert(alert);
@@ -57,7 +60,7 @@ export class AlertCache {
     // 1. 신규 특보 및 수준 변경 감지
     for (const [key, current] of currentCachedAlerts) {
       const previous = this.cache.get(key);
-      
+
       if (!previous) {
         if (this.isNewCommand(current.command)) {
           // CMD=1: 진짜 신규 발표
@@ -84,22 +87,47 @@ export class AlertCache {
       }
     }
 
-    // 2. 해제된 특보 감지 및 캐시에서 제거
+    // 2. 캐시에 있지만 API 응답에 없는 특보 감지 (중복 알림 방지)
+    const GRACE_PERIOD_MS = 30 * 60 * 1000; // 30분
+
+    for (const [key, previous] of this.cache) {
+      if (!currentCachedAlerts.has(key)) {
+        // API 응답에 없는 특보 발견
+        const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+        const timeSinceLastSeen = Date.now() - lastSeenAt.getTime();
+
+        if (timeSinceLastSeen > GRACE_PERIOD_MS) {
+          // Grace period 초과 → 해제로 간주
+          changes.push({
+            type: 'RESOLVED',
+            previous,
+            description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제 (자동감지)`
+          });
+          logger.info(`특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 미확인)`);
+          // 캐시에서 제거 (activeAlerts에 추가하지 않음)
+        } else {
+          // Grace period 내 → 일시적 사라짐, 캐시 유지
+          logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000)}초 경과)`);
+          currentCachedAlerts.set(key, previous); // 캐시 유지
+        }
+      }
+    }
+
+    // 3. 해제 명령 처리 및 활성 특보 수집
     const activeAlerts = new Map<string, CachedAlert>();
-    
+
     for (const [key, current] of currentCachedAlerts) {
-      const previous = this.cache.get(key);
-      
       if (this.isResolvedCommand(current.command)) {
+        const previous = this.cache.get(key);
         if (previous) {
-          // 해제 명령이 있고 이전 캐시에 있던 특보 → RESOLVED 변동으로 처리
+          // 명시적 해제 명령 처리 (자동감지보다 우선)
           changes.push({
             type: 'RESOLVED',
             previous,
             description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제`
           });
         }
-        // 해제된 특보는 캐시에 저장하지 않음 (activeAlerts에 추가 안함)
+        // 해제된 특보는 캐시에 저장하지 않음
       } else {
         // 활성 특보만 캐시에 유지
         activeAlerts.set(key, current);
@@ -108,7 +136,7 @@ export class AlertCache {
 
     // 캐시 업데이트 (활성 특보만)
     this.replaceCache(activeAlerts);
-    
+
     logger.debug(`특보 변동 감지 완료: ${changes.length}개 변동사항`);
     return changes;
   }

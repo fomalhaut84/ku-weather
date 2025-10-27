@@ -608,16 +608,17 @@ describe('AlertCache', () => {
       const mixedUpdates = [
         { ...mockAlert1, REG_ID: 'L1000001', CMD: '3' }, // 해제
         { ...mockAlert1, REG_ID: 'L1000002', CMD: '1', LVL: '3' }, // 수준 상향
+        { ...mockAlert1, REG_ID: 'L1000003', CMD: '3' }, // 해제 (L1000003도 명시적 해제)
         { ...mockAlert1, REG_ID: 'L1000004', CMD: '1' }, // 신규
         { ...mockAlert1, REG_ID: 'L1000005', CMD: '6' }  // 기존 변경 (캐시 없음)
       ];
 
       const changes = alertCache.detectChanges(mixedUpdates);
 
-      expect(changes).toHaveLength(3); // 해제, 수준상향, 신규
-      
+      expect(changes).toHaveLength(4); // 해제x2, 수준상향, 신규
+
       const changeTypes = changes.map(c => c.type).sort();
-      expect(changeTypes).toEqual(['LEVEL_UP', 'NEW', 'RESOLVED']);
+      expect(changeTypes).toEqual(['LEVEL_UP', 'NEW', 'RESOLVED', 'RESOLVED']);
 
       // 최종 캐시 상태 검증
       const finalCache = alertCache.getAllCachedAlerts();
@@ -875,6 +876,142 @@ describe('AlertCache', () => {
       
       // 캐시 상태 복구 확인
       expect(newAlertCache.getCacheStatus().count).toBe(3);
+    });
+  });
+
+  describe('중복 알림 방지 (Grace Period) 테스트', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should maintain cache for alerts missing within grace period', () => {
+      // T+0: 특보A 발표
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      const changes1 = alertCache.detectChanges([alert1]);
+
+      expect(changes1).toHaveLength(1);
+      expect(changes1[0].type).toBe('NEW');
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // T+10분: API 응답에서 사라짐 (grace period 30분 내)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes2 = alertCache.detectChanges([]);
+
+      expect(changes2).toHaveLength(0); // 변동 없음
+      expect(alertCache.getCacheStatus().count).toBe(1); // 캐시 유지
+
+      // T+20분: 다시 나타남
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes3 = alertCache.detectChanges([alert1]);
+
+      expect(changes3).toHaveLength(0); // 중복 알림 없음 ✅
+      expect(alertCache.getCacheStatus().count).toBe(1);
+    });
+
+    it('should auto-resolve alerts missing beyond grace period', () => {
+      // T+0: 특보A 발표
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      alertCache.detectChanges([alert1]);
+
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // T+31분: API 응답에서 사라짐 (grace period 30분 초과)
+      jest.advanceTimersByTime(31 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(changes[0].description).toContain('자동감지');
+      expect(alertCache.getCacheStatus().count).toBe(0); // 캐시에서 제거
+    });
+
+    it('should prioritize explicit resolution over auto-detection', () => {
+      // T+0: 특보A 발표
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      alertCache.detectChanges([alert1]);
+
+      // T+10분: 명시적 해제 명령 (CMD=3)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const alert2 = { ...alert1, CMD: '3' };
+      const changes = alertCache.detectChanges([alert2]);
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(changes[0].description).not.toContain('자동감지'); // 명시적 해제
+      expect(alertCache.getCacheStatus().count).toBe(0);
+    });
+
+    it('should handle multiple alerts with different grace periods', () => {
+      // 특보A 발표 (T+0)
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      alertCache.detectChanges([alert1]);
+
+      // 10분 후 특보B 발표 (T+10)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const alert2 = { ...mockAlert1, REG_ID: '11A00102', WRN: 'R', CMD: '1' };
+      // alert1을 포함하지 않으므로, alert1의 lastSeenAt은 T+0 상태 유지
+      alertCache.detectChanges([alert2]);
+      expect(alertCache.getCacheStatus().count).toBe(2);
+
+      // 25분 후 (T+35): alert1은 35분 경과(초과), alert2는 25분 경과(미초과)
+      jest.advanceTimersByTime(25 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+
+      // alert1만 자동 해제, alert2는 캐시 유지
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(changes[0].previous?.regionId).toBe('11A00101'); // alert1
+      expect(alertCache.getCacheStatus().count).toBe(1); // alert2만 남음
+    });
+
+    it('should not duplicate NEW alerts after cache miss', () => {
+      // 이슈 #61의 핵심 시나리오: 중복 알림 방지
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+
+      // T+0: 신규 발표
+      const changes1 = alertCache.detectChanges([alert]);
+      expect(changes1).toHaveLength(1);
+      expect(changes1[0].type).toBe('NEW');
+
+      // T+10분: API에서 사라짐 (grace period 내)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes2 = alertCache.detectChanges([]);
+      expect(changes2).toHaveLength(0);
+      expect(alertCache.getCacheStatus().count).toBe(1); // 캐시 유지
+
+      // T+20분: 다시 나타남 (같은 특보)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes3 = alertCache.detectChanges([alert]);
+
+      // 중복 NEW 알림 없어야 함 ✅
+      expect(changes3).toHaveLength(0);
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // 캐시된 특보의 lastSeenAt이 갱신되었는지 확인
+      const cached = alertCache.getAllCachedAlerts()[0];
+      expect(cached.lastSeenAt).toBeDefined();
+    });
+
+    it('should update lastSeenAt when alert reappears', () => {
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+
+      // 초기 발표
+      alertCache.detectChanges([alert]);
+      const firstSeen = alertCache.getAllCachedAlerts()[0].lastSeenAt;
+
+      // 5분 후
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      // 다시 확인 (lastSeenAt 갱신)
+      alertCache.detectChanges([alert]);
+      const secondSeen = alertCache.getAllCachedAlerts()[0].lastSeenAt;
+
+      expect(secondSeen).toBeDefined();
+      expect(new Date(secondSeen!).getTime()).toBeGreaterThan(new Date(firstSeen!).getTime());
     });
   });
 
