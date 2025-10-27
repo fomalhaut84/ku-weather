@@ -913,13 +913,14 @@ describe('AlertCache', () => {
     });
 
     it('should auto-resolve alerts missing beyond grace period', () => {
-      // T+0: 특보A 발표
-      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      // T+0: 특보A 발표 (종료시각 30분 후로 설정)
+      const endTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime };
       alertCache.detectChanges([alert1]);
 
       expect(alertCache.getCacheStatus().count).toBe(1);
 
-      // T+31분: API 응답에서 사라짐 (grace period 30분 초과)
+      // T+31분: API 응답에서 사라짐 (종료시각 도과)
       jest.advanceTimersByTime(31 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
@@ -946,18 +947,20 @@ describe('AlertCache', () => {
     });
 
     it('should handle multiple alerts with different grace periods', () => {
-      // 특보A 발표 (T+0)
-      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      // 특보A 발표 (T+0, 종료시각 T+30)
+      const endTime1 = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime1 };
       alertCache.detectChanges([alert1]);
 
-      // 10분 후 특보B 발표 (T+10)
+      // 10분 후 특보B 발표 (T+10, 종료시각 T+40)
       jest.advanceTimersByTime(10 * 60 * 1000);
-      const alert2 = { ...mockAlert1, REG_ID: '11A00102', WRN: 'R', CMD: '1' };
+      const endTime2 = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert2 = { ...mockAlert1, REG_ID: '11A00102', WRN: 'R', CMD: '1', TM_ED: endTime2 };
       // alert1을 포함하지 않으므로, alert1의 lastSeenAt은 T+0 상태 유지
       alertCache.detectChanges([alert2]);
       expect(alertCache.getCacheStatus().count).toBe(2);
 
-      // 25분 후 (T+35): alert1은 35분 경과(초과), alert2는 25분 경과(미초과)
+      // 25분 후 (T+35): alert1 종료시각 도과(T+30), alert2는 유효(T+40)
       jest.advanceTimersByTime(25 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
