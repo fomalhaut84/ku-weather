@@ -38,7 +38,8 @@ export class AlertCache {
       announcedAt: alert.TM_FC,
       effectiveAt: alert.TM_EF,
       lastUpdated: now,
-      lastSeenAt: now  // API에서 확인된 현재 시각
+      lastSeenAt: now,  // API에서 확인된 현재 시각
+      endTime: alert.TM_ED  // 종료시각 (Grace period 판단용)
     };
   }
 
@@ -59,27 +60,69 @@ export class AlertCache {
     });
 
     // 1. 캐시에 있지만 API 응답에 없는 특보 감지 (Grace Period 판단)
-    const GRACE_PERIOD_MS = 30 * 60 * 1000; // 30분
+    // TM_ED (종료시각) 기반으로 Grace period 판단, TM_ED가 없으면 30분 타임아웃 사용
     const gracePeriodEntries = new Map<string, CachedAlert>();
+    const FALLBACK_GRACE_PERIOD_MS = 30 * 60 * 1000; // 30분 (TM_ED 없을 때 fallback)
 
     for (const [key, previous] of this.cache) {
       if (!currentCachedAlerts.has(key)) {
         // API 응답에 완전히 없는 특보 발견
-        const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
-        const timeSinceLastSeen = Date.now() - lastSeenAt.getTime();
+        const now = Date.now();
+        let shouldAutoResolve = false;
+        let logMessage = '';
 
-        if (timeSinceLastSeen > GRACE_PERIOD_MS) {
-          // Grace period 초과 → 해제로 간주
+        // TM_ED (종료시각)이 있으면 우선 사용
+        let useFallback = true;
+        if (previous.endTime && previous.endTime.trim() !== '') {
+          try {
+            const endTime = new Date(previous.endTime);
+            if (!isNaN(endTime.getTime())) {
+              // 유효한 TM_ED
+              useFallback = false;
+              if (now > endTime.getTime()) {
+                // 종료시각 도과 → 해제로 간주
+                shouldAutoResolve = true;
+                logMessage = `특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (종료시각 도과)`;
+              } else {
+                // 종료시각 미도과 → 캐시 유지
+                const timeUntilEnd = Math.round((endTime.getTime() - now) / 1000 / 60);
+                logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (종료까지 ${timeUntilEnd}분)`);
+              }
+            } else {
+              // Invalid Date
+              logger.debug(`TM_ED 파싱 실패 (Invalid Date: ${previous.endTime}), fallback 사용`);
+            }
+          } catch {
+            // endTime 파싱 실패 시 fallback으로 처리
+            logger.debug(`TM_ED 파싱 실패 (${previous.endTime}), fallback 사용`);
+          }
+        }
+
+        // TM_ED가 없거나 파싱 실패한 경우 30분 타임아웃 사용 (fallback)
+        if (!shouldAutoResolve && useFallback) {
+          const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+          const timeSinceLastSeen = now - lastSeenAt.getTime();
+
+          if (timeSinceLastSeen > FALLBACK_GRACE_PERIOD_MS) {
+            // 30분 타임아웃 초과 → 해제로 간주
+            shouldAutoResolve = true;
+            logMessage = `특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 미확인, fallback)`;
+          } else {
+            // 30분 내 → 캐시 유지
+            logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000)}초 경과, fallback)`);
+          }
+        }
+
+        if (shouldAutoResolve) {
           changes.push({
             type: 'RESOLVED',
             previous,
             description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제 (자동감지)`
           });
-          logger.info(`특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 미확인)`);
+          logger.info(logMessage);
           // 캐시에서 제거 (activeAlerts에 추가하지 않음)
         } else {
           // Grace period 내 → 일시적 사라짐, 캐시 유지
-          logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000)}초 경과)`);
           gracePeriodEntries.set(key, previous);
         }
       }
@@ -107,14 +150,15 @@ export class AlertCache {
       } else {
         // 기존 특보의 변동 감지 (해제 명령이 아닌 경우만)
         if (!this.isResolvedCommand(current.command)) {
-          // Codex P1: Grace period 내 진짜 신규 특보 감지
-          // announcedAt이 다르고, 이전 특보가 grace period 상태였다면 (lastSeenAt이 오래됨) 진짜 신규로 처리
+          // API 불안정성 감지: 일시적으로 사라졌다가 다시 나타난 특보 처리
+          // announcedAt이 다르고, 이전 특보가 일시적으로 사라졌다면 진짜 신규로 처리
           if (previous.announcedAt !== current.announcedAt || previous.command !== current.command) {
             const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
             const timeSinceLastSeen = Date.now() - lastSeenAt.getTime();
+            const API_INSTABILITY_WINDOW_MS = 30 * 60 * 1000; // 30분 (API 일시 불안정 허용 시간)
 
-            // Grace period 내에 있고 (30분 이내), 데이터가 다르면 진짜 신규 특보 가능성
-            if (timeSinceLastSeen > 0 && timeSinceLastSeen < GRACE_PERIOD_MS && timeSinceLastSeen > 60 * 1000) {
+            // API 불안정 윈도우 내에 있고, 데이터가 다르면 진짜 신규 특보 가능성
+            if (timeSinceLastSeen > 0 && timeSinceLastSeen < API_INSTABILITY_WINDOW_MS && timeSinceLastSeen > 60 * 1000) {
               // 1분 이상 경과한 경우 (즉, 최소 한 번의 폴링 사이클을 놓친 경우)
               logger.debug(`Grace period 내 새로운 특보 감지: ${current.regionName} ${this.getWarningTypeName(current.warningType)} (이전: ${previous.announcedAt}/${previous.command}, 현재: ${current.announcedAt}/${current.command}, 경과시간: ${Math.round(timeSinceLastSeen/1000)}초)`);
 
