@@ -913,13 +913,14 @@ describe('AlertCache', () => {
     });
 
     it('should auto-resolve alerts missing beyond grace period', () => {
-      // T+0: 특보A 발표
-      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      // T+0: 특보A 발표 (종료시각 30분 후로 설정)
+      const endTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime };
       alertCache.detectChanges([alert1]);
 
       expect(alertCache.getCacheStatus().count).toBe(1);
 
-      // T+31분: API 응답에서 사라짐 (grace period 30분 초과)
+      // T+31분: API 응답에서 사라짐 (종료시각 도과)
       jest.advanceTimersByTime(31 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
@@ -946,18 +947,20 @@ describe('AlertCache', () => {
     });
 
     it('should handle multiple alerts with different grace periods', () => {
-      // 특보A 발표 (T+0)
-      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
+      // 특보A 발표 (T+0, 종료시각 T+30)
+      const endTime1 = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime1 };
       alertCache.detectChanges([alert1]);
 
-      // 10분 후 특보B 발표 (T+10)
+      // 10분 후 특보B 발표 (T+10, 종료시각 T+40)
       jest.advanceTimersByTime(10 * 60 * 1000);
-      const alert2 = { ...mockAlert1, REG_ID: '11A00102', WRN: 'R', CMD: '1' };
+      const endTime2 = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const alert2 = { ...mockAlert1, REG_ID: '11A00102', WRN: 'R', CMD: '1', TM_ED: endTime2 };
       // alert1을 포함하지 않으므로, alert1의 lastSeenAt은 T+0 상태 유지
       alertCache.detectChanges([alert2]);
       expect(alertCache.getCacheStatus().count).toBe(2);
 
-      // 25분 후 (T+35): alert1은 35분 경과(초과), alert2는 25분 경과(미초과)
+      // 25분 후 (T+35): alert1 종료시각 도과(T+30), alert2는 유효(T+40)
       jest.advanceTimersByTime(25 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
@@ -1062,6 +1065,80 @@ describe('AlertCache', () => {
       // CMD가 다르므로 변동으로 감지
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe('MODIFIED'); // CMD 변경
+    });
+  });
+
+  describe('TM_ED 기반 Grace Period 테스트 (Issue #64)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('should use TM_ED when available for auto-resolve', () => {
+      // TM_ED가 있는 경우: 종료시각 기준으로 자동 해제
+      const endTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1시간 후
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime };
+      alertCache.detectChanges([alert]);
+
+      // 30분 후: TM_ED는 아직 도과하지 않음
+      jest.advanceTimersByTime(30 * 60 * 1000);
+      const changes1 = alertCache.detectChanges([]);
+      expect(changes1).toHaveLength(0); // 해제되지 않음 ✅
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // 추가 35분 후 (총 65분): TM_ED 도과
+      jest.advanceTimersByTime(35 * 60 * 1000);
+      const changes2 = alertCache.detectChanges([]);
+      expect(changes2).toHaveLength(1);
+      expect(changes2[0].type).toBe('RESOLVED');
+      expect(alertCache.getCacheStatus().count).toBe(0);
+    });
+
+    it('should fallback to 30min timeout when TM_ED is missing', () => {
+      // TM_ED가 없는 경우: 30분 타임아웃 사용
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: '' };
+      alertCache.detectChanges([alert]);
+
+      // 25분 후: 30분 미만
+      jest.advanceTimersByTime(25 * 60 * 1000);
+      const changes1 = alertCache.detectChanges([]);
+      expect(changes1).toHaveLength(0); // 해제되지 않음
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // 추가 10분 후 (총 35분): 30분 초과
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      const changes2 = alertCache.detectChanges([]);
+      expect(changes2).toHaveLength(1);
+      expect(changes2[0].type).toBe('RESOLVED');
+      expect(alertCache.getCacheStatus().count).toBe(0);
+    });
+
+    it('should handle invalid TM_ED with fallback', () => {
+      // 잘못된 TM_ED 형식: fallback 사용
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: 'invalid-date' };
+      alertCache.detectChanges([alert]);
+
+      // 35분 후: fallback 30분 타임아웃 적용
+      jest.advanceTimersByTime(35 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+    });
+
+    it('should prioritize TM_ED over 30min timeout when both applicable', () => {
+      // TM_ED가 3시간 후인 경우, 30분이 지나도 해제되지 않아야 함
+      const endTime = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(); // 3시간 후
+      const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'H', CMD: '1', TM_ED: endTime };
+      alertCache.detectChanges([alert]);
+
+      // 40분 후: 30분 타임아웃은 초과했지만 TM_ED는 아직 유효
+      jest.advanceTimersByTime(40 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+      expect(changes).toHaveLength(0); // 해제되지 않음 (TM_ED 우선) ✅
+      expect(alertCache.getCacheStatus().count).toBe(1);
     });
   });
 
