@@ -547,10 +547,27 @@ export class WeatherService {
       }
 
       try {
-        // 실제 API 응답 형식: TM_FC, TM_EF, TM_IN, STN, REG_ID, WRN, LVL, CMD, GRD, CNT, RPT, =
+        // API 응답 형식 (기본 11개 + 추가 필드 가능):
+        // TM_FC, TM_EF, TM_IN, STN, REG_ID, WRN, LVL, CMD, GRD, CNT, RPT, [TM_ST, TM_ED, ...]
         const fields = line.split(',').map(field => field.trim());
-        
+
         if (fields.length >= 11) {
+          // TM_ED가 있는 경우 YYYYMMDDHHmm → ISO 형식 변환
+          let tmEd = '';
+          if (fields.length >= 13 && fields[12]) {
+            // fields[12]가 TM_ED라고 가정 (실제 API 응답 구조에 따라 인덱스 조정 필요)
+            const tmEdRaw = fields[12].trim();
+            if (tmEdRaw && tmEdRaw.length === 12) {
+              // YYYYMMDDHHmm → YYYY-MM-DDTHH:mm:00+09:00 (KST)
+              const year = tmEdRaw.substring(0, 4);
+              const month = tmEdRaw.substring(4, 6);
+              const day = tmEdRaw.substring(6, 8);
+              const hour = tmEdRaw.substring(8, 10);
+              const minute = tmEdRaw.substring(10, 12);
+              tmEd = `${year}-${month}-${day}T${hour}:${minute}:00+09:00`;
+            }
+          }
+
           const alert: WeatherAlert = {
             TM_FC: fields[0],       // 발표시각
             TM_EF: fields[1],       // 발효시각
@@ -563,10 +580,10 @@ export class WeatherService {
             GRD: fields[8],         // 태풍경보시 등급
             CNT: fields[9],         // 작업순번
             RPT: fields[10],        // 특보 발송구분
-            // API에서 제공되지 않는 필드들은 기본값으로 설정
-            TM_ST: '',              // 시작시각
-            TM_ED: '',              // 종료시각
-            REG_SP: '',             // 특성
+            // 추가 필드 (있으면 파싱, 없으면 빈 문자열)
+            TM_ST: fields.length >= 12 ? fields[11] : '',  // 시작시각
+            TM_ED: tmEd,            // 종료시각 (ISO 형식 변환)
+            REG_SP: fields.length >= 14 ? fields[13] : '', // 특성
             REG_UP: '',             // 상위 특보구역코드
             REG_KO: '',             // 특보구역명(약어)
             REG_UP_KO: '',          // 상위 특보구역명
@@ -576,7 +593,7 @@ export class WeatherService {
             MAN_FC: '',             // 예보관명
             MAN_IN: ''              // 입력자명
           };
-          
+
           alerts.push(alert);
         }
       } catch (error) {
