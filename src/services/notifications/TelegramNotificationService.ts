@@ -10,6 +10,7 @@ import {
   getWarningLevelEmoji,
   generateWeatherSearchUrl
 } from '../../utils/messageFormatter';
+import { groupAlertChanges, getLevelName, getLevelEmoji } from '../../utils/messageGrouper';
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
 import { SubscriptionCommandParams } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
@@ -555,55 +556,40 @@ _한국 기상청_`;
     const env = this.config.nodeEnv === 'development' ? '[DEV] ' :
                this.config.nodeEnv === 'staging' ? '[STAGING] ' : '';
 
+    // 그루핑 로직 적용
+    const groupedAlerts = groupAlertChanges(changes);
+
     let message = `${env}🌦️ *기상특보 변동 알림 (${changes.length}건)*\n\n`;
 
-    changes.forEach((change, index) => {
-      const emoji = this.getChangeEmoji(change.type);
-      const title = this.getChangeTitle(change.type);
-      const regionName = change.current?.regionName || change.previous?.regionName || '알 수 없음';
-      const warningType = change.current?.warningType || change.previous?.warningType || '알 수 없음';
-      const warningTypeName = getWarningTypeName(warningType);
-      const weatherUrl = generateWeatherSearchUrl(regionName);
+    let currentLevel = '';
 
-      message += `${emoji} *${title}*\n`;
-      message += `📍 [${regionName}](${weatherUrl}) | ⚠️ ${warningTypeName}`;
-
-      switch (change.type) {
-        case 'NEW':
-          if (change.current) {
-            const levelEmoji = getWarningLevelEmoji(change.current.level);
-            const levelName = getWarningLevelName(change.current.level);
-            message += ` | 📊 ${levelEmoji} ${levelName}`;
-          }
-          break;
-        case 'RESOLVED':
-          if (change.previous) {
-            const levelEmoji = getWarningLevelEmoji(change.previous.level);
-            const levelName = getWarningLevelName(change.previous.level);
-            message += ` | ❌ 해제수준: ${levelEmoji} ${levelName}`;
-          }
-          break;
-        case 'LEVEL_UP':
-        case 'LEVEL_DOWN':
-          if (change.previous && change.current) {
-            const prevLevelName = getWarningLevelName(change.previous.level);
-            const currLevelName = getWarningLevelName(change.current.level);
-            message += ` | 📈 ${prevLevelName} → ${currLevelName}`;
-          }
-          break;
-        case 'TIME_EXTENDED':
-          message += ` | ⏰ 시간연장`;
-          break;
-        case 'MODIFIED':
-          if (change.current) {
-            const levelEmoji = getWarningLevelEmoji(change.current.level);
-            const levelName = getWarningLevelName(change.current.level);
-            message += ` | 📊 ${levelEmoji} ${levelName}`;
-          }
-          break;
+    groupedAlerts.forEach((group, groupIndex) => {
+      // 수준 헤더 (수준이 변경될 때만)
+      if (group.level !== currentLevel) {
+        currentLevel = group.level;
+        const levelEmoji = getLevelEmoji(group.level);
+        const levelName = getLevelName(group.level);
+        message += `${levelEmoji} *${levelName}*\n`;
       }
 
-      if (index < changes.length - 1) {
+      // 변동 타입 이모지 및 특보 정보
+      const changeEmoji = this.getChangeEmoji(group.changeType);
+      const warningEmoji = getWarningTypeEmoji(group.warningType);
+      const warningName = getWarningTypeName(group.warningType);
+      const changeTypeText = this.getChangeTypeText(group.changeType);
+
+      message += `${changeEmoji} ${warningEmoji} *${warningName} ${changeTypeText}*\n`;
+
+      // 지역 정보 (상위지역별로 그룹화)
+      const regionTexts: string[] = [];
+      for (const [upperRegion, regionNames] of group.regions.entries()) {
+        const regionList = regionNames.join(', ');
+        regionTexts.push(`  📍 ${upperRegion} (${regionList})`);
+      }
+      message += regionTexts.join('\n');
+
+      // 그룹 간 구분
+      if (groupIndex < groupedAlerts.length - 1) {
         message += '\n\n';
       }
     });
@@ -634,6 +620,18 @@ _한국 기상청_`;
       'MODIFIED': '내용 변경'
     };
     return titleMap[type];
+  }
+
+  private getChangeTypeText(type: AlertChangeType): string {
+    const textMap: Record<AlertChangeType, string> = {
+      'NEW': '발표',
+      'RESOLVED': '해제',
+      'LEVEL_UP': '상향',
+      'LEVEL_DOWN': '하향',
+      'TIME_EXTENDED': '연장',
+      'MODIFIED': '변경'
+    };
+    return textMap[type];
   }
 
   private getChangeColor(type: AlertChangeType): string {
