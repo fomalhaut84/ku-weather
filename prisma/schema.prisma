@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 기상특보 데이터
+model WeatherAlert {
+  id           String   @id @default(uuid())
+  regionId     String   // 지역코드 (REG_ID)
+  regionName   String   // 지역명 (REG_NAME)
+  upperRegion  String?  // 상위지역 (서울, 경기 등)
+  warningType  String   // 특보종류 (WRN: W, R, C 등)
+  warningLevel String   // 특보수준 (LVL: 1,2,3)
+  command      String   // 특보명령 (CMD)
+  announcedAt  DateTime // 발표시각 (TM_FC)
+  effectiveAt  DateTime // 발효시각 (TM_EF)
+  endTime      DateTime? // 종료시각 (TM_ED)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 복합 유니크 제약조건 (같은 지역의 같은 특보는 하나만 존재)
+  @@unique([regionId, warningType])
+  // 인덱스
+  @@index([regionId, createdAt])
+  @@index([warningType, warningLevel])
+  @@index([announcedAt])
+  @@index([upperRegion])
+  @@map("weather_alerts")
+}
+
+// 특보 변동 이력
+model AlertHistory {
+  id           String   @id @default(uuid())
+  alertId      String?  // WeatherAlert ID (nullable)
+  regionId     String   // 지역코드
+  regionName   String   // 지역명
+  upperRegion  String?  // 상위지역
+  warningType  String   // 특보종류
+  warningLevel String   // 특보수준
+  changeType   String   // 변동 유형: NEW, RESOLVED, LEVEL_UP, LEVEL_DOWN, TIME_EXTENDED, MODIFIED
+  previousData Json?    // 이전 상태 (JSON)
+  currentData  Json?    // 현재 상태 (JSON)
+  timestamp    DateTime @default(now())
+
+  @@index([regionId, timestamp])
+  @@index([changeType])
+  @@index([timestamp])
+  @@index([warningType])
+  @@map("alert_histories")
+}
+
+// 지역 매핑 (캐싱용)
+model RegionMapping {
+  id          String   @id @default(uuid())
+  regionId    String   @unique
+  regionName  String
+  upperRegion String
+  createdAt   DateTime @default(now())
+
+  @@index([regionId])
+  @@index([upperRegion])
+  @@map("region_mappings")
+}
