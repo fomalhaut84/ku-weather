@@ -6,8 +6,10 @@ import {
   getWarningTypeName,
   getWarningLevelName,
   getWarningCommandName,
-  generateWeatherSearchUrl
+  generateWeatherSearchUrl,
+  getWarningTypeEmoji
 } from '../utils/messageFormatter';
+import { groupAlertChanges, getLevelName, getLevelEmoji } from '../utils/messageGrouper';
 
 export class SlackService {
   private readonly webhookUrl: string;
@@ -187,6 +189,7 @@ export class SlackService {
 
   /**
    * 여러 특보 변동사항을 하나의 메시지로 묶어서 전송합니다.
+   * 그루핑 기능을 사용하여 수준/종류/상위지역별로 정리합니다.
    */
   async sendBatchedAlertChanges(changes: AlertChange[]): Promise<void> {
     if (changes.length === 0) {
@@ -194,35 +197,51 @@ export class SlackService {
     }
 
     try {
-      const attachments = changes.map((change, index) => {
-        const config = this.getChangeTypeConfig(change.type);
-        const alert = change.current || change.previous!;
-        
+      // 그루핑 로직 적용
+      const groupedAlerts = groupAlertChanges(changes);
+      const attachments: any[] = [];
+
+      // 수준별로 섹션 헤더 추가
+      let currentLevel = '';
+
+      for (let i = 0; i < groupedAlerts.length; i++) {
+        const group = groupedAlerts[i];
+        const changeConfig = this.getChangeTypeConfig(group.changeType);
+
+        // 수준이 바뀔 때마다 구분선 추가
+        if (group.level !== currentLevel) {
+          currentLevel = group.level;
+          const levelEmoji = getLevelEmoji(group.level);
+          const levelName = getLevelName(group.level);
+
+          attachments.push({
+            color: group.level === '3' ? '#ff0000' : group.level === '2' ? '#ff9900' : '#ffcc00',
+            text: `${levelEmoji} *${levelName}*`,
+            mrkdwn_in: ['text']
+          });
+        }
+
+        // 상위지역별 지역명 조합
+        const regionTexts: string[] = [];
+        for (const [upperRegion, regionNames] of group.regions.entries()) {
+          regionTexts.push(`${upperRegion} (${regionNames.join(', ')})`);
+        }
+
+        const warningEmoji = getWarningTypeEmoji(group.warningType);
+        const warningName = getWarningTypeName(group.warningType);
+        const levelName = getLevelName(group.level);
+
+        // 그룹 정보를 하나의 attachment로 표시
         const attachment: any = {
-          color: config.color,
-          title: `${config.emoji} ${change.description}`,
-          title_link: generateWeatherSearchUrl(alert.regionName),
-          fields: [
-            {
-              title: '📍 지역',
-              value: `<${generateWeatherSearchUrl(alert.regionName)}|${alert.regionName}>`,
-              short: true
-            },
-            {
-              title: '⚠️ 특보종류',
-              value: getWarningTypeName(alert.warningType),
-              short: true
-            }
-          ],
-          footer: index === changes.length - 1 ? '한국 기상청' : '',
-          ts: index === changes.length - 1 ? Math.floor(Date.now() / 1000) : undefined
+          color: changeConfig.color,
+          text: `${changeConfig.emoji} *${warningEmoji} ${warningName}${levelName} ${this.getChangeTypeText(group.changeType)}*\n${regionTexts.join(', ')}`,
+          mrkdwn_in: ['text'],
+          footer: i === groupedAlerts.length - 1 ? '한국 기상청' : '',
+          ts: i === groupedAlerts.length - 1 ? Math.floor(Date.now() / 1000) : undefined
         };
 
-        // 변동 유형별 추가 필드
-        this.addBatchedChangeFields(attachment, change);
-        
-        return attachment;
-      });
+        attachments.push(attachment);
+      }
 
       const payload = {
         text: `${this.getEnvironmentPrefix()}🌦️ 기상특보 변동 알림 (${changes.length}건)`,
@@ -247,7 +266,7 @@ export class SlackService {
         throw new Error(errorMessage);
       }
 
-      logger.info(`Slack 배치 변동 알림 전송 완료: ${changes.length}건`);
+      logger.info(`Slack 배치 변동 알림 전송 완료: ${changes.length}건 (${groupedAlerts.length}개 그룹)`);
     } catch (error) {
       logger.error('Slack 배치 변동 알림 전송 중 오류:', {
         error: error instanceof Error ? error.message : String(error),
@@ -257,6 +276,21 @@ export class SlackService {
       });
       throw error;
     }
+  }
+
+  /**
+   * 변동 유형을 한글 텍스트로 변환합니다.
+   */
+  private getChangeTypeText(changeType: AlertChangeType): string {
+    const texts: Record<AlertChangeType, string> = {
+      'NEW': '신규 발표',
+      'RESOLVED': '해제',
+      'LEVEL_UP': '수준 상향',
+      'LEVEL_DOWN': '수준 하향',
+      'TIME_EXTENDED': '발효시각 연장',
+      'MODIFIED': '내용 변경'
+    };
+    return texts[changeType] || changeType;
   }
 
   /**

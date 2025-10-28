@@ -81,6 +81,8 @@ export interface CachedAlert {
   regionId: string;
   /** 지역명 (REG_NAME) */
   regionName: string;
+  /** 상위 특보구역명 (REG_UP_KO) - 메시지 그루핑용 (optional for backward compatibility) */
+  upperRegion?: string;
   /** 특보종류 (WRN) */
   warningType: string;
   /** 특보수준 (LVL) */
