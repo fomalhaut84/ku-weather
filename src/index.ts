@@ -4,6 +4,7 @@ import { config } from './config';
 import { NotificationFactory } from './services/notifications/NotificationFactory';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { HttpServer } from './server';
+import { databaseService } from './services/DatabaseService';
 
 // UTF-8 출력 설정
 process.stdout.setDefaultEncoding('utf8');
@@ -70,6 +71,10 @@ async function main() {
   try {
     logger.info('기상특보 모니터링 시작');
 
+    // 데이터베이스 연결
+    logger.info('데이터베이스 연결 중...');
+    await databaseService.connect();
+
     const weatherService = new WeatherService(config.weatherApiKey);
 
     // 새로운 다중 플랫폼 알림 서비스 초기화
@@ -135,7 +140,16 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
       
       if (changes.length > 0) {
         logger.info(`${changes.length}개의 특보 변동사항 발견`);
-        
+
+        // 데이터베이스에 변동 이력 저장
+        try {
+          await databaseService.saveAlertHistories(changes);
+          logger.debug(`${changes.length}개 변동 이력 데이터베이스 저장 완료`);
+        } catch (dbError) {
+          logger.error('변동 이력 저장 실패:', dbError);
+          // DB 저장 실패해도 알림 전송은 계속 진행
+        }
+
         // 콘솔에 변동 내역 출력
         console.log('\n=== 기상특보 변동 내역 ===');
         changes.forEach((change, index) => {
