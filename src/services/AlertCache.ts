@@ -70,6 +70,29 @@ export class AlertCache {
         let shouldAutoResolve = false;
         let logMessage = '';
 
+        // 예비특보(LVL='1')는 발효시각 전에는 해제하지 않음
+        if (previous.level === '1') {
+          try {
+            // effectiveAt은 "YYYYMMDDHHMM" 형식의 문자열
+            const year = parseInt(previous.effectiveAt.substring(0, 4));
+            const month = parseInt(previous.effectiveAt.substring(4, 6)) - 1; // JS Date month는 0-based
+            const day = parseInt(previous.effectiveAt.substring(6, 8));
+            const hour = parseInt(previous.effectiveAt.substring(8, 10));
+            const minute = parseInt(previous.effectiveAt.substring(10, 12));
+            const effectiveAt = new Date(year, month, day, hour, minute);
+
+            if (!isNaN(effectiveAt.getTime()) && now < effectiveAt.getTime()) {
+              // 예비특보이고 발효시각 전 → Grace period로 처리 (해제하지 않음)
+              const minutesUntilEffective = Math.round((effectiveAt.getTime() - now) / 1000 / 60);
+              logger.debug(`예비특보 발효 대기 중: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (발효까지 ${minutesUntilEffective}분)`);
+              gracePeriodEntries.set(key, previous);
+              continue; // 다음 특보로 넘어감 (해제하지 않음)
+            }
+          } catch (error) {
+            logger.debug(`발효시각 파싱 실패 (${previous.effectiveAt}): ${error}`);
+          }
+        }
+
         // TM_ED (종료시각)이 있으면 우선 사용
         let useFallback = true;
         if (previous.endTime && previous.endTime.trim() !== '') {

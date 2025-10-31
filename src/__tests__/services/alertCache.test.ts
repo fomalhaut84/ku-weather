@@ -1265,4 +1265,172 @@ describe('AlertCache', () => {
       });
     });
   });
+
+  /**
+   * 예비특보 발효시각 전 해제 방지 테스트 (Hotfix Issue #69)
+   */
+  describe('Preliminary Alert Resolution Prevention Before Effective Time', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('예비특보는 발효시각 전에는 해제되지 않아야 함', () => {
+      // 예비특보 발표 (발효시각: 26시간 후)
+      const now = new Date('2025-10-31T04:00:00+09:00');
+      const effectiveTime = new Date('2025-11-01T05:58:00+09:00'); // 26시간 후
+
+      // TM_FC, TM_EF를 YYYYMMDDHHMM 형식으로 변환
+      const formatDateTime = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        return `${year}${month}${day}${hour}${minute}`;
+      };
+
+      const preliminaryAlert: WeatherAlert = {
+        ...mockAlert1,
+        REG_ID: '108',
+        REG_NAME: '제주도남쪽바깥먼바다',
+        WRN: 'V', // 풍랑
+        LVL: '1', // 예비
+        CMD: '1', // 신규 발표
+        TM_FC: formatDateTime(now),
+        TM_EF: formatDateTime(effectiveTime),
+        TM_ED: ''
+      };
+
+      // Step 1: 예비특보 발표 (04:00)
+      jest.spyOn(Date, 'now').mockReturnValue(now.getTime());
+      const changes1 = alertCache.detectChanges([preliminaryAlert]);
+
+      expect(changes1).toHaveLength(1);
+      expect(changes1[0].type).toBe('NEW');
+      expect(changes1[0].current?.level).toBe('1');
+
+      // Step 2: 2시간 후 (06:00), API 응답에서 일시적으로 사라짐
+      const twoHoursLater = new Date('2025-10-31T06:00:00+09:00');
+      jest.spyOn(Date, 'now').mockReturnValue(twoHoursLater.getTime());
+
+      const changes2 = alertCache.detectChanges([]); // API 응답 없음
+
+      // ✅ 예비특보는 발효시각(26시간 후) 전이므로 해제되지 않아야 함
+      expect(changes2).toHaveLength(0); // 해제 알림 없음
+      expect(alertCache.getCacheStatus().count).toBe(1); // 캐시에 여전히 존재
+
+      jest.restoreAllMocks();
+    });
+
+    it('예비특보 발효시각 도과 후에는 TM_ED 기준으로 정상 해제되어야 함', () => {
+      alertCache.clearCache();
+
+      // 예비특보 발표 (TM_ED 종료시각 35분 후로 설정)
+      const endTime = new Date(Date.now() + 35 * 60 * 1000).toISOString();
+      const preliminaryAlert: WeatherAlert = {
+        ...mockAlert1,
+        REG_ID: '108',
+        REG_NAME: '제주도남쪽바깥먼바다',
+        WRN: 'V',
+        LVL: '1',  // 예비특보
+        CMD: '1',
+        TM_FC: '202510310400',
+        TM_EF: '202510310500',  // 발효시각 (현재로부터 어느 정도 지난 시점)
+        TM_ED: endTime
+      };
+
+      // Step 1: 예비특보 발표
+      alertCache.detectChanges([preliminaryAlert]);
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // Step 2: 40분 경과 (TM_ED 도과)
+      jest.advanceTimersByTime(40 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+
+      // ✅ TM_ED 도과 → 정상 해제
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(alertCache.getCacheStatus().count).toBe(0);
+    });
+
+    it('주의보/경보는 기존 로직 유지 (30분 타임아웃)', () => {
+      alertCache.clearCache();
+
+      // 주의보 발표 (TM_ED 없음 → 30분 fallback 사용)
+      const warningAlert: WeatherAlert = {
+        ...mockAlert1,
+        REG_ID: '109',
+        REG_NAME: '서울강북',
+        WRN: 'R',  // 호우
+        LVL: '2',  // 주의보
+        CMD: '1',
+        TM_ED: ''  // 종료시각 없음
+      };
+
+      // Step 1: 주의보 발표
+      alertCache.detectChanges([warningAlert]);
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // Step 2: 35분 경과 (30분 타임아웃 초과)
+      jest.advanceTimersByTime(35 * 60 * 1000);
+      const changes = alertCache.detectChanges([]);
+
+      // ✅ 주의보는 30분 타임아웃으로 정상 해제 (기존 로직 유지)
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(alertCache.getCacheStatus().count).toBe(0);
+    });
+
+    it('예비특보가 발효시각 전에 명시적으로 해제되면 해제 알림 발생', () => {
+      // 예비특보 발표 (발효시각: 1일 후)
+      const now = new Date('2025-10-31T04:00:00+09:00');
+      const effectiveTime = new Date('2025-11-01T04:00:00+09:00');
+
+      const formatDateTime = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hour = String(date.getHours()).padStart(2, '0');
+        const minute = String(date.getMinutes()).padStart(2, '0');
+        return `${year}${month}${day}${hour}${minute}`;
+      };
+
+      const preliminaryAlert: WeatherAlert = {
+        ...mockAlert1,
+        REG_ID: '108',
+        WRN: 'V',
+        LVL: '1',
+        CMD: '1',
+        TM_FC: formatDateTime(now),
+        TM_EF: formatDateTime(effectiveTime),
+        TM_ED: ''
+      };
+
+      // Step 1: 예비특보 발표
+      jest.spyOn(Date, 'now').mockReturnValue(now.getTime());
+      alertCache.detectChanges([preliminaryAlert]);
+
+      // Step 2: 2시간 후, 명시적 해제 명령 (CMD=3)
+      const twoHoursLater = new Date('2025-10-31T06:00:00+09:00');
+      jest.spyOn(Date, 'now').mockReturnValue(twoHoursLater.getTime());
+
+      const resolvedAlert: WeatherAlert = {
+        ...preliminaryAlert,
+        CMD: '3' // 명시적 해제
+      };
+
+      const changes = alertCache.detectChanges([resolvedAlert]);
+
+      // ✅ 명시적 해제 명령은 발효시각과 관계없이 처리됨
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('RESOLVED');
+      expect(alertCache.getCacheStatus().count).toBe(0);
+
+      jest.restoreAllMocks();
+    });
+  });
 });
