@@ -73,13 +73,17 @@ export class AlertCache {
         // 예비특보(LVL='1')는 발효시각 전에는 해제하지 않음
         if (previous.level === '1') {
           try {
-            // effectiveAt은 "YYYYMMDDHHMM" 형식의 문자열
+            // effectiveAt은 "YYYYMMDDHHMM" 형식의 KST 타임스탬프
             const year = parseInt(previous.effectiveAt.substring(0, 4));
             const month = parseInt(previous.effectiveAt.substring(4, 6)) - 1; // JS Date month는 0-based
             const day = parseInt(previous.effectiveAt.substring(6, 8));
             const hour = parseInt(previous.effectiveAt.substring(8, 10));
             const minute = parseInt(previous.effectiveAt.substring(10, 12));
-            const effectiveAt = new Date(year, month, day, hour, minute);
+
+            // KST (UTC+9)를 UTC로 변환
+            // Date.UTC는 입력을 UTC로 해석하므로, KST 값에서 9시간을 빼야 함
+            const effectiveAtUTC = Date.UTC(year, month, day, hour, minute) - 9 * 60 * 60 * 1000;
+            const effectiveAt = new Date(effectiveAtUTC);
 
             if (!isNaN(effectiveAt.getTime()) && now < effectiveAt.getTime()) {
               // 예비특보이고 발효시각 전 → Grace period로 처리 (해제하지 않음)
