@@ -27,7 +27,10 @@
       "Bash(timeout 60 npm run start)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "Bash(gh release create:*)"
+      "Bash(gh release create:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)"
     ],
     "deny": []
   }

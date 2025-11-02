@@ -67,81 +67,22 @@ export class AlertCache {
       if (!currentCachedAlerts.has(key)) {
         // API 응답에 완전히 없는 특보 발견
         const now = Date.now();
-        // API 응답에 없는 특보는 기상청 시스템에서 해제되었을 가능성이 높음
-        // 하지만 자동 해제 알림은 전송하지 않고, 조용히 캐시에서만 제거
-        
-        let shouldSilentlyRemove = false;
-        let shouldKeepInCache = false;
+        // API 응답에 없는 특보는 일시적 API 누락으로 간주하고 캐시 유지
+        // 오직 기상청 CMD=3,4,7 해제 명령만 신뢰
 
-        // 예비특보(LVL='1')는 발효시각 전까지는 유지
+        // 🚨 모든 자동 정리 로직 완전 제거
+        // API 응답에 없는 특보는 무조건 캐시 유지 (오직 API CMD=3,4,7 해제만 신뢰)
+        // TM_ED 도과, 시간 경과, 예비특보 발효시각 등 모든 자동 판단 로직 비활성화
+        const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+        const timeSinceLastSeen = now - lastSeenAt.getTime();
+        
         if (previous.level === '1') {
-          try {
-            // effectiveAt은 "YYYYMMDDHHMM" 형식의 KST 타임스탬프
-            const year = parseInt(previous.effectiveAt.substring(0, 4));
-            const month = parseInt(previous.effectiveAt.substring(4, 6)) - 1; // JS Date month는 0-based
-            const day = parseInt(previous.effectiveAt.substring(6, 8));
-            const hour = parseInt(previous.effectiveAt.substring(8, 10));
-            const minute = parseInt(previous.effectiveAt.substring(10, 12));
-
-            // KST (UTC+9)를 UTC로 변환
-            const effectiveAtUTC = Date.UTC(year, month, day, hour, minute) - 9 * 60 * 60 * 1000;
-            const effectiveAt = new Date(effectiveAtUTC);
-
-            if (!isNaN(effectiveAt.getTime()) && now < effectiveAt.getTime()) {
-              // 예비특보이고 발효시각 전 → Grace period로 처리 (유지)
-              const minutesUntilEffective = Math.round((effectiveAt.getTime() - now) / 1000 / 60);
-              logger.debug(`예비특보 발효 대기 중: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (발효까지 ${minutesUntilEffective}분)`);
-              gracePeriodEntries.set(key, previous);
-              continue; // 다음 특보로 넘어감 (유지)
-            }
-          } catch (error) {
-            logger.debug(`발효시각 파싱 실패 (${previous.effectiveAt}): ${error}`);
-          }
-        }
-
-        // TM_ED (종료시각) 확인 - 도과 시 조용히 정리만 수행
-        if (previous.endTime && previous.endTime.trim() !== '') {
-          try {
-            const endTime = new Date(previous.endTime);
-            if (!isNaN(endTime.getTime()) && now > endTime.getTime()) {
-              // 종료시각 도과 → 조용히 캐시에서 제거 (알림 없음)
-              shouldSilentlyRemove = true;
-              logger.debug(`종료시각 도과로 캐시 정리: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)}`);
-            } else if (!isNaN(endTime.getTime())) {
-              // 종료시각 미도과 → 일시적 API 누락으로 간주, 캐시 유지
-              const timeUntilEnd = Math.round((endTime.getTime() - now) / 1000 / 60);
-              logger.debug(`일시적 API 누락 추정: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (종료까지 ${timeUntilEnd}분)`);
-              shouldKeepInCache = true;
-            }
-          } catch {
-            logger.debug(`TM_ED 파싱 실패 (${previous.endTime}), 캐시 유지`);
-            shouldKeepInCache = true;
-          }
+          logger.debug(`예비특보 캐시 유지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 경과)`);
         } else {
-          // TM_ED가 없는 경우, 일시적 API 누락으로 간주하여 더 오래 유지
-          const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
-          const timeSinceLastSeen = now - lastSeenAt.getTime();
-          
-          // 기존 30분 → 2시간으로 연장하여 API 불안정성 대응
-          const EXTENDED_GRACE_PERIOD_MS = 2 * 60 * 60 * 1000; // 2시간
-          
-          if (timeSinceLastSeen > EXTENDED_GRACE_PERIOD_MS) {
-            // 2시간 초과 → 조용히 캐시에서 제거 (알림 없음)
-            shouldSilentlyRemove = true;
-            logger.debug(`장기간 미확인으로 캐시 정리: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 미확인)`);
-          } else {
-            // 2시간 내 → 캐시 유지
-            shouldKeepInCache = true;
-            logger.debug(`일시적 API 누락: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 경과)`);
-          }
-        }
-
-        // 캐시 유지가 필요한 경우 gracePeriodEntries에 추가
-        if (shouldKeepInCache) {
-          gracePeriodEntries.set(key, previous);
+          logger.debug(`일시적 API 누락으로 캐시 유지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 경과)`);
         }
         
-        // shouldSilentlyRemove가 true인 경우 아무것도 하지 않음 (조용히 제거)
+        gracePeriodEntries.set(key, previous);
       }
     }
 
