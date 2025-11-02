@@ -61,96 +61,28 @@ export class AlertCache {
     // 1. 캐시에 있지만 API 응답에 없는 특보 감지 (Grace Period 판단)
     // TM_ED (종료시각) 기반으로 Grace period 판단, TM_ED가 없으면 30분 타임아웃 사용
     const gracePeriodEntries = new Map<string, CachedAlert>();
-    const FALLBACK_GRACE_PERIOD_MS = 30 * 60 * 1000; // 30분 (TM_ED 없을 때 fallback)
+    // 자동 해제 로직 제거: API 데이터만 신뢰하고 해제 알림은 기상청 명령(CMD=3,4,7)에만 의존
 
     for (const [key, previous] of this.cache) {
       if (!currentCachedAlerts.has(key)) {
         // API 응답에 완전히 없는 특보 발견
         const now = Date.now();
-        let shouldAutoResolve = false;
-        let logMessage = '';
+        // API 응답에 없는 특보는 일시적 API 누락으로 간주하고 캐시 유지
+        // 오직 기상청 CMD=3,4,7 해제 명령만 신뢰
 
-        // 예비특보(LVL='1')는 발효시각 전에는 해제하지 않음
+        // 🚨 모든 자동 정리 로직 완전 제거
+        // API 응답에 없는 특보는 무조건 캐시 유지 (오직 API CMD=3,4,7 해제만 신뢰)
+        // TM_ED 도과, 시간 경과, 예비특보 발효시각 등 모든 자동 판단 로직 비활성화
+        const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+        const timeSinceLastSeen = now - lastSeenAt.getTime();
+        
         if (previous.level === '1') {
-          try {
-            // effectiveAt은 "YYYYMMDDHHMM" 형식의 KST 타임스탬프
-            const year = parseInt(previous.effectiveAt.substring(0, 4));
-            const month = parseInt(previous.effectiveAt.substring(4, 6)) - 1; // JS Date month는 0-based
-            const day = parseInt(previous.effectiveAt.substring(6, 8));
-            const hour = parseInt(previous.effectiveAt.substring(8, 10));
-            const minute = parseInt(previous.effectiveAt.substring(10, 12));
-
-            // KST (UTC+9)를 UTC로 변환
-            // Date.UTC는 입력을 UTC로 해석하므로, KST 값에서 9시간을 빼야 함
-            const effectiveAtUTC = Date.UTC(year, month, day, hour, minute) - 9 * 60 * 60 * 1000;
-            const effectiveAt = new Date(effectiveAtUTC);
-
-            if (!isNaN(effectiveAt.getTime()) && now < effectiveAt.getTime()) {
-              // 예비특보이고 발효시각 전 → Grace period로 처리 (해제하지 않음)
-              const minutesUntilEffective = Math.round((effectiveAt.getTime() - now) / 1000 / 60);
-              logger.debug(`예비특보 발효 대기 중: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (발효까지 ${minutesUntilEffective}분)`);
-              gracePeriodEntries.set(key, previous);
-              continue; // 다음 특보로 넘어감 (해제하지 않음)
-            }
-          } catch (error) {
-            logger.debug(`발효시각 파싱 실패 (${previous.effectiveAt}): ${error}`);
-          }
-        }
-
-        // TM_ED (종료시각)이 있으면 우선 사용
-        let useFallback = true;
-        if (previous.endTime && previous.endTime.trim() !== '') {
-          try {
-            const endTime = new Date(previous.endTime);
-            if (!isNaN(endTime.getTime())) {
-              // 유효한 TM_ED
-              useFallback = false;
-              if (now > endTime.getTime()) {
-                // 종료시각 도과 → 해제로 간주
-                shouldAutoResolve = true;
-                logMessage = `특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (종료시각 도과)`;
-              } else {
-                // 종료시각 미도과 → 캐시 유지
-                const timeUntilEnd = Math.round((endTime.getTime() - now) / 1000 / 60);
-                logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (종료까지 ${timeUntilEnd}분)`);
-              }
-            } else {
-              // Invalid Date
-              logger.debug(`TM_ED 파싱 실패 (Invalid Date: ${previous.endTime}), fallback 사용`);
-            }
-          } catch {
-            // endTime 파싱 실패 시 fallback으로 처리
-            logger.debug(`TM_ED 파싱 실패 (${previous.endTime}), fallback 사용`);
-          }
-        }
-
-        // TM_ED가 없거나 파싱 실패한 경우 30분 타임아웃 사용 (fallback)
-        if (!shouldAutoResolve && useFallback) {
-          const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
-          const timeSinceLastSeen = now - lastSeenAt.getTime();
-
-          if (timeSinceLastSeen > FALLBACK_GRACE_PERIOD_MS) {
-            // 30분 타임아웃 초과 → 해제로 간주
-            shouldAutoResolve = true;
-            logMessage = `특보 자동 해제 감지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 미확인, fallback)`;
-          } else {
-            // 30분 내 → 캐시 유지
-            logger.debug(`특보 일시 미확인: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000)}초 경과, fallback)`);
-          }
-        }
-
-        if (shouldAutoResolve) {
-          changes.push({
-            type: 'RESOLVED',
-            previous,
-            description: `${previous.regionName} ${this.getWarningTypeName(previous.warningType)} ${this.getWarningLevel(previous.level)} 해제 (자동감지)`
-          });
-          logger.info(logMessage);
-          // 캐시에서 제거 (activeAlerts에 추가하지 않음)
+          logger.debug(`예비특보 캐시 유지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 경과)`);
         } else {
-          // Grace period 내 → 일시적 사라짐, 캐시 유지
-          gracePeriodEntries.set(key, previous);
+          logger.debug(`일시적 API 누락으로 캐시 유지: ${previous.regionName} ${this.getWarningTypeName(previous.warningType)} (${Math.round(timeSinceLastSeen/1000/60)}분 경과)`);
         }
+        
+        gracePeriodEntries.set(key, previous);
       }
     }
 
@@ -203,20 +135,50 @@ export class AlertCache {
                 }
               }
             } else {
-              // 일반적인 변동 (즉시 변경)
-              const change = this.detectAlertChange(previous, current);
-              if (change) {
-                changes.push(change);
+              // 🚨 Codex P1: 장기간 누락 후 재등장 시 stale cache 판단
+              const STALE_CACHE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2시간
+              
+              if (timeSinceLastSeen > STALE_CACHE_THRESHOLD_MS && previous.announcedAt !== current.announcedAt) {
+                // 2시간 초과 + TM_FC 다름 → 기존 특보는 stale, 새 특보를 NEW로 처리
+                logger.debug(`Stale cache 감지 후 신규 특보: ${current.regionName} ${this.getWarningTypeName(current.warningType)} (이전: ${previous.announcedAt}, 현재: ${current.announcedAt}, 경과: ${Math.round(timeSinceLastSeen/1000/60/60)}시간)`);
+                
+                changes.push({
+                  type: 'NEW',
+                  current,
+                  description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 신규 발표`
+                });
+              } else {
+                // 일반적인 변동 (즉시 변경 또는 짧은 누락)
+                const change = this.detectAlertChange(previous, current);
+                if (change) {
+                  changes.push(change);
+                }
               }
             }
           } else if (gracePeriodEntries.has(key)) {
             // 동일한 특보 재등장: 변동 없음, grace period 엔트리 유지
             logger.debug(`동일 특보 재등장 (중복 알림 방지): ${current.regionName} ${this.getWarningTypeName(current.warningType)}`);
           } else {
-            // 일반적인 변동 감지 (데이터 동일)
-            const change = this.detectAlertChange(previous, current);
-            if (change) {
-              changes.push(change);
+            // 일반적인 변동 감지 (데이터 동일하지만 오랜 시간 누락된 경우 체크)
+            const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+            const timeSinceLastSeen = Date.now() - lastSeenAt.getTime();
+            const STALE_CACHE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2시간
+            
+            if (timeSinceLastSeen > STALE_CACHE_THRESHOLD_MS && previous.announcedAt !== current.announcedAt) {
+              // 2시간 초과 + TM_FC 다름 → 기존 특보는 stale, 새 특보를 NEW로 처리
+              logger.debug(`Stale cache 감지 후 신규 특보 (동일 데이터): ${current.regionName} ${this.getWarningTypeName(current.warningType)} (이전: ${previous.announcedAt}, 현재: ${current.announcedAt}, 경과: ${Math.round(timeSinceLastSeen/1000/60/60)}시간)`);
+              
+              changes.push({
+                type: 'NEW',
+                current,
+                description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 신규 발표`
+              });
+            } else {
+              // 일반적인 변동 감지
+              const change = this.detectAlertChange(previous, current);
+              if (change) {
+                changes.push(change);
+              }
             }
           }
         }
@@ -239,7 +201,7 @@ export class AlertCache {
       if (this.isResolvedCommand(current.command)) {
         const previous = this.cache.get(key);
         if (previous) {
-          // 명시적 해제 명령 처리 (자동감지보다 우선)
+          // 기상청 API 해제 명령 처리 (CMD=3,4,7)
           changes.push({
             type: 'RESOLVED',
             previous,
