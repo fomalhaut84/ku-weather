@@ -1065,6 +1065,53 @@ describe('AlertCache', () => {
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe('MODIFIED'); // CMD 변경
     });
+
+    it('should treat long-missing alerts with different TM_FC as NEW (Codex P1)', () => {
+      // Codex P1: 장기간 누락 후 다른 TM_FC로 재등장 시 NEW로 처리해야 함
+
+      // T+0: 특보A 발표 (TM_FC=202501070900)
+      const alertA = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501070900' };
+      const changes1 = alertCache.detectChanges([alertA]);
+      
+      expect(changes1).toHaveLength(1);
+      expect(changes1[0].type).toBe('NEW');
+
+      // T+10분: API 응답에서 사라짐 (기상청 시스템 오류로 CMD=3,4,7 없이 누락)
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      alertCache.detectChanges([]);
+
+      // T+3시간: 같은 지역에 진짜 새로운 특보B 발표 (TM_FC=202501071200)
+      jest.advanceTimersByTime(170 * 60 * 1000); // 추가 170분 (총 180분 = 3시간)
+      const alertB = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501071200' };
+      const changes2 = alertCache.detectChanges([alertB]);
+
+      // ✅ Stale cache 감지: 2시간 초과 + TM_FC 다름 → NEW로 처리
+      expect(changes2).toHaveLength(1);
+      expect(changes2[0].type).toBe('NEW');
+      expect(changes2[0].description).toContain('신규 발표');
+      expect(alertCache.getCacheStatus().count).toBe(1);
+    });
+
+    it('should still treat recently missing alerts with different TM_FC as MODIFIED', () => {
+      // 짧은 시간 누락 후 다른 TM_FC로 재등장 시 MODIFIED 유지
+
+      // T+0: 특보A 발표 (TM_FC=202501070900)
+      const alertA = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501070900' };
+      alertCache.detectChanges([alertA]);
+
+      // T+10분: API 응답에서 사라짐
+      jest.advanceTimersByTime(10 * 60 * 1000);
+      alertCache.detectChanges([]);
+
+      // T+30분: 다른 TM_FC로 재등장 (1시간 미만이므로 stale 아님)
+      jest.advanceTimersByTime(20 * 60 * 1000);
+      const alertB = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_FC: '202501071000' };
+      const changes = alertCache.detectChanges([alertB]);
+
+      // 2시간 미만이므로 MODIFIED로 처리
+      expect(changes).toHaveLength(1);
+      expect(changes[0].type).toBe('MODIFIED'); // TM_FC 변경
+    });
   });
 
   describe('TM_ED 기반 Grace Period 테스트 (Issue #64)', () => {

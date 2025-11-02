@@ -135,20 +135,50 @@ export class AlertCache {
                 }
               }
             } else {
-              // 일반적인 변동 (즉시 변경)
-              const change = this.detectAlertChange(previous, current);
-              if (change) {
-                changes.push(change);
+              // 🚨 Codex P1: 장기간 누락 후 재등장 시 stale cache 판단
+              const STALE_CACHE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2시간
+              
+              if (timeSinceLastSeen > STALE_CACHE_THRESHOLD_MS && previous.announcedAt !== current.announcedAt) {
+                // 2시간 초과 + TM_FC 다름 → 기존 특보는 stale, 새 특보를 NEW로 처리
+                logger.debug(`Stale cache 감지 후 신규 특보: ${current.regionName} ${this.getWarningTypeName(current.warningType)} (이전: ${previous.announcedAt}, 현재: ${current.announcedAt}, 경과: ${Math.round(timeSinceLastSeen/1000/60/60)}시간)`);
+                
+                changes.push({
+                  type: 'NEW',
+                  current,
+                  description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 신규 발표`
+                });
+              } else {
+                // 일반적인 변동 (즉시 변경 또는 짧은 누락)
+                const change = this.detectAlertChange(previous, current);
+                if (change) {
+                  changes.push(change);
+                }
               }
             }
           } else if (gracePeriodEntries.has(key)) {
             // 동일한 특보 재등장: 변동 없음, grace period 엔트리 유지
             logger.debug(`동일 특보 재등장 (중복 알림 방지): ${current.regionName} ${this.getWarningTypeName(current.warningType)}`);
           } else {
-            // 일반적인 변동 감지 (데이터 동일)
-            const change = this.detectAlertChange(previous, current);
-            if (change) {
-              changes.push(change);
+            // 일반적인 변동 감지 (데이터 동일하지만 오랜 시간 누락된 경우 체크)
+            const lastSeenAt = new Date(previous.lastSeenAt || previous.lastUpdated);
+            const timeSinceLastSeen = Date.now() - lastSeenAt.getTime();
+            const STALE_CACHE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2시간
+            
+            if (timeSinceLastSeen > STALE_CACHE_THRESHOLD_MS && previous.announcedAt !== current.announcedAt) {
+              // 2시간 초과 + TM_FC 다름 → 기존 특보는 stale, 새 특보를 NEW로 처리
+              logger.debug(`Stale cache 감지 후 신규 특보 (동일 데이터): ${current.regionName} ${this.getWarningTypeName(current.warningType)} (이전: ${previous.announcedAt}, 현재: ${current.announcedAt}, 경과: ${Math.round(timeSinceLastSeen/1000/60/60)}시간)`);
+              
+              changes.push({
+                type: 'NEW',
+                current,
+                description: `${current.regionName} ${this.getWarningTypeName(current.warningType)} ${this.getWarningLevel(current.level)} 신규 발표`
+              });
+            } else {
+              // 일반적인 변동 감지
+              const change = this.detectAlertChange(previous, current);
+              if (change) {
+                changes.push(change);
+              }
             }
           }
         }
