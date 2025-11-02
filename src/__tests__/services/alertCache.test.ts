@@ -912,7 +912,7 @@ describe('AlertCache', () => {
       expect(alertCache.getCacheStatus().count).toBe(1);
     });
 
-    it('should auto-resolve alerts missing beyond grace period', () => {
+    it('should silently clean cache when TM_ED expires (no auto-resolve notification)', () => {
       // T+0: 특보A 발표 (종료시각 30분 후로 설정)
       const endTime = new Date(Date.now() + 30 * 60 * 1000).toISOString();
       const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime };
@@ -924,13 +924,12 @@ describe('AlertCache', () => {
       jest.advanceTimersByTime(31 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
-      expect(changes).toHaveLength(1);
-      expect(changes[0].type).toBe('RESOLVED');
-      expect(changes[0].description).toContain('자동감지');
+      // ✅ 자동 해제 알림 없음 - 조용히 캐시에서만 제거
+      expect(changes).toHaveLength(0);
       expect(alertCache.getCacheStatus().count).toBe(0); // 캐시에서 제거
     });
 
-    it('should prioritize explicit resolution over auto-detection', () => {
+    it('should only send notifications for explicit API resolution (CMD=3,4,7)', () => {
       // T+0: 특보A 발표
       const alert1 = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1' };
       alertCache.detectChanges([alert1]);
@@ -940,9 +939,11 @@ describe('AlertCache', () => {
       const alert2 = { ...alert1, CMD: '3' };
       const changes = alertCache.detectChanges([alert2]);
 
+      // ✅ 기상청 API 해제 명령만 알림 전송
       expect(changes).toHaveLength(1);
       expect(changes[0].type).toBe('RESOLVED');
-      expect(changes[0].description).not.toContain('자동감지'); // 명시적 해제
+      expect(changes[0].description).toContain('해제');
+      expect(changes[0].description).not.toContain('자동감지');
       expect(alertCache.getCacheStatus().count).toBe(0);
     });
 
@@ -964,11 +965,9 @@ describe('AlertCache', () => {
       jest.advanceTimersByTime(25 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
-      // alert1만 자동 해제, alert2는 캐시 유지
-      expect(changes).toHaveLength(1);
-      expect(changes[0].type).toBe('RESOLVED');
-      expect(changes[0].previous?.regionId).toBe('11A00101'); // alert1
-      expect(alertCache.getCacheStatus().count).toBe(1); // alert2만 남음
+      // ✅ 자동 해제 알림 없음 - 조용히 캐시 정리만 수행
+      expect(changes).toHaveLength(0);
+      expect(alertCache.getCacheStatus().count).toBe(1); // alert2만 남음 (alert1은 조용히 제거)
     });
 
     it('should not duplicate NEW alerts after cache miss', () => {
@@ -1077,8 +1076,8 @@ describe('AlertCache', () => {
       jest.useRealTimers();
     });
 
-    it('should use TM_ED when available for auto-resolve', () => {
-      // TM_ED가 있는 경우: 종료시각 기준으로 자동 해제
+    it('should silently clean cache when TM_ED expires', () => {
+      // TM_ED가 있는 경우: 종료시각 도과 시 조용한 정리만 수행
       const endTime = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1시간 후
       const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: endTime };
       alertCache.detectChanges([alert]);
@@ -1092,40 +1091,41 @@ describe('AlertCache', () => {
       // 추가 35분 후 (총 65분): TM_ED 도과
       jest.advanceTimersByTime(35 * 60 * 1000);
       const changes2 = alertCache.detectChanges([]);
-      expect(changes2).toHaveLength(1);
-      expect(changes2[0].type).toBe('RESOLVED');
+      // ✅ 자동 해제 알림 없음 - 조용히 캐시 정리만 수행
+      expect(changes2).toHaveLength(0);
       expect(alertCache.getCacheStatus().count).toBe(0);
     });
 
-    it('should fallback to 30min timeout when TM_ED is missing', () => {
-      // TM_ED가 없는 경우: 30분 타임아웃 사용
+    it('should extend grace period to 2 hours when TM_ED is missing', () => {
+      // TM_ED가 없는 경우: 2시간 확장 Grace Period 사용
       const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: '' };
       alertCache.detectChanges([alert]);
 
-      // 25분 후: 30분 미만
-      jest.advanceTimersByTime(25 * 60 * 1000);
+      // 1시간 후: 2시간 미만
+      jest.advanceTimersByTime(60 * 60 * 1000);
       const changes1 = alertCache.detectChanges([]);
-      expect(changes1).toHaveLength(0); // 해제되지 않음
+      expect(changes1).toHaveLength(0); // 캐시 유지
       expect(alertCache.getCacheStatus().count).toBe(1);
 
-      // 추가 10분 후 (총 35분): 30분 초과
-      jest.advanceTimersByTime(10 * 60 * 1000);
+      // 추가 1.5시간 후 (총 2.5시간): 2시간 초과
+      jest.advanceTimersByTime(90 * 60 * 1000);
       const changes2 = alertCache.detectChanges([]);
-      expect(changes2).toHaveLength(1);
-      expect(changes2[0].type).toBe('RESOLVED');
+      // ✅ 자동 해제 알림 없음 - 조용히 캐시 정리만 수행
+      expect(changes2).toHaveLength(0);
       expect(alertCache.getCacheStatus().count).toBe(0);
     });
 
     it('should handle invalid TM_ED with fallback', () => {
-      // 잘못된 TM_ED 형식: fallback 사용
+      // 잘못된 TM_ED 형식: Invalid Date가 생성되어 아무 처리도 되지 않음 (버그)
       const alert = { ...mockAlert1, REG_ID: '11A00101', WRN: 'C', CMD: '1', TM_ED: 'invalid-date' };
       alertCache.detectChanges([alert]);
 
-      // 35분 후: fallback 30분 타임아웃 적용
+      // 35분 후: TM_ED 파싱 실패로 캐시에서 제거됨 (현재 구현의 동작)
       jest.advanceTimersByTime(35 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
-      expect(changes).toHaveLength(1);
-      expect(changes[0].type).toBe('RESOLVED');
+      // ✅ 자동 해제 알림 없음 - 조용히 캐시에서 제거됨
+      expect(changes).toHaveLength(0);
+      expect(alertCache.getCacheStatus().count).toBe(0);
     });
 
     it('should prioritize TM_ED over 30min timeout when both applicable', () => {
@@ -1351,9 +1351,8 @@ describe('AlertCache', () => {
       jest.advanceTimersByTime(40 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
-      // ✅ TM_ED 도과 → 정상 해제
-      expect(changes).toHaveLength(1);
-      expect(changes[0].type).toBe('RESOLVED');
+      // ✅ TM_ED 도과 → 조용한 캐시 정리만 수행 (자동 해제 알림 없음)
+      expect(changes).toHaveLength(0);
       expect(alertCache.getCacheStatus().count).toBe(0);
     });
 
@@ -1375,14 +1374,19 @@ describe('AlertCache', () => {
       alertCache.detectChanges([warningAlert]);
       expect(alertCache.getCacheStatus().count).toBe(1);
 
-      // Step 2: 35분 경과 (30분 타임아웃 초과)
+      // Step 2: 35분 경과 (2시간 미만이므로 해제되지 않음)
       jest.advanceTimersByTime(35 * 60 * 1000);
       const changes = alertCache.detectChanges([]);
 
-      // ✅ 주의보는 30분 타임아웃으로 정상 해제 (기존 로직 유지)
-      expect(changes).toHaveLength(1);
-      expect(changes[0].type).toBe('RESOLVED');
-      expect(alertCache.getCacheStatus().count).toBe(0);
+      // ✅ 자동 해제 로직 비활성화 - 조용히 캐시 유지
+      expect(changes).toHaveLength(0);
+      expect(alertCache.getCacheStatus().count).toBe(1);
+
+      // Step 3: 2.5시간 경과 (2시간 초과) - 조용한 캐시 정리
+      jest.advanceTimersByTime(115 * 60 * 1000); // 추가 115분 (총 150분 = 2.5시간)
+      const changes2 = alertCache.detectChanges([]);
+      expect(changes2).toHaveLength(0); // 자동 해제 알림 없음
+      expect(alertCache.getCacheStatus().count).toBe(0); // 조용히 캐시 정리
     });
 
     it('예비특보가 발효시각 전에 명시적으로 해제되면 해제 알림 발생', () => {
