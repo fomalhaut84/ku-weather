@@ -87,6 +87,41 @@ describe('WeatherService', () => {
     });
   });
 
+  describe('getUpperRegionName', () => {
+    it('should return correct upper region for major province codes', () => {
+      expect((weatherService as any).getUpperRegionName('L1011200')).toBe('경기도');  // 연천군
+      expect((weatherService as any).getUpperRegionName('L1021300')).toBe('강원도');  // 철원군
+      expect((weatherService as any).getUpperRegionName('L1031100')).toBe('충청남도'); // 태안군
+    });
+
+    it('should return correct upper region for metropolitan cities', () => {
+      expect((weatherService as any).getUpperRegionName('L1110100')).toBe('서울특별시');
+      expect((weatherService as any).getUpperRegionName('L1120100')).toBe('부산광역시');
+      expect((weatherService as any).getUpperRegionName('L1010800')).toBe('인천광역시'); // 특별 케이스
+    });
+
+    it('should return correct upper region for special administrative cities', () => {
+      expect((weatherService as any).getUpperRegionName('L1030100')).toBe('대전광역시'); // 특별 케이스
+      expect((weatherService as any).getUpperRegionName('L1031800')).toBe('세종특별자치시'); // 특별 케이스
+    });
+
+    it('should return correct upper region for sea areas', () => {
+      expect((weatherService as any).getUpperRegionName('S1001000')).toBe('서해전해상');
+      expect((weatherService as any).getUpperRegionName('S1211000')).toBe('동해북부전해상');
+      expect((weatherService as any).getUpperRegionName('S1311000')).toBe('남해동부전해상');
+    });
+
+    it('should return region name for province-level regions', () => {
+      expect((weatherService as any).getUpperRegionName('L1010000')).toBe('경기도');
+      expect((weatherService as any).getUpperRegionName('L1100000')).toBe('서울특별시');
+    });
+
+    it('should return "기타" for unknown patterns', () => {
+      expect((weatherService as any).getUpperRegionName('L9999999')).toBe('기타');
+      expect((weatherService as any).getUpperRegionName('X1234567')).toBe('기타');
+    });
+  });
+
   describe('parseCSVResponse', () => {
     it('should parse valid CSV response correctly', () => {
       const csvData = `#START7777
