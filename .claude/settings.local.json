@@ -35,7 +35,8 @@
       "Bash(gh pr comment:*)",
       "Bash(gh api:*)",
       "Bash(git branch:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }
