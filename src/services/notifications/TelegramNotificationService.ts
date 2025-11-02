@@ -10,7 +10,7 @@ import {
   getWarningLevelEmoji,
   generateWeatherSearchUrl
 } from '../../utils/messageFormatter';
-import { groupAlertChanges, getLevelName, getLevelEmoji } from '../../utils/messageGrouper';
+import { groupAlertChanges, getLevelName, getLevelEmoji, formatRegionList } from '../../utils/messageGrouper';
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
 import { SubscriptionCommandParams } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
@@ -580,11 +580,10 @@ _한국 기상청_`;
 
       message += `${changeEmoji} ${warningEmoji} *${warningName} ${changeTypeText}*\n`;
 
-      // 지역 정보 (상위지역별로 그룹화)
+      // 지역 정보 (상위지역별로 그룹화, 새로운 포맷팅 함수 사용)
       const regionTexts: string[] = [];
       for (const [upperRegion, regionNames] of group.regions.entries()) {
-        const regionList = regionNames.join(', ');
-        regionTexts.push(`  📍 ${upperRegion} (${regionList})`);
+        regionTexts.push(`  📍 ${formatRegionList(upperRegion, regionNames)}`);
       }
       message += regionTexts.join('\n');
 

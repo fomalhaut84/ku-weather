@@ -2,7 +2,7 @@
  * messageGrouper.ts 테스트
  */
 
-import { groupAlertChanges, getLevelName, getLevelEmoji } from '../../utils/messageGrouper';
+import { groupAlertChanges, getLevelName, getLevelEmoji, formatRegionList, getTotalRegionCount } from '../../utils/messageGrouper';
 import { AlertChange, CachedAlert } from '../../types/weather';
 
 describe('messageGrouper', () => {
@@ -125,7 +125,7 @@ describe('messageGrouper', () => {
       expect(grouped[0].regions.get('강원도')).toEqual(['철원']);
     });
 
-    it('should handle alerts without upperRegion (fallback to "기타")', () => {
+    it('should handle alerts without upperRegion (fallback to "미분류지역")', () => {
       const changes: AlertChange[] = [
         {
           type: 'NEW',
@@ -137,7 +137,7 @@ describe('messageGrouper', () => {
       const grouped = groupAlertChanges(changes);
 
       expect(grouped).toHaveLength(1);
-      expect(grouped[0].regions.get('기타')).toEqual(['테스트지역']);
+      expect(grouped[0].regions.get('미분류지역')).toEqual(['테스트지역']);
     });
 
     it('should not duplicate regionName within same upperRegion', () => {
@@ -277,6 +277,62 @@ describe('messageGrouper', () => {
 
     it('should return default emoji for unknown levels', () => {
       expect(getLevelEmoji('9')).toBe('⚠️');
+    });
+  });
+
+  describe('formatRegionList', () => {
+    it('should display all regions when count <= 5', () => {
+      const result = formatRegionList('경기도', ['연천군', '포천시', '파주시']);
+      expect(result).toBe('경기도 (연천군, 포천시, 파주시)');
+    });
+
+    it('should display first 3 regions and count when count > 5', () => {
+      const regions = ['연천군', '포천시', '파주시', '고양시', '의정부시', '양주시', '동두천시'];
+      const result = formatRegionList('경기도', regions);
+      expect(result).toBe('경기도 (연천군, 포천시, 파주시 외 4개 지역)');
+    });
+
+    it('should handle exactly 5 regions', () => {
+      const regions = ['연천군', '포천시', '파주시', '고양시', '의정부시'];
+      const result = formatRegionList('경기도', regions);
+      expect(result).toBe('경기도 (연천군, 포천시, 파주시, 고양시, 의정부시)');
+    });
+
+    it('should handle exactly 6 regions', () => {
+      const regions = ['연천군', '포천시', '파주시', '고양시', '의정부시', '양주시'];
+      const result = formatRegionList('경기도', regions);
+      expect(result).toBe('경기도 (연천군, 포천시, 파주시 외 3개 지역)');
+    });
+  });
+
+  describe('getTotalRegionCount', () => {
+    it('should count total regions across all upper regions', () => {
+      const groupedAlert = {
+        level: '2',
+        warningType: 'C',
+        changeType: 'NEW' as any,
+        regions: new Map([
+          ['경기도', ['연천군', '포천시', '파주시']],
+          ['강원도', ['철원군', '화천군']]
+        ]),
+        representativeAlert: createMockAlert({})
+      };
+
+      const result = getTotalRegionCount(groupedAlert);
+      expect(result).toBe(5); // 3 + 2
+    });
+
+    it('should return 0 for empty regions map', () => {
+      const groupedAlert = {
+        level: '2',
+        warningType: 'C',
+        changeType: 'NEW' as any,
+        regions: new Map(),
+        representativeAlert: createMockAlert({})
+      };
+
+      const result = getTotalRegionCount(groupedAlert);
+      expect(result).toBe(0);
     });
   });
 });

@@ -9,7 +9,7 @@ import {
   generateWeatherSearchUrl,
   getWarningTypeEmoji
 } from '../utils/messageFormatter';
-import { groupAlertChanges, getLevelName, getLevelEmoji } from '../utils/messageGrouper';
+import { groupAlertChanges, getLevelName, getLevelEmoji, formatRegionList } from '../utils/messageGrouper';
 
 export class SlackService {
   private readonly webhookUrl: string;
@@ -221,10 +221,10 @@ export class SlackService {
           });
         }
 
-        // 상위지역별 지역명 조합
+        // 상위지역별 지역명 조합 (새로운 포맷팅 함수 사용)
         const regionTexts: string[] = [];
         for (const [upperRegion, regionNames] of group.regions.entries()) {
-          regionTexts.push(`${upperRegion} (${regionNames.join(', ')})`);
+          regionTexts.push(formatRegionList(upperRegion, regionNames));
         }
 
         const warningEmoji = getWarningTypeEmoji(group.warningType);

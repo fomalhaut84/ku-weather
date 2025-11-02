@@ -586,7 +586,7 @@ export class WeatherService {
             REG_SP: fields.length >= 14 ? fields[13] : '', // 특성
             REG_UP: '',             // 상위 특보구역코드
             REG_KO: '',             // 특보구역명(약어)
-            REG_UP_KO: '',          // 상위 특보구역명
+            REG_UP_KO: this.getUpperRegionName(fields[4]),  // 상위 특보구역명
             REG_NAME: this.getRegionName(fields[4]), // 특보구역명
             STN_ID: fields[3],      // 발표관서 (STN과 동일)
             TM_SEQ: '',             // 발표번호
@@ -947,6 +947,137 @@ export class WeatherService {
     }
     
     return regId;
+  }
+
+  /**
+   * 지역 코드에서 상위지역명을 추출합니다.
+   * @param regId 지역 코드 (예: L1011200)
+   * @returns 상위지역명 (예: 경기도)
+   */
+  private getUpperRegionName(regId: string): string {
+    // 지역 코드 패턴에 따른 상위지역 매핑
+    const upperRegionMapping: Record<string, string> = {
+      // === 육상지역 (L) ===
+      'L1000000': '전국',
+      
+      // 경기도 (L101XXXX)
+      'L101': '경기도',
+      
+      // 강원도 (L102XXXX)
+      'L102': '강원도',
+      
+      // 충청남도 (L103XXXX)
+      'L103': '충청남도',
+      
+      // 충청북도 (L104XXXX)
+      'L104': '충청북도',
+      
+      // 전라북도 (L105XXXX)
+      'L105': '전라북도',
+      
+      // 전라남도 (L106XXXX)
+      'L106': '전라남도',
+      
+      // 경상북도 (L107XXXX)
+      'L107': '경상북도',
+      
+      // 경상남도 (L108XXXX)
+      'L108': '경상남도',
+      
+      // 제주도 (L109XXXX, L501XXXX)
+      'L109': '제주도',
+      'L501': '제주도',
+      
+      // 서울특별시 (L111XXXX)
+      'L111': '서울특별시',
+      
+      // 부산광역시 (L112XXXX)
+      'L112': '부산광역시',
+      
+      // 대구광역시 (L113XXXX)
+      'L113': '대구광역시',
+      
+      // 인천광역시 (L114XXXX, 일부 L101XXXX)
+      'L114': '인천광역시',
+      
+      // 광주광역시 (L115XXXX)
+      'L115': '광주광역시',
+      
+      // 대전광역시 (L116XXXX, 일부 L103XXXX)
+      'L116': '대전광역시',
+      
+      // 울산광역시 (L117XXXX)
+      'L117': '울산광역시',
+      
+      // 세종특별자치시 (L118XXXX, 일부 L103XXXX)
+      'L118': '세종특별자치시',
+      
+      // === 해상지역 (S) ===
+      // 서해전해상 (S100XXXX)
+      'S100': '서해전해상',
+      'S101': '서해북부전해상',
+      'S102': '서해중부전해상',
+      'S103': '서해남부전해상',
+      
+      // 남해전해상 (S130XXXX)
+      'S130': '남해전해상',
+      'S131': '남해동부전해상',
+      'S132': '남해서부전해상',
+      
+      // 동해전해상 (S120XXXX)
+      'S120': '동해전해상',
+      'S121': '동해북부전해상',
+      'S122': '동해중부전해상',
+      'S123': '동해남부전해상',
+      
+      // 제주도해상 (S132XXXX)
+      'S133': '제주도전해상',
+      
+      // 연안바다/평수구역
+      'S200': '연안바다/평수구역'
+    };
+    
+    // 전체 코드로 직접 매핑 시도
+    if (upperRegionMapping[regId]) {
+      return upperRegionMapping[regId];
+    }
+    
+    // 특별 케이스 처리 (패턴 매칭보다 먼저)
+    if (regId.startsWith('L1010800')) {
+      return '인천광역시';  // 인천광역시는 경기도 코드 범위에 있음
+    }
+    
+    if (regId.startsWith('L1030100')) {
+      return '대전광역시';  // 대전광역시는 충청남도 코드 범위에 있음
+    }
+    
+    if (regId.startsWith('L1031800')) {
+      return '세종특별자치시';  // 세종시는 충청남도 코드 범위에 있음
+    }
+    
+    // 패턴 매칭 (앞 4자리 또는 3자리)
+    const prefix4 = regId.substring(0, 4);
+    const prefix3 = regId.substring(0, 3);
+    
+    if (upperRegionMapping[prefix4]) {
+      return upperRegionMapping[prefix4];
+    }
+    
+    if (upperRegionMapping[prefix3]) {
+      return upperRegionMapping[prefix3];
+    }
+    
+    // 기본값: 지역명을 상위지역으로 사용
+    const regionName = this.getRegionName(regId);
+    
+    // 광역시/도 단위인 경우 그대로 반환
+    if (regionName.includes('특별시') || regionName.includes('광역시') || 
+        regionName.includes('도') || regionName.includes('특별자치시')) {
+      return regionName;
+    }
+    
+    // 시/군/구 단위인 경우 "기타" 반환
+    return '기타';
   }
 
   /**

@@ -59,7 +59,7 @@ export function groupAlertChanges(changes: AlertChange[]): GroupedAlert[] {
     }
 
     // 상위지역별로 지역명 추가
-    const upperRegion = alert.upperRegion || '기타';  // upperRegion이 없으면 "기타"로 분류
+    const upperRegion = alert.upperRegion || '미분류지역';  // upperRegion이 없으면 "미분류지역"으로 분류
     const regionList = group.regions.get(upperRegion) || [];
 
     // 중복 체크 후 추가
@@ -111,4 +111,39 @@ export function getLevelEmoji(levelCode: string): string {
     '3': '🔴'   // 경보 - 빨간색
   };
   return emojis[levelCode] || '⚠️';
+}
+
+/**
+ * 지역 목록을 더 나은 형태로 포맷팅합니다.
+ * 너무 많은 지역이 있을 때 요약 형태로 표시합니다.
+ * @param upperRegion 상위지역명
+ * @param regionNames 지역명 배열
+ * @returns 포맷팅된 지역 문자열
+ */
+export function formatRegionList(upperRegion: string, regionNames: string[]): string {
+  const regionCount = regionNames.length;
+  
+  // 지역이 5개 이하면 모두 표시
+  if (regionCount <= 5) {
+    return `${upperRegion} (${regionNames.join(', ')})`;
+  }
+  
+  // 지역이 6개 이상이면 처음 3개만 표시하고 나머지는 개수로 표시
+  const firstThree = regionNames.slice(0, 3).join(', ');
+  const remainingCount = regionCount - 3;
+  
+  return `${upperRegion} (${firstThree} 외 ${remainingCount}개 지역)`;
+}
+
+/**
+ * 상위지역별 지역 개수를 계산합니다.
+ * @param group 그루핑된 알림 데이터
+ * @returns 총 지역 개수
+ */
+export function getTotalRegionCount(group: GroupedAlert): number {
+  let totalCount = 0;
+  for (const regionNames of group.regions.values()) {
+    totalCount += regionNames.length;
+  }
+  return totalCount;
 }
