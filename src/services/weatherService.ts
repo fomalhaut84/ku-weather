@@ -627,7 +627,12 @@ export class WeatherService {
                             currentName.endsWith('광역시') ||
                             currentName.endsWith('도') ||
                             currentName.endsWith('특별자치시') ||
-                            currentName.endsWith('전해상');
+                            currentName.endsWith('전해상') ||
+                            // Codex P1 피드백: 특수 최상위 지역 처리
+                            currentName === '전국' ||
+                            currentName === '전해상' ||
+                            currentName.includes('연안바다') ||
+                            currentName.includes('평수구역');
 
     if (isRealMapping && isTopLevelGroup) {
       return currentName;
@@ -675,7 +680,12 @@ export class WeatherService {
                              parentName.endsWith('광역시') ||
                              parentName.endsWith('도') ||
                              parentName.endsWith('특별자치시') ||
-                             parentName.endsWith('전해상');
+                             parentName.endsWith('전해상') ||
+                             // Codex P1 피드백: 특수 최상위 지역 처리
+                             parentName === '전국' ||
+                             parentName === '전해상' ||
+                             parentName.includes('연안바다') ||
+                             parentName.includes('평수구역');
 
     if (isParentRealMapping && isParentTopLevel) {
       return parentName;
