@@ -657,9 +657,10 @@ export class WeatherService {
       }
     }
 
-    // 최상위 레벨 (6개 이상의 0)은 상위 지역이 없음
+    // 최상위 레벨 (6개 이상의 0) 또는 매핑되지 않은 코드
+    // Codex P1 피드백 #3: "기타" fallback 복원
     if (level >= 6) {
-      return '';
+      return '기타';
     }
 
     // 상위 지역 코드 생성: 한 자리 더 0으로 만들기
