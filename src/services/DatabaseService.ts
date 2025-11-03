@@ -13,6 +13,12 @@ export class DatabaseService {
   constructor() {
     this.prisma = new PrismaClient({
       log: process.env.DEBUG === 'true' ? ['query', 'info', 'warn', 'error'] : ['warn', 'error'],
+      // Phase 5: 연결 풀 최적화
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL,
+        },
+      },
     });
   }
 

@@ -32,6 +32,10 @@ model WeatherAlert {
   @@index([warningType, warningLevel])
   @@index([announcedAt])
   @@index([upperRegion])
+  // Phase 5 최적화: 추가 인덱스
+  @@index([command]) // command != '6' 필터링에 유용
+  @@index([upperRegion, warningType]) // 복합 필터링 최적화
+  @@index([upperRegion, warningLevel]) // 지역별 수준 조회 최적화
   @@map("weather_alerts")
 }
 
@@ -53,6 +57,11 @@ model AlertHistory {
   @@index([changeType])
   @@index([timestamp])
   @@index([warningType])
+  // Phase 5 최적화: 추가 복합 인덱스
+  @@index([timestamp, warningType]) // 기간별 특보 종류 필터링
+  @@index([timestamp, changeType]) // 기간별 변동 유형 필터링
+  @@index([timestamp, upperRegion]) // 기간별 지역 통계에 유용
+  @@index([upperRegion, timestamp]) // 지역별 시계열 조회
   @@map("alert_histories")
 }
 
