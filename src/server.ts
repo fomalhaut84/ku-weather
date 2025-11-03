@@ -5,6 +5,7 @@ import { logger } from './utils/logger';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { WeatherService } from './services/weatherService';
 import { CachedAlert } from './types/weather';
+import alertRoutes from './routes/alertRoutes';
 
 export interface ServerConfig {
   port: number;
@@ -77,12 +78,18 @@ export class HttpServer {
         endpoints: {
           health: '/health',
           telegram: '/telegram/webhook',
-          alerts: '/api/alerts',
+          alerts: '/api/alerts (cache-based)',
+          alertsCurrent: '/api/alerts/current (database)',
+          alertsHistory: '/api/alerts/history?startDate={ISO8601}&endDate={ISO8601}',
+          alertsStatistics: '/api/alerts/statistics?startDate={ISO8601}&endDate={ISO8601}&groupBy={region|warningType|level}',
           alertsFiltered: '/api/alerts?region={regionId}&type={warningType}',
           subscriptions: '/api/subscriptions/{token}'
         }
       });
     });
+
+    // Database-based alert routes
+    this.app.use('/api/alerts', alertRoutes);
 
     // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
