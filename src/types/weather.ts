@@ -5,7 +5,7 @@
 export interface WeatherAlert {
   REG_ID: string;        // 특보구역코드 (필수)
   REG_UP: string;        // 상위 특보구역코드 (REG_ID로부터 도출 가능)
-  REG_KO: string;        // 특보구역명(약어) (REG_ID로부터 도출 가능)  
+  REG_KO: string;        // 특보구역명(약어) (REG_ID로부터 도출 가능)
   REG_UP_KO: string;     // 상위 특보구역명 (REG_ID로부터 도출 가능)
   REG_NAME: string;      // 특보구역명 (REG_ID로부터 도출)
   TM_FC: string;         // 발표시각(KST) (필수)
@@ -25,6 +25,7 @@ export interface WeatherAlert {
   TM_SEQ: string;        // 발표번호
   MAN_FC: string;        // 예보관명
   MAN_IN: string;        // 입력자명
+  upperRegion?: string;  // 상위 지역명 (메시지 그루핑용, WeatherService에서 추가)
 }
 
 export type WeatherWarningType = 'W' | 'R' | 'C' | 'D' | 'O' | 'N' | 'V' | 'T' | 'S' | 'Y' | 'H' | 'F';
