@@ -621,14 +621,15 @@ export class WeatherService {
     // 현재 지역이 실제 매핑이고 (fallback이 아니고)
     const isRealMapping = !currentName.startsWith('육상지역(') && !currentName.startsWith('해상지역(');
 
-    // 광역시/도 단위거나 해상 "전해상" 단위면 자기 자신을 그룹으로 반환
+    // 광역시/도 단위면 자기 자신을 그룹으로 반환
     // endsWith로 정확히 체크 (예: "제주도", "흑산도" 같은 일반 지역 제외)
+    // 주의: "앞바다"/"먼바다"는 여기서 체크하지 않음 (하위 지역도 "앞바다"로 끝날 수 있음)
     const isTopLevelGroup = currentName.endsWith('특별시') ||
                             currentName.endsWith('광역시') ||
                             currentName.endsWith('도') ||
                             currentName.endsWith('특별자치시') ||
                             currentName.endsWith('전해상') ||
-                            // Codex P1 피드백: 특수 최상위 지역 처리
+                            // Codex P1 피드백 #2: 특수 최상위 지역 처리
                             currentName === '전국' ||
                             currentName === '전해상' ||
                             currentName.includes('연안바다') ||
@@ -676,13 +677,16 @@ export class WeatherService {
     // 상위 지역이 실제 매핑이고 (fallback이 아니고)
     const isParentRealMapping = !parentName.startsWith('육상지역(') && !parentName.startsWith('해상지역(');
 
-    // 광역시/도 단위 또는 해상 "전해상" 단위면 반환
+    // 광역시/도 단위 또는 해상 그룹핑 단위면 반환
     const isParentTopLevel = parentName.endsWith('특별시') ||
                              parentName.endsWith('광역시') ||
                              parentName.endsWith('도') ||
                              parentName.endsWith('특별자치시') ||
                              parentName.endsWith('전해상') ||
-                             // Codex P1 피드백: 특수 최상위 지역 처리
+                             // Codex P1 피드백 #4: 해상 중간 그룹핑 단위 추가
+                             parentName.endsWith('앞바다') ||
+                             parentName.endsWith('먼바다') ||
+                             // Codex P1 피드백 #2: 특수 최상위 지역 처리
                              parentName === '전국' ||
                              parentName === '전해상' ||
                              parentName.includes('연안바다') ||
