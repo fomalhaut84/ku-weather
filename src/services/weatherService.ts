@@ -615,6 +615,24 @@ export class WeatherService {
       return '';
     }
 
+    // Codex P1 피드백 반영: 먼저 현재 지역이 이미 광역시/도 단위인지 확인
+    const currentName = this.getRegionName(regId);
+
+    // 현재 지역이 실제 매핑이고 (fallback이 아니고)
+    const isRealMapping = !currentName.startsWith('육상지역(') && !currentName.startsWith('해상지역(');
+
+    // 광역시/도 단위거나 해상 "전해상" 단위면 자기 자신을 그룹으로 반환
+    // endsWith로 정확히 체크 (예: "제주도", "흑산도" 같은 일반 지역 제외)
+    const isTopLevelGroup = currentName.endsWith('특별시') ||
+                            currentName.endsWith('광역시') ||
+                            currentName.endsWith('도') ||
+                            currentName.endsWith('특별자치시') ||
+                            currentName.endsWith('전해상');
+
+    if (isRealMapping && isTopLevelGroup) {
+      return currentName;
+    }
+
     // 지역 코드 계층 구조 분석
     // 예: S1311200 → S1311000 (상위 지역)
     //     S1311000 → S1310000
@@ -649,14 +667,22 @@ export class WeatherService {
     // 상위 지역명 조회
     const parentName = this.getRegionName(parentRegId);
 
-    // 만약 상위 지역이 패턴 기반 fallback이면 (실제 매핑이 없음),
-    // 계속 상위로 올라가서 실제 지역명을 찾음
-    if (parentName.startsWith('육상지역(') || parentName.startsWith('해상지역(')) {
-      // 재귀적으로 더 상위 지역 찾기
-      return this.getUpperRegionName(parentRegId);
+    // 상위 지역이 실제 매핑이고 (fallback이 아니고)
+    const isParentRealMapping = !parentName.startsWith('육상지역(') && !parentName.startsWith('해상지역(');
+
+    // 광역시/도 단위 또는 해상 "전해상" 단위면 반환
+    const isParentTopLevel = parentName.endsWith('특별시') ||
+                             parentName.endsWith('광역시') ||
+                             parentName.endsWith('도') ||
+                             parentName.endsWith('특별자치시') ||
+                             parentName.endsWith('전해상');
+
+    if (isParentRealMapping && isParentTopLevel) {
+      return parentName;
     }
 
-    return parentName;
+    // 아니면 계속 상위로 올라가서 광역시/도 단위를 찾음
+    return this.getUpperRegionName(parentRegId);
   }
 
   private getRegionName(regId: string): string {
