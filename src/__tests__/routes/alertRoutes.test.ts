@@ -120,6 +120,15 @@ describe('Alert Routes', () => {
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('Internal server error');
     });
+
+    it('should return 400 for array query parameters', async () => {
+      const response = await request(app)
+        .get('/api/alerts/current?warningType=R&warningType=C')
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('Array query parameters are not supported');
+    });
   });
 
   describe('GET /api/alerts/history', () => {
@@ -212,6 +221,15 @@ describe('Alert Routes', () => {
         })
       );
     });
+
+    it('should return 400 for array query parameters', async () => {
+      const response = await request(app)
+        .get('/api/alerts/history?startDate=2025-01-01T00:00:00Z&endDate=2025-01-02T00:00:00Z&regionId=L1100000&regionId=L1200000')
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('Array query parameters are not supported');
+    });
   });
 
   describe('GET /api/alerts/statistics', () => {
@@ -285,6 +303,15 @@ describe('Alert Routes', () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toBe('Internal server error');
+    });
+
+    it('should return 400 for array query parameters', async () => {
+      const response = await request(app)
+        .get('/api/alerts/statistics?startDate=2025-01-01T00:00:00Z&endDate=2025-01-02T00:00:00Z&groupBy=region&groupBy=warningType')
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toContain('Array query parameters are not supported');
     });
   });
 });

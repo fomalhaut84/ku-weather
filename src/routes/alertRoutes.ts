@@ -18,6 +18,15 @@ router.get('/current', async (req: Request, res: Response) => {
   try {
     const { regionId, warningType, warningLevel, upperRegion } = req.query;
 
+    // 배열 파라미터 거부
+    if (Array.isArray(regionId) || Array.isArray(warningType) ||
+        Array.isArray(warningLevel) || Array.isArray(upperRegion)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Array query parameters are not supported. Please provide single values only.'
+      });
+    }
+
     // 쿼리 파라미터 검증
     if (warningType && typeof warningType === 'string' && !/^[WRCDONFVTSYHF]$/.test(warningType)) {
       return res.status(400).json({
@@ -70,6 +79,16 @@ router.get('/current', async (req: Request, res: Response) => {
 router.get('/history', async (req: Request, res: Response) => {
   try {
     const { startDate, endDate, regionId, warningType, changeType } = req.query;
+
+    // 배열 파라미터 거부
+    if (Array.isArray(startDate) || Array.isArray(endDate) ||
+        Array.isArray(regionId) || Array.isArray(warningType) ||
+        Array.isArray(changeType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Array query parameters are not supported. Please provide single values only.'
+      });
+    }
 
     // 필수 파라미터 검증
     if (!startDate || !endDate) {
@@ -149,6 +168,14 @@ router.get('/history', async (req: Request, res: Response) => {
 router.get('/statistics', async (req: Request, res: Response) => {
   try {
     const { startDate, endDate, groupBy } = req.query;
+
+    // 배열 파라미터 거부
+    if (Array.isArray(startDate) || Array.isArray(endDate) || Array.isArray(groupBy)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Array query parameters are not supported. Please provide single values only.'
+      });
+    }
 
     // 필수 파라미터 검증
     if (!startDate || !endDate || !groupBy) {
