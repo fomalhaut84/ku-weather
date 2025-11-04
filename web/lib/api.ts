@@ -9,6 +9,7 @@ import type {
   SubscriptionStats,
   ApiResponse
 } from '@/types/subscription';
+import type { AlertsResponse } from '@/types/alert';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
@@ -118,4 +119,52 @@ export async function getAvailableRegions(): Promise<ApiResponse<Region[]>> {
  */
 export async function getAvailableWarningTypes(): Promise<ApiResponse<WarningType[]>> {
   return fetchAPI<WarningType[]>('/api/subscriptions/warning-types');
+}
+
+/**
+ * 현재 발효 중인 특보 조회
+ */
+export async function getCurrentAlerts(filters?: {
+  regionId?: string;
+  warningType?: string;
+  warningLevel?: string;
+  upperRegion?: string;
+}): Promise<AlertsResponse> {
+  try {
+    const params = new URLSearchParams();
+
+    if (filters?.regionId) params.append('regionId', filters.regionId);
+    if (filters?.warningType) params.append('warningType', filters.warningType);
+    if (filters?.warningLevel) params.append('warningLevel', filters.warningLevel);
+    if (filters?.upperRegion) params.append('upperRegion', filters.upperRegion);
+
+    const queryString = params.toString();
+    const endpoint = `/api/alerts/current${queryString ? `?${queryString}` : ''}`;
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        count: 0,
+        data: [],
+        error: data.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
+  } catch (error) {
+    return {
+      success: false,
+      count: 0,
+      data: [],
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
 }
