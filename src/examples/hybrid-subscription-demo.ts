@@ -6,13 +6,15 @@
 
 import { MultiplatformNotificationService } from '../services/notifications/MultiplatformNotificationService';
 import { NotificationFactory } from '../services/notifications/NotificationFactory';
-import { 
+import {
   HybridSubscriptionManager,
   TelegramSubscriptionInterface,
   SlackInteractiveInterface,
   EmailCommandProcessor,
   WebSubscriptionInterface
 } from '../services/subscriptions';
+import { TokenService } from '../services/TokenService';
+import { databaseService } from '../services/DatabaseService';
 import { logger } from '../utils/logger';
 
 /**
@@ -77,7 +79,9 @@ export class HybridSubscriptionDemo {
     this.hybridManager.registerPlatformInterface('email', emailInterface);
 
     // 웹 인터페이스 등록
-    const webInterface = new WebSubscriptionInterface(subscriptionManager);
+    const prisma = databaseService.getPrismaClient();
+    const tokenService = new TokenService(prisma);
+    const webInterface = new WebSubscriptionInterface(subscriptionManager, tokenService);
     this.hybridManager.registerWebInterface(webInterface);
 
     logger.info('모든 플랫폼별 구독 인터페이스 등록 완료');

@@ -33,6 +33,13 @@ export class DatabaseService {
   }
 
   /**
+   * Prisma 클라이언트 반환
+   */
+  getPrismaClient(): PrismaClient {
+    return this.prisma;
+  }
+
+  /**
    * 데이터베이스 연결 테스트
    */
   async connect(): Promise<void> {

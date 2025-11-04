@@ -7,6 +7,7 @@
 import express, { Request, Response, Router } from 'express';
 import { WebSubscriptionInterface } from '../services/subscriptions/WebSubscriptionInterface';
 import { SubscriptionManager } from '../services/notifications/SubscriptionManager';
+import { TokenService } from '../services/TokenService';
 import { logger } from '../utils/logger';
 
 const router: Router = express.Router();
@@ -17,8 +18,11 @@ let webSubscriptionInterface: WebSubscriptionInterface | null = null;
 /**
  * WebSubscriptionInterface 초기화
  */
-export function initializeSubscriptionRoutes(subscriptionManager: SubscriptionManager): void {
-  webSubscriptionInterface = new WebSubscriptionInterface(subscriptionManager);
+export function initializeSubscriptionRoutes(
+  subscriptionManager: SubscriptionManager,
+  tokenService: TokenService
+): void {
+  webSubscriptionInterface = new WebSubscriptionInterface(subscriptionManager, tokenService);
   logger.info('구독 관리 API 라우터 초기화 완료');
 }
 

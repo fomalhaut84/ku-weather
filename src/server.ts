@@ -7,6 +7,8 @@ import { WeatherService } from './services/weatherService';
 import { CachedAlert } from './types/weather';
 import alertRoutes from './routes/alertRoutes';
 import subscriptionRoutes, { initializeSubscriptionRoutes } from './routes/subscriptionRoutes';
+import { TokenService } from './services/TokenService';
+import { databaseService } from './services/DatabaseService';
 
 export interface ServerConfig {
   port: number;
@@ -329,9 +331,11 @@ export class HttpServer {
     this.notificationService = notificationService;
     this.weatherService = weatherService;
 
-    // SubscriptionManager를 사용하여 구독 관리 라우터 초기화
+    // SubscriptionManager와 TokenService를 사용하여 구독 관리 라우터 초기화
     const subscriptionManager = notificationService.getSubscriptionManager();
-    initializeSubscriptionRoutes(subscriptionManager);
+    const prisma = databaseService.getPrismaClient();
+    const tokenService = new TokenService(prisma);
+    initializeSubscriptionRoutes(subscriptionManager, tokenService);
 
     logger.info('Services injected into HTTP server');
   }
