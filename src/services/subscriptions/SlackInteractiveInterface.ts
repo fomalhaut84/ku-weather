@@ -70,6 +70,14 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   }
 
   /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
+    logger.info('Slack 인터페이스에 WebInterface 연결 완료');
+  }
+
+  /**
    * Slack 명령어 처리 (제한적 지원)
    * 주로 웹 토큰 생성 및 기본 정보 제공용
    */

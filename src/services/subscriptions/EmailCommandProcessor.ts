@@ -49,6 +49,14 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
   }
 
   /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
+    logger.info('Email 프로세서에 WebInterface 연결 완료');
+  }
+
+  /**
    * Email 명령어 처리 (Reply-to 방식)
    */
   async handleCommand(params: SubscriptionCommandParams): Promise<SubscriptionCommandResult> {
