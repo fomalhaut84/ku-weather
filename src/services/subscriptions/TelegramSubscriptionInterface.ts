@@ -39,6 +39,14 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
   }
 
   /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
+    logger.info('Telegram 구독 인터페이스에 WebInterface 연결 완료');
+  }
+
+  /**
    * Telegram Bot 명령어 처리
    */
   async handleCommand(params: SubscriptionCommandParams): Promise<SubscriptionCommandResult> {

@@ -57,7 +57,8 @@ export class TelegramNotificationService implements NotificationService {
     this.subscriptionManager = new SubscriptionManager();
     this.subscriptionInterface = new TelegramSubscriptionInterface(
       this.subscriptionManager,
-      config.botToken
+      config.botToken,
+      undefined // webInterface는 나중에 setWebInterface()로 설정
     );
 
     // Legacy chatId를 자동으로 구독으로 전환
@@ -636,6 +637,21 @@ _한국 기상청_`;
   private getChangeColor(type: AlertChangeType): string {
     // Telegram doesn't support colors, so we use emojis for visual distinction
     return this.getChangeEmoji(type);
+  }
+
+  /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: any): void {
+    this.subscriptionInterface.setWebInterface(webInterface);
+    logger.info('TelegramNotificationService에 WebInterface 연결 완료');
+  }
+
+  /**
+   * SubscriptionManager 반환
+   */
+  getSubscriptionManager(): SubscriptionManager {
+    return this.subscriptionManager;
   }
 
   async stop(): Promise<void> {
