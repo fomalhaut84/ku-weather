@@ -442,6 +442,247 @@ getRainAlerts('경기도');
 
 ---
 
+## 구독 관리 API
+
+웹 대시보드에서 사용자 구독 설정을 관리하기 위한 API입니다.
+
+### 7. 토큰 인증
+
+사용자 인증 토큰을 검증하고 구독 정보를 조회합니다.
+
+**Endpoint**: `POST /api/subscriptions/auth`
+
+**Request Body**:
+```json
+{
+  "token": "TG_1234567890_abc123..."
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "platform": "telegram",
+    "userId": "123456789",
+    "targetRegions": ["L1100000", "L1200000"],
+    "warningTypes": ["W", "R", "H"],
+    "enabled": true,
+    "displayName": "홍길동",
+    "preferences": {
+      "minLevel": "2",
+      "quietHours": {
+        "start": "22:00",
+        "end": "08:00"
+      },
+      "batchMode": true
+    }
+  }
+}
+```
+
+---
+
+### 8. 내 구독 정보 조회
+
+현재 로그인한 사용자의 상세 구독 정보를 조회합니다.
+
+**Endpoint**: `GET /api/subscriptions/me`
+
+**Headers**:
+- `Authorization`: `Bearer {token}`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "platform": "telegram",
+    "userId": "123456789",
+    "targetRegions": ["L1100000"],
+    "warningTypes": ["W", "H"],
+    "enabled": true,
+    "displayName": "홍길동",
+    "regionNames": ["서울특별시"],
+    "warningTypeNames": ["강풍", "폭염"],
+    "platformDisplayName": "Telegram",
+    "preferences": {
+      "minLevel": "2",
+      "batchMode": true
+    }
+  }
+}
+```
+
+---
+
+### 9. 구독 설정 수정
+
+사용자의 구독 설정을 업데이트합니다.
+
+**Endpoint**: `PUT /api/subscriptions/update`
+
+**Headers**:
+- `Authorization`: `Bearer {token}`
+
+**Request Body**:
+```json
+{
+  "targetRegions": ["L1100000", "L1200000"],
+  "warningTypes": ["W", "R", "H"],
+  "enabled": true,
+  "displayName": "홍길동",
+  "preferences": {
+    "minLevel": "2",
+    "quietHours": {
+      "start": "22:00",
+      "end": "08:00"
+    },
+    "batchMode": true
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "구독 설정이 성공적으로 업데이트되었습니다.",
+  "data": {
+    "subscription": { ...updated_subscription },
+    "regions": ["서울특별시", "경기도"],
+    "warningTypes": ["강풍", "호우", "폭염"]
+  }
+}
+```
+
+---
+
+### 10. 구독 삭제
+
+사용자의 구독을 삭제합니다.
+
+**Endpoint**: `DELETE /api/subscriptions/delete`
+
+**Headers**:
+- `Authorization`: `Bearer {token}`
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "구독이 성공적으로 삭제되었습니다."
+}
+```
+
+---
+
+### 11. 구독 통계
+
+사용자의 구독 통계 정보를 조회합니다.
+
+**Endpoint**: `GET /api/subscriptions/stats`
+
+**Headers**:
+- `Authorization`: `Bearer {token}`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "overall": {
+      "totalSubscriptions": 150,
+      "activeSubscriptions": 142,
+      "platformBreakdown": {
+        "telegram": 80,
+        "slack": 50,
+        "discord": 12,
+        "email": 8
+      }
+    },
+    "user": {
+      "hasSubscription": true,
+      "platform": "telegram",
+      "regions": 2,
+      "warningTypes": 3,
+      "enabled": true
+    },
+    "metadata": {
+      "availableRegions": [...],
+      "availableWarningTypes": [...],
+      "platformInfo": {
+        "name": "telegram",
+        "displayName": "Telegram",
+        "features": ["bot_commands", "direct_message", "real_time"]
+      }
+    }
+  }
+}
+```
+
+---
+
+### 12. 사용 가능한 지역 목록
+
+등록 가능한 모든 지역 목록을 조회합니다.
+
+**Endpoint**: `GET /api/subscriptions/regions`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "L1100000",
+      "name": "서울특별시",
+      "aliases": ["서울", "seoul"]
+    },
+    {
+      "code": "L1200000",
+      "name": "경기도",
+      "aliases": ["경기", "gyeonggi"]
+    }
+  ]
+}
+```
+
+---
+
+### 13. 사용 가능한 특보 종류 목록
+
+등록 가능한 모든 특보 종류를 조회합니다.
+
+**Endpoint**: `GET /api/subscriptions/warning-types`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "W",
+      "name": "강풍",
+      "aliases": ["wind", "gale"]
+    },
+    {
+      "code": "R",
+      "name": "호우",
+      "aliases": ["rain", "heavyrain"]
+    },
+    {
+      "code": "H",
+      "name": "폭염",
+      "aliases": ["heat", "heatwave"]
+    }
+  ]
+}
+```
+
+---
+
 ## 웹 대시보드 개발 가이드
 
 웹 대시보드를 개발할 때 다음 API들을 활용하세요:
@@ -457,6 +698,13 @@ getRainAlerts('경기도');
 3. **통계 차트**: `GET /api/alerts/statistics`
    - 대시보드 하단에 Chart.js 등으로 시각화
    - 지역별, 특보별, 수준별 통계 제공
+
+4. **구독 관리**:
+   - `POST /api/subscriptions/auth` - 토큰 인증
+   - `GET /api/subscriptions/me` - 내 구독 정보
+   - `PUT /api/subscriptions/update` - 설정 수정
+   - `DELETE /api/subscriptions/delete` - 구독 삭제
+   - `GET /api/subscriptions/stats` - 통계 조회
 
 ---
 

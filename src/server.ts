@@ -6,6 +6,7 @@ import { MultiplatformNotificationService } from './services/notifications/Multi
 import { WeatherService } from './services/weatherService';
 import { CachedAlert } from './types/weather';
 import alertRoutes from './routes/alertRoutes';
+import subscriptionRoutes, { initializeSubscriptionRoutes } from './routes/subscriptionRoutes';
 
 export interface ServerConfig {
   port: number;
@@ -90,6 +91,9 @@ export class HttpServer {
 
     // Database-based alert routes
     this.app.use('/api/alerts', alertRoutes);
+
+    // Subscription management routes
+    this.app.use('/api/subscriptions', subscriptionRoutes);
 
     // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
@@ -324,6 +328,11 @@ export class HttpServer {
   ): void {
     this.notificationService = notificationService;
     this.weatherService = weatherService;
+
+    // SubscriptionManager를 사용하여 구독 관리 라우터 초기화
+    const subscriptionManager = notificationService.getSubscriptionManager();
+    initializeSubscriptionRoutes(subscriptionManager);
+
     logger.info('Services injected into HTTP server');
   }
 
