@@ -163,11 +163,11 @@ export interface EmailCommandProcessor {
   /**
    * 구독 설정 확인 이메일
    */
-  createConfirmationEmail(subscription: UserSubscription, recipientEmail: string): {
+  createConfirmationEmail(subscription: UserSubscription, recipientEmail: string): Promise<{
     subject: string;
     html: string;
     text: string;
-  };
+  }>;
 }
 
 /**

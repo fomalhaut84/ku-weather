@@ -14,6 +14,7 @@ import {
   UserAuthToken
 } from './interfaces';
 import { CommonCommandParser, REGION_MAPPINGS, WARNING_TYPE_MAPPINGS } from './CommandParser';
+import { WebSubscriptionInterface } from './WebSubscriptionInterface';
 
 /**
  * 이메일 템플릿 타입
@@ -29,15 +30,21 @@ interface EmailTemplate {
  */
 export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEmailCommandProcessor {
   readonly platformName = 'email';
-  
+
   private subscriptionManager: SubscriptionManager;
   private commandParser: CommonCommandParser;
   private smtpConfig?: any;
+  private webInterface?: WebSubscriptionInterface;
 
-  constructor(subscriptionManager: SubscriptionManager, smtpConfig?: any) {
+  constructor(
+    subscriptionManager: SubscriptionManager,
+    smtpConfig?: any,
+    webInterface?: WebSubscriptionInterface
+  ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.smtpConfig = smtpConfig;
+    this.webInterface = webInterface;
     logger.info('Email 명령어 프로세서 초기화 완료');
   }
 
@@ -174,9 +181,9 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
   /**
    * 구독 설정 확인 이메일 생성
    */
-  createConfirmationEmail(subscription: UserSubscription, recipientEmail: string): EmailTemplate {
+  async createConfirmationEmail(subscription: UserSubscription, recipientEmail: string): Promise<EmailTemplate> {
     const summary = this.commandParser.formatSubscriptionSummary(subscription);
-    const webToken = this.generateWebToken(recipientEmail);
+    const webToken = await this.generateWebToken(recipientEmail);
     
     const subject = '✅ 기상특보 구독 설정 확인';
     
@@ -235,7 +242,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
   // PlatformSubscriptionInterface 구현
 
   async generateAuthToken(userId: string): Promise<UserAuthToken> {
-    const token = this.generateWebToken(userId);
+    const token = await this.generateWebToken(userId);
     return {
       token,
       platform: 'email',
@@ -426,7 +433,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
     try {
       const stats = this.subscriptionManager.getStatistics();
       const userSubscription = this.subscriptionManager.getUserSubscription('email', params.userId);
-      const webToken = this.generateWebToken(params.userId);
+      const webToken = await this.generateWebToken(params.userId);
       
       let message = `📊 기상특보 구독 현황\n\n` +
         `👥 전체 구독자: ${stats.totalSubscriptions}명\n` +
@@ -523,11 +530,27 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
     return warning ? warning.name : code;
   }
 
-  private generateWebToken(userId: string): string {
+  private async generateWebToken(userId: string): Promise<string> {
+    // WebSubscriptionInterface가 있으면 데이터베이스 기반 토큰 생성
+    if (this.webInterface) {
+      try {
+        const subscription = this.subscriptionManager.getUserSubscription('email', userId);
+        const displayName = subscription?.displayName || userId;
+
+        const tokenInfo = await this.webInterface.generateAccessToken('email', userId, displayName);
+        logger.info(`Email 웹 토큰 생성 (DB): ${userId}`);
+        return tokenInfo.token;
+      } catch (error) {
+        logger.error('데이터베이스 토큰 생성 실패, 폴백 사용:', error);
+        // 실패 시 폴백
+      }
+    }
+
+    // 폴백: 임시 토큰 생성 (하위 호환성)
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2);
     const userHash = this.hashUserId(userId);
-    
+
     return `EM_${timestamp}_${userHash}_${random}`;
   }
 
