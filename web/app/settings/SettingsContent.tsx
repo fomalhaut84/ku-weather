@@ -124,9 +124,19 @@ export default function SettingsContent() {
     setSuccess(null);
 
     try {
+      // "전국/전체" 선택 시 빈 문자열('')을 빈 배열로 정규화
+      const normalizeSelection = (arr: string[]) => {
+        if (arr.includes('')) {
+          // 빈 문자열이 포함되어 있으면 "전체" 선택을 의미하므로 빈 배열 반환
+          return [];
+        }
+        // 아니면 빈 문자열 제거 후 반환
+        return arr.filter(item => item !== '');
+      };
+
       const result = await updateSubscription(token, {
-        targetRegions: selectedRegions,
-        warningTypes: selectedWarningTypes,
+        targetRegions: normalizeSelection(selectedRegions),
+        warningTypes: normalizeSelection(selectedWarningTypes),
         enabled,
         preferences: {
           minLevel,
