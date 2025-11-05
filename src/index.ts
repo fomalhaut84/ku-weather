@@ -102,6 +102,18 @@ async function main() {
       logger.info('Telegram 서비스에 WebInterface 주입 완료');
     }
 
+    const slackService = notificationService.getService('slack');
+    if (slackService && 'setWebInterface' in slackService) {
+      (slackService as any).setWebInterface(webInterface);
+      logger.info('Slack 서비스에 WebInterface 주입 완료');
+    }
+
+    const emailService = notificationService.getService('email');
+    if (emailService && 'setWebInterface' in emailService) {
+      (emailService as any).setWebInterface(webInterface);
+      logger.info('Email 서비스에 WebInterface 주입 완료');
+    }
+
     // HTTP 서버 초기화 및 시작 (선택적)
     if (config.serverEnabled) {
       const httpServer = new HttpServer({
