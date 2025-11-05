@@ -129,6 +129,7 @@ export default function DashboardContent() {
 
       if (!response.success) {
         setError(response.error || '특보 데이터를 불러올 수 없습니다.');
+        setLoading(false);
         return;
       }
 

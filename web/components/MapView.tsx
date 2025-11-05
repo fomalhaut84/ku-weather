@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import type { WeatherAlert } from '@/types/alert';
 
 // 한국 주요 지역 좌표 (upperRegion 기준)
