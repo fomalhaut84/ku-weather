@@ -77,3 +77,23 @@ model RegionMapping {
   @@index([upperRegion])
   @@map("region_mappings")
 }
+
+// 웹 대시보드 접근 토큰
+model WebAccessToken {
+  id          String    @id @default(uuid())
+  token       String    @unique // 고유 토큰 문자열
+  platform    String    // 플랫폼: slack, telegram, discord, email
+  userId      String    // 플랫폼별 사용자 ID
+  displayName String?   // 사용자 표시 이름
+  expiresAt   DateTime  // 토큰 만료 시각
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime? // 마지막 사용 시각 (선택적)
+
+  // 복합 유니크 제약조건 (같은 플랫폼의 같은 사용자는 하나의 활성 토큰만 보유)
+  @@unique([platform, userId])
+  // 인덱스
+  @@index([token, expiresAt]) // 토큰 검증 최적화
+  @@index([platform, userId]) // 사용자별 토큰 조회
+  @@index([expiresAt]) // 만료된 토큰 정리
+  @@map("web_access_tokens")
+}

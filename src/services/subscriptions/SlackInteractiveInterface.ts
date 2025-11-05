@@ -15,6 +15,7 @@ import {
   UserAuthToken
 } from './interfaces';
 import { CommonCommandParser, REGION_MAPPINGS, WARNING_TYPE_MAPPINGS } from './CommandParser';
+import { WebSubscriptionInterface } from './WebSubscriptionInterface';
 
 /**
  * Slack 버튼 액션 페이로드
@@ -50,16 +51,30 @@ interface SlackMessageBlock {
  */
 export class SlackInteractiveInterface implements PlatformSubscriptionInterface, InteractiveMessageInterface {
   readonly platformName = 'slack';
-  
+
   private subscriptionManager: SubscriptionManager;
   private commandParser: CommonCommandParser;
   private webhookUrl?: string;
+  private webInterface?: WebSubscriptionInterface;
 
-  constructor(subscriptionManager: SubscriptionManager, webhookUrl?: string) {
+  constructor(
+    subscriptionManager: SubscriptionManager,
+    webhookUrl?: string,
+    webInterface?: WebSubscriptionInterface
+  ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.webhookUrl = webhookUrl;
+    this.webInterface = webInterface;
     logger.info('Slack 인터랙티브 인터페이스 초기화 완료');
+  }
+
+  /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
+    logger.info('Slack 인터페이스에 WebInterface 연결 완료');
   }
 
   /**
@@ -101,9 +116,9 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   /**
    * 구독 설정용 인터랙티브 메시지 생성
    */
-  createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): any {
+  async createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): Promise<any> {
     try {
-      const webToken = this.generateWebToken(userId);
+      const webToken = await this.generateWebToken(userId);
       const hasSubscription = !!currentSettings;
 
       const blocks: SlackMessageBlock[] = [
@@ -313,7 +328,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   // PlatformSubscriptionInterface 구현
 
   async generateAuthToken(userId: string): Promise<UserAuthToken> {
-    const token = this.generateWebToken(userId);
+    const token = await this.generateWebToken(userId);
     return {
       token,
       platform: 'slack',
@@ -379,7 +394,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   }
 
   private async handleSettingsCommand(params: SubscriptionCommandParams): Promise<SubscriptionCommandResult> {
-    const webToken = this.generateWebToken(params.userId);
+    const webToken = await this.generateWebToken(params.userId);
     const webUrl = `https://weather.starryjeju.net/subscribe?token=${webToken}`;
     
     const message = `⚙️ 개인 구독 설정\n\n` +
@@ -394,7 +409,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
     // 실제로는 Slack Modal을 열어서 지역 선택 UI 제공
     // 현재는 간단한 응답 메시지 반환
     const userId = payload.user.id;
-    const webToken = this.generateWebToken(userId);
+    const webToken = await this.generateWebToken(userId);
     
     return {
       success: true,
@@ -404,7 +419,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
   private async handleWarningSelection(payload: SlackButtonPayload): Promise<SubscriptionCommandResult> {
     const userId = payload.user.id;
-    const webToken = this.generateWebToken(userId);
+    const webToken = await this.generateWebToken(userId);
     
     return {
       success: true,
@@ -414,7 +429,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
   private async handleQuietHoursSetup(payload: SlackButtonPayload): Promise<SubscriptionCommandResult> {
     const userId = payload.user.id;
-    const webToken = this.generateWebToken(userId);
+    const webToken = await this.generateWebToken(userId);
     
     return {
       success: true,
@@ -435,7 +450,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
     }
 
     const summary = this.commandParser.formatSubscriptionSummary(subscription);
-    const webToken = this.generateWebToken(userId);
+    const webToken = await this.generateWebToken(userId);
     
     return {
       success: true,
@@ -502,12 +517,26 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
     return warning ? warning.name : code;
   }
 
-  private generateWebToken(userId: string): string {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2);
-    const userHash = this.hashUserId(userId);
-    
-    return `SL_${timestamp}_${userHash}_${random}`;
+  private async generateWebToken(userId: string): Promise<string> {
+    // WebSubscriptionInterface가 없으면 에러 발생
+    if (!this.webInterface) {
+      const error = new Error('WebSubscriptionInterface가 초기화되지 않았습니다. 관리자에게 문의하세요.');
+      logger.error('Slack 토큰 생성 실패: webInterface 없음');
+      throw error;
+    }
+
+    // 데이터베이스 기반 토큰 생성 (에러 시 전파)
+    try {
+      const subscription = this.subscriptionManager.getUserSubscription('slack', userId);
+      const displayName = subscription?.displayName || `Slack User ${userId}`;
+
+      const tokenInfo = await this.webInterface.generateAccessToken('slack', userId, displayName);
+      logger.info(`Slack 웹 토큰 생성 (DB): ${userId}`);
+      return tokenInfo.token;
+    } catch (error) {
+      logger.error('Slack 데이터베이스 토큰 생성 실패:', error);
+      throw new Error('토큰 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   }
 
   private hashUserId(userId: string): string {

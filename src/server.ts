@@ -6,6 +6,9 @@ import { MultiplatformNotificationService } from './services/notifications/Multi
 import { WeatherService } from './services/weatherService';
 import { CachedAlert } from './types/weather';
 import alertRoutes from './routes/alertRoutes';
+import subscriptionRoutes, { initializeSubscriptionRoutes } from './routes/subscriptionRoutes';
+import { TokenService } from './services/TokenService';
+import { databaseService } from './services/DatabaseService';
 
 export interface ServerConfig {
   port: number;
@@ -90,6 +93,9 @@ export class HttpServer {
 
     // Database-based alert routes
     this.app.use('/api/alerts', alertRoutes);
+
+    // Subscription management routes
+    this.app.use('/api/subscriptions', subscriptionRoutes);
 
     // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
@@ -320,10 +326,24 @@ export class HttpServer {
    */
   setServices(
     notificationService: MultiplatformNotificationService,
-    weatherService: WeatherService
+    weatherService: WeatherService,
+    tokenService?: TokenService
   ): void {
     this.notificationService = notificationService;
     this.weatherService = weatherService;
+
+    // SubscriptionManager와 TokenService를 사용하여 구독 관리 라우터 초기화
+    const subscriptionManager = notificationService.getSubscriptionManager();
+
+    // 외부에서 주입된 tokenService 사용, 없으면 새로 생성 (하위 호환성)
+    const finalTokenService = tokenService || (() => {
+      logger.warn('TokenService가 주입되지 않아 새로 생성합니다 (deprecated)');
+      const prisma = databaseService.getPrismaClient();
+      return new TokenService(prisma);
+    })();
+
+    initializeSubscriptionRoutes(subscriptionManager, finalTokenService);
+
     logger.info('Services injected into HTTP server');
   }
 

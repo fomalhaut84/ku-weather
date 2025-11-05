@@ -5,6 +5,8 @@ import { NotificationFactory } from './services/notifications/NotificationFactor
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { HttpServer } from './server';
 import { databaseService } from './services/DatabaseService';
+import { TokenService } from './services/TokenService';
+import { WebSubscriptionInterface } from './services/subscriptions/WebSubscriptionInterface';
 
 // UTF-8 출력 설정
 process.stdout.setDefaultEncoding('utf8');
@@ -87,6 +89,31 @@ async function main() {
       throw new Error('알림 설정이 올바르지 않습니다');
     }
 
+    // TokenService 및 WebSubscriptionInterface 초기화
+    const prisma = databaseService.getPrismaClient();
+    const tokenService = new TokenService(prisma);
+    const subscriptionManager = notificationService.getSubscriptionManager();
+    const webInterface = new WebSubscriptionInterface(subscriptionManager, tokenService);
+
+    // 모든 플랫폼 서비스에 WebInterface 주입
+    const telegramService = notificationService.getService('telegram');
+    if (telegramService && 'setWebInterface' in telegramService) {
+      (telegramService as any).setWebInterface(webInterface);
+      logger.info('Telegram 서비스에 WebInterface 주입 완료');
+    }
+
+    const slackService = notificationService.getService('slack');
+    if (slackService && 'setWebInterface' in slackService) {
+      (slackService as any).setWebInterface(webInterface);
+      logger.info('Slack 서비스에 WebInterface 주입 완료');
+    }
+
+    const emailService = notificationService.getService('email');
+    if (emailService && 'setWebInterface' in emailService) {
+      (emailService as any).setWebInterface(webInterface);
+      logger.info('Email 서비스에 WebInterface 주입 완료');
+    }
+
     // HTTP 서버 초기화 및 시작 (선택적)
     if (config.serverEnabled) {
       const httpServer = new HttpServer({
@@ -96,8 +123,8 @@ async function main() {
         telegramWebhookSecret: config.telegramWebhookSecret
       });
 
-      // 서비스 인스턴스 주입
-      httpServer.setServices(notificationService, weatherService);
+      // 서비스 인스턴스 주입 (TokenService 포함)
+      httpServer.setServices(notificationService, weatherService, tokenService);
 
       // 서버 시작 (백그라운드)
       await httpServer.start();

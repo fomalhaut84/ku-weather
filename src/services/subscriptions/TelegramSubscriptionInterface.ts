@@ -13,22 +13,37 @@ import {
   UserAuthToken
 } from './interfaces';
 import { CommonCommandParser, REGION_MAPPINGS, WARNING_TYPE_MAPPINGS } from './CommandParser';
+import { WebSubscriptionInterface } from './WebSubscriptionInterface';
 
 /**
  * Telegram Bot 구독 인터페이스 구현
  */
 export class TelegramSubscriptionInterface implements PlatformSubscriptionInterface {
   readonly platformName = 'telegram';
-  
+
   private subscriptionManager: SubscriptionManager;
   private commandParser: CommonCommandParser;
   private botToken?: string;
+  private webInterface?: WebSubscriptionInterface;
 
-  constructor(subscriptionManager: SubscriptionManager, botToken?: string) {
+  constructor(
+    subscriptionManager: SubscriptionManager,
+    botToken?: string,
+    webInterface?: WebSubscriptionInterface
+  ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.botToken = botToken;
+    this.webInterface = webInterface;
     logger.info('Telegram 구독 인터페이스 초기화 완료');
+  }
+
+  /**
+   * WebSubscriptionInterface 설정 (나중에 주입)
+   */
+  setWebInterface(webInterface: WebSubscriptionInterface): void {
+    this.webInterface = webInterface;
+    logger.info('Telegram 구독 인터페이스에 WebInterface 연결 완료');
   }
 
   /**
@@ -454,6 +469,22 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
   }
 
   private async generateWebToken(userId: string): Promise<string> {
+    // WebSubscriptionInterface가 있으면 데이터베이스 기반 토큰 생성
+    if (this.webInterface) {
+      try {
+        const subscription = this.subscriptionManager.getUserSubscription('telegram', userId);
+        const displayName = subscription?.displayName || `Telegram User ${userId}`;
+
+        const tokenInfo = await this.webInterface.generateAccessToken('telegram', userId, displayName);
+        logger.info(`Telegram 웹 토큰 생성 (DB): ${userId}`);
+        return tokenInfo.token;
+      } catch (error) {
+        logger.error('데이터베이스 토큰 생성 실패, 폴백 사용:', error);
+        // 실패 시 폴백
+      }
+    }
+
+    // 폴백: 임시 토큰 생성 (하위 호환성)
     const authToken = await this.generateAuthToken(userId);
     return authToken.token;
   }

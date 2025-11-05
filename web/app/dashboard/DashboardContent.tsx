@@ -1,0 +1,347 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { getCurrentAlerts, getAvailableRegions, getAvailableWarningTypes } from '@/lib/api';
+import type { WeatherAlert } from '@/types/alert';
+import type { Region, WarningType } from '@/types/subscription';
+import {
+  WARNING_TYPE_NAMES,
+  WARNING_LEVEL_NAMES,
+  WARNING_TYPE_EMOJI,
+  WARNING_LEVEL_COLORS
+} from '@/types/alert';
+
+export default function DashboardContent() {
+  const searchParams = useSearchParams();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  const [availableRegions, setAvailableRegions] = useState<Region[]>([]);
+  const [availableWarningTypes, setAvailableWarningTypes] = useState<WarningType[]>([]);
+
+  // 필터 상태
+  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [selectedWarningType, setSelectedWarningType] = useState<string>('');
+  const [selectedWarningLevel, setSelectedWarningLevel] = useState<string>('');
+
+  // 자동 새로고침
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // 특보 데이터 로드
+  const loadAlerts = useCallback(async () => {
+    try {
+      setError(null);
+
+      const filters: any = {};
+      if (selectedRegion) filters.upperRegion = selectedRegion;
+      if (selectedWarningType) filters.warningType = selectedWarningType;
+      if (selectedWarningLevel) filters.warningLevel = selectedWarningLevel;
+
+      const response = await getCurrentAlerts(filters);
+
+      if (!response.success) {
+        setError(response.error || '특보 데이터를 불러올 수 없습니다.');
+        return;
+      }
+
+      setAlerts(response.data || []);
+      setLastUpdated(new Date());
+      setLoading(false);
+    } catch (err) {
+      setError('특보 데이터를 불러오는 중 오류가 발생했습니다.');
+      setLoading(false);
+    }
+  }, [selectedRegion, selectedWarningType, selectedWarningLevel]);
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    async function loadMetadata() {
+      try {
+        const [regionsRes, warningTypesRes] = await Promise.all([
+          getAvailableRegions(),
+          getAvailableWarningTypes(),
+        ]);
+
+        if (regionsRes.success) {
+          setAvailableRegions(regionsRes.data || []);
+        }
+
+        if (warningTypesRes.success) {
+          setAvailableWarningTypes(warningTypesRes.data || []);
+        }
+
+        // URL 파라미터에서 필터 설정
+        const regionParam = searchParams.get('region');
+        const typeParam = searchParams.get('type');
+        const levelParam = searchParams.get('level');
+
+        if (regionParam) setSelectedRegion(regionParam);
+        if (typeParam) setSelectedWarningType(typeParam);
+        if (levelParam) setSelectedWarningLevel(levelParam);
+
+      } catch (err) {
+        console.error('Failed to load metadata:', err);
+      }
+    }
+
+    loadMetadata();
+  }, [searchParams]);
+
+  // 필터 변경 시 특보 데이터 다시 로드
+  useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts]);
+
+  // 자동 새로고침 (5분 간격)
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      loadAlerts();
+    }, 5 * 60 * 1000); // 5분
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, loadAlerts]);
+
+  // 날짜 포맷팅
+  const formatDateTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // 상대 시간 표시
+  const getRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diff < 60) return '방금 전';
+    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+    return `${Math.floor(diff / 86400)}일 전`;
+  };
+
+  // 로딩 중
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+          <p className="mt-4 text-gray-600">특보 현황 로딩 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-6xl mx-auto">
+        {/* 헤더 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-bold">📊 기상특보 현황</h1>
+            <button
+              onClick={() => loadAlerts()}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              🔄 새로고침
+            </button>
+          </div>
+
+          {lastUpdated && (
+            <p className="text-sm text-gray-500">
+              마지막 업데이트: {formatDateTime(lastUpdated.toISOString())} ({getRelativeTime(lastUpdated)})
+            </p>
+          )}
+
+          {/* 자동 새로고침 토글 */}
+          <label className="flex items-center mt-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
+          </label>
+        </div>
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-red-600">{error}</p>
+          </div>
+        )}
+
+        {/* 필터 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">🔍 필터</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 지역 필터 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                지역
+              </label>
+              <select
+                value={selectedRegion}
+                onChange={(e) => setSelectedRegion(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">전체 지역</option>
+                {availableRegions.map((region) => (
+                  <option key={region.code} value={region.name}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 특보 종류 필터 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                특보 종류
+              </label>
+              <select
+                value={selectedWarningType}
+                onChange={(e) => setSelectedWarningType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">전체 특보</option>
+                {availableWarningTypes.map((warning) => (
+                  <option key={warning.code} value={warning.code}>
+                    {WARNING_TYPE_EMOJI[warning.code] || ''} {warning.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 특보 수준 필터 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                특보 수준
+              </label>
+              <select
+                value={selectedWarningLevel}
+                onChange={(e) => setSelectedWarningLevel(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">전체 수준</option>
+                <option value="1">⚠️ 예비특보</option>
+                <option value="2">🟠 주의보</option>
+                <option value="3">🔴 경보</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 필터 초기화 */}
+          {(selectedRegion || selectedWarningType || selectedWarningLevel) && (
+            <button
+              onClick={() => {
+                setSelectedRegion('');
+                setSelectedWarningType('');
+                setSelectedWarningLevel('');
+              }}
+              className="mt-4 text-sm text-blue-600 hover:underline"
+            >
+              필터 초기화
+            </button>
+          )}
+        </div>
+
+        {/* 특보 목록 */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold">
+              현재 발효 중인 특보 ({alerts.length}개)
+            </h2>
+          </div>
+
+          {alerts.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <div className="text-6xl mb-4">🌤️</div>
+              <p className="text-xl text-gray-600 mb-2">발효 중인 특보가 없습니다</p>
+              <p className="text-sm text-gray-500">
+                현재 선택한 필터에 해당하는 특보가 없습니다.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className={`border-2 rounded-lg p-6 ${WARNING_LEVEL_COLORS[alert.warningLevel] || 'bg-gray-100 border-gray-300'}`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      {/* 특보 헤더 */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-3xl">
+                          {WARNING_TYPE_EMOJI[alert.warningType] || '⚠️'}
+                        </span>
+                        <div>
+                          <h3 className="text-xl font-bold">
+                            {alert.regionName}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="font-semibold">
+                              {WARNING_TYPE_NAMES[alert.warningType] || alert.warningType}
+                            </span>
+                            <span className="px-2 py-1 rounded text-sm font-bold">
+                              {WARNING_LEVEL_NAMES[alert.warningLevel] || alert.warningLevel}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 특보 상세 정보 */}
+                      <div className="space-y-1 text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">발표 시각:</span>
+                          <span>{formatDateTime(alert.announcedAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">발효 시각:</span>
+                          <span>{formatDateTime(alert.effectiveAt)}</span>
+                        </div>
+                        {alert.endTime && (
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">종료 시각:</span>
+                            <span>{formatDateTime(alert.endTime)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 하단 링크 */}
+        <div className="text-center">
+          <Link
+            href="/"
+            className="text-blue-600 hover:underline"
+          >
+            홈으로
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}

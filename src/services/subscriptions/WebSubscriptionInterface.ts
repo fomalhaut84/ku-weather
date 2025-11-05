@@ -12,6 +12,7 @@ import {
   UserAuthToken
 } from './interfaces';
 import { CommonCommandParser, REGION_MAPPINGS, WARNING_TYPE_MAPPINGS } from './CommandParser';
+import { TokenService, TokenInfo } from '../TokenService';
 
 /**
  * 웹 구독 관리 API 응답 타입
@@ -53,36 +54,54 @@ interface WebSubscriptionInfo extends UserSubscription {
 export class WebSubscriptionInterface implements IWebSubscriptionInterface {
   private subscriptionManager: SubscriptionManager;
   private commandParser: CommonCommandParser;
-  private tokenStore: Map<string, UserAuthToken> = new Map();
+  private tokenService: TokenService;
 
-  constructor(subscriptionManager: SubscriptionManager) {
+  constructor(subscriptionManager: SubscriptionManager, tokenService: TokenService) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
+    this.tokenService = tokenService;
     logger.info('웹 구독 인터페이스 초기화 완료');
   }
 
   /**
    * 토큰으로 사용자 인증 및 구독 정보 조회
+   *
+   * 신규 사용자의 경우 기본 구독 객체를 반환하여 초기 설정 가능
    */
   async authenticateWithToken(token: string): Promise<UserSubscription | null> {
     try {
-      const authToken = this.validateToken(token);
-      if (!authToken) {
+      const tokenInfo = await this.tokenService.validateToken(token);
+      if (!tokenInfo) {
         logger.warn(`유효하지 않은 토큰: ${token.substring(0, 10)}...`);
         return null;
       }
 
       // 사용자 구독 정보 조회
       const subscription = this.subscriptionManager.getUserSubscription(
-        authToken.platform, 
-        authToken.userId
+        tokenInfo.platform,
+        tokenInfo.userId
       );
 
       if (subscription) {
-        logger.debug(`웹 토큰 인증 성공: ${authToken.platform}/${authToken.userId}`);
+        logger.debug(`웹 토큰 인증 성공 (기존 구독): ${tokenInfo.platform}/${tokenInfo.userId}`);
+        return subscription;
       }
 
-      return subscription || null;
+      // 신규 사용자: 기본 구독 객체 반환
+      logger.debug(`웹 토큰 인증 성공 (신규 사용자): ${tokenInfo.platform}/${tokenInfo.userId}`);
+      const defaultSubscription: UserSubscription = {
+        id: `temp_${tokenInfo.platform}_${tokenInfo.userId}`,
+        platform: tokenInfo.platform,
+        userId: tokenInfo.userId,
+        targetRegions: [],
+        warningTypes: [],
+        enabled: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        displayName: tokenInfo.displayName || `${this.getPlatformDisplayName(tokenInfo.platform)} 사용자`
+      };
+
+      return defaultSubscription;
 
     } catch (error) {
       logger.error('웹 토큰 인증 실패:', error);
@@ -95,8 +114,8 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
    */
   async updateSubscription(token: string, updateRequest: SubscriptionUpdateRequest): Promise<SubscriptionCommandResult> {
     try {
-      const authToken = this.validateToken(token);
-      if (!authToken) {
+      const tokenInfo = await this.tokenService.validateToken(token);
+      if (!tokenInfo) {
         return {
           success: false,
           message: '인증이 만료되었습니다. 다시 로그인해주세요.',
@@ -106,26 +125,40 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
 
       // 기존 구독 정보 조회
       const existingSubscription = this.subscriptionManager.getUserSubscription(
-        authToken.platform, 
-        authToken.userId
+        tokenInfo.platform,
+        tokenInfo.userId
       );
 
       // 새로운 구독 정보 생성
+      // preferences 처리: 명시적 null을 보존하여 quietHours 비활성화 가능
+      let mergedPreferences = { ...existingSubscription?.preferences };
+      if (updateRequest.preferences !== undefined) {
+        // quietHours가 명시적으로 null이면 제거
+        const { quietHours, ...otherPreferences } = updateRequest.preferences;
+
+        mergedPreferences = {
+          ...mergedPreferences,
+          ...otherPreferences
+        };
+
+        if (quietHours === null) {
+          // null이면 기존 quietHours 제거
+          delete mergedPreferences.quietHours;
+        } else if (quietHours !== undefined) {
+          // 새로운 값이 있으면 설정
+          mergedPreferences.quietHours = quietHours;
+        }
+      }
+
       const newSubscription: Partial<UserSubscription> = {
-        platform: authToken.platform,
-        userId: authToken.userId,
+        platform: tokenInfo.platform,
+        userId: tokenInfo.userId,
         targetRegions: updateRequest.targetRegions ?? existingSubscription?.targetRegions ?? [],
         warningTypes: updateRequest.warningTypes ?? existingSubscription?.warningTypes ?? [],
         enabled: updateRequest.enabled ?? existingSubscription?.enabled ?? true,
-        displayName: updateRequest.displayName ?? existingSubscription?.displayName ?? 
-          `${this.getPlatformDisplayName(authToken.platform)} 사용자`,
-        preferences: {
-          ...existingSubscription?.preferences,
-          ...(updateRequest.preferences && {
-            ...updateRequest.preferences,
-            quietHours: updateRequest.preferences.quietHours || undefined
-          })
-        }
+        displayName: updateRequest.displayName ?? existingSubscription?.displayName ??
+          `${this.getPlatformDisplayName(tokenInfo.platform)} 사용자`,
+        preferences: mergedPreferences
       };
 
       // 입력값 검증
@@ -137,7 +170,7 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       // 구독 업데이트 실행
       this.subscriptionManager.addSubscription(newSubscription as Omit<UserSubscription, 'id' | 'createdAt' | 'updatedAt'>);
 
-      logger.info(`웹에서 구독 업데이트: ${authToken.platform}/${authToken.userId}`);
+      logger.info(`웹에서 구독 업데이트: ${tokenInfo.platform}/${tokenInfo.userId}`);
 
       return {
         success: true,
@@ -164,14 +197,14 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
    */
   async getUserSubscriptions(token: string): Promise<UserSubscription[]> {
     try {
-      const authToken = this.validateToken(token);
-      if (!authToken) {
+      const tokenInfo = await this.tokenService.validateToken(token);
+      if (!tokenInfo) {
         return [];
       }
 
       const subscription = this.subscriptionManager.getUserSubscription(
-        authToken.platform, 
-        authToken.userId
+        tokenInfo.platform,
+        tokenInfo.userId
       );
 
       return subscription ? [subscription] : [];
@@ -187,22 +220,22 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
    */
   async getSubscriptionStats(token: string): Promise<any> {
     try {
-      const authToken = this.validateToken(token);
-      if (!authToken) {
+      const tokenInfo = await this.tokenService.validateToken(token);
+      if (!tokenInfo) {
         return null;
       }
 
       const stats = this.subscriptionManager.getStatistics();
       const userSubscription = this.subscriptionManager.getUserSubscription(
-        authToken.platform, 
-        authToken.userId
+        tokenInfo.platform,
+        tokenInfo.userId
       );
 
       return {
         overall: stats,
         user: {
           hasSubscription: !!userSubscription,
-          platform: authToken.platform,
+          platform: tokenInfo.platform,
           regions: userSubscription?.targetRegions?.length || 0,
           warningTypes: userSubscription?.warningTypes?.length || 0,
           enabled: userSubscription?.enabled ?? false
@@ -211,9 +244,9 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
           availableRegions: this.getAvailableRegions(),
           availableWarningTypes: this.getAvailableWarningTypes(),
           platformInfo: {
-            name: authToken.platform,
-            displayName: this.getPlatformDisplayName(authToken.platform),
-            features: this.getPlatformFeatures(authToken.platform)
+            name: tokenInfo.platform,
+            displayName: this.getPlatformDisplayName(tokenInfo.platform),
+            features: this.getPlatformFeatures(tokenInfo.platform)
           }
         }
       };
@@ -266,8 +299,8 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
    */
   async deleteSubscription(token: string): Promise<SubscriptionCommandResult> {
     try {
-      const authToken = this.validateToken(token);
-      if (!authToken) {
+      const tokenInfo = await this.tokenService.validateToken(token);
+      if (!tokenInfo) {
         return {
           success: false,
           message: '인증이 만료되었습니다.',
@@ -276,8 +309,8 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       }
 
       const subscription = this.subscriptionManager.getUserSubscription(
-        authToken.platform, 
-        authToken.userId
+        tokenInfo.platform,
+        tokenInfo.userId
       );
 
       if (!subscription) {
@@ -291,7 +324,14 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       const success = this.subscriptionManager.removeSubscription(subscription.id);
 
       if (success) {
-        logger.info(`웹에서 구독 삭제: ${authToken.platform}/${authToken.userId}`);
+        // 구독 삭제 성공 시 토큰도 무효화하여 재활성화 방지
+        const tokenRevoked = await this.tokenService.revokeToken(token);
+        if (tokenRevoked) {
+          logger.info(`웹에서 구독 및 토큰 삭제: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        } else {
+          logger.warn(`구독은 삭제되었으나 토큰 무효화 실패: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        }
+
         return {
           success: true,
           message: '구독이 성공적으로 삭제되었습니다.'
@@ -315,18 +355,29 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
   }
 
   /**
-   * 토큰 등록 (다른 인터페이스에서 생성된 토큰 등록)
+   * 새로운 웹 접근 토큰 생성
+   * 플랫폼 인터페이스에서 호출되어 사용자에게 설정 링크를 제공할 때 사용
    */
-  registerToken(authToken: UserAuthToken): void {
-    this.tokenStore.set(authToken.token, authToken);
-    
-    // 만료 시간에 자동 삭제 스케줄링
-    const expiryMs = authToken.expiresAt.getTime() - Date.now();
-    if (expiryMs > 0) {
-      setTimeout(() => {
-        this.tokenStore.delete(authToken.token);
-      }, expiryMs);
-    }
+  async generateAccessToken(platform: string, userId: string, displayName?: string): Promise<TokenInfo> {
+    return await this.tokenService.generateToken({
+      platform,
+      userId,
+      displayName,
+      expiresInHours: 720 // 30일
+    });
+  }
+
+  /**
+   * 토큰 등록 (하위 호환성 유지 - deprecated)
+   * @deprecated Use generateAccessToken() instead
+   */
+  async registerToken(authToken: UserAuthToken): Promise<void> {
+    await this.tokenService.generateToken({
+      platform: authToken.platform,
+      userId: authToken.userId,
+      displayName: authToken.userId,
+      expiresInHours: Math.floor((authToken.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60))
+    });
 
     logger.debug(`웹 토큰 등록: ${authToken.platform}/${authToken.userId}`);
   }
@@ -354,19 +405,6 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
   }
 
   // Private helper methods
-
-  private validateToken(token: string): UserAuthToken | null {
-    const authToken = this.tokenStore.get(token);
-    if (!authToken) return null;
-
-    // 만료 시간 확인
-    if (authToken.expiresAt < new Date()) {
-      this.tokenStore.delete(token);
-      return null;
-    }
-
-    return authToken;
-  }
 
   private validateSubscriptionData(subscription: Partial<UserSubscription>): SubscriptionCommandResult {
     // 필수 필드 검증
