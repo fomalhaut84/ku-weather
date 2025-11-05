@@ -65,6 +65,8 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
 
   /**
    * 토큰으로 사용자 인증 및 구독 정보 조회
+   *
+   * 신규 사용자의 경우 기본 구독 객체를 반환하여 초기 설정 가능
    */
   async authenticateWithToken(token: string): Promise<UserSubscription | null> {
     try {
@@ -81,10 +83,25 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       );
 
       if (subscription) {
-        logger.debug(`웹 토큰 인증 성공: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        logger.debug(`웹 토큰 인증 성공 (기존 구독): ${tokenInfo.platform}/${tokenInfo.userId}`);
+        return subscription;
       }
 
-      return subscription || null;
+      // 신규 사용자: 기본 구독 객체 반환
+      logger.debug(`웹 토큰 인증 성공 (신규 사용자): ${tokenInfo.platform}/${tokenInfo.userId}`);
+      const defaultSubscription: UserSubscription = {
+        id: `temp_${tokenInfo.platform}_${tokenInfo.userId}`,
+        platform: tokenInfo.platform,
+        userId: tokenInfo.userId,
+        targetRegions: [],
+        warningTypes: [],
+        enabled: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        displayName: tokenInfo.displayName || `${this.getPlatformDisplayName(tokenInfo.platform)} 사용자`
+      };
+
+      return defaultSubscription;
 
     } catch (error) {
       logger.error('웹 토큰 인증 실패:', error);
