@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { getCurrentAlerts, getAvailableRegions, getAvailableWarningTypes } from '@/lib/api';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import type { WeatherAlert } from '@/types/alert';
 import type { Region, WarningType } from '@/types/subscription';
 import {
@@ -73,6 +74,46 @@ export default function DashboardContent() {
 
   // 브라우저 알림 상태
   const [notificationEnabled, setNotificationEnabled] = useState(false);
+
+  // WebSocket 실시간 업데이트
+  const [realtimeEnabled, setRealtimeEnabled] = useState(false);
+  const { isConnected, error: wsError } = useWebSocket({
+    enabled: realtimeEnabled,
+    onNewAlert: useCallback((alert: WeatherAlert) => {
+      // 새로운 특보를 목록에 추가
+      setAlerts(prev => {
+        // 중복 체크
+        if (prev.some(a => a.id === alert.id)) {
+          return prev;
+        }
+        return [alert, ...prev];
+      });
+
+      // 브라우저 알림도 표시
+      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        const title = `${WARNING_TYPE_NAMES[alert.warningType] || alert.warningType} ${WARNING_LEVEL_NAMES[alert.warningLevel] || alert.warningLevel}`;
+        const body = `${alert.regionName}에 특보가 발표되었습니다.`;
+
+        const notification = new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: alert.id,
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          window.location.href = `/dashboard?region=${encodeURIComponent(alert.upperRegion || '')}`;
+          notification.close();
+        };
+
+        setTimeout(() => notification.close(), 10000);
+      }
+    }, [notificationEnabled]),
+    onAlertRemoved: useCallback((alertId: string) => {
+      // 특보 해제 시 목록에서 제거
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+    }, []),
+  });
 
   // 특보 데이터 로드
   const loadAlerts = useCallback(async () => {
@@ -236,6 +277,29 @@ export default function DashboardContent() {
               />
               <span className="ml-2 text-sm">🔔 브라우저 알림 (새로운 특보 발생 시)</span>
             </label>
+
+            <div className="flex items-center gap-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={realtimeEnabled}
+                  onChange={(e) => setRealtimeEnabled(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm">⚡ 실시간 업데이트 (WebSocket)</span>
+              </label>
+              {realtimeEnabled && (
+                <span className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  {isConnected ? '연결됨' : '연결 중...'}
+                </span>
+              )}
+            </div>
+
+            {wsError && realtimeEnabled && (
+              <p className="text-xs text-red-600 ml-6">
+                * WebSocket 서버에 연결할 수 없습니다. 폴링 모드로 동작합니다.
+              </p>
+            )}
           </div>
         </div>
 
