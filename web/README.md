@@ -16,7 +16,9 @@ npm install
 npm run dev
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 확인하세요.
+브라우저에서 [http://localhost:3001](http://localhost:3001)을 열어 확인하세요.
+
+> **참고**: Next.js는 포트 3001에서 실행됩니다. 백엔드 API 서버는 포트 3000을 사용합니다.
 
 ### 빌드
 
@@ -27,11 +29,11 @@ npm run start
 
 ## 📋 주요 기능
 
-### Phase 1 (MVP)
-- [ ] 실시간 특보 현황 페이지
-- [ ] 개인별 구독 설정 관리 페이지
-- [ ] 통합 토큰 기반 인증
-- [ ] 다중 플랫폼 연동 (Slack, Telegram, Email)
+### Phase 1 (MVP) ✅
+- [x] 실시간 특보 현황 페이지
+- [x] 개인별 구독 설정 관리 페이지
+- [x] 통합 토큰 기반 인증 (30일 DB 토큰)
+- [x] 다중 플랫폼 연동 (Slack, Telegram, Email)
 - [ ] 모바일 반응형 디자인
 
 ### Phase 2 (고도화)
@@ -67,16 +69,22 @@ web/
 
 - **Issue #67**: 데이터베이스 연동 (완료)
 - **Issue #23**: 다중 플랫폼 알림 시스템 (Phase 1 완료)
-- **Issue #26**: 웹 대시보드 개발 (진행 중)
+- **Issue #26**: 웹 대시보드 개발 (Phase 1 완료 - PR #77 머지됨)
 
 ## 📝 환경 변수
 
 `.env.local` 파일을 생성하고 다음 변수를 설정하세요:
 
 ```env
+# 백엔드 API 서버 주소 (포트 3000)
 NEXT_PUBLIC_API_URL=http://localhost:3000
 BACKEND_URL=http://localhost:3000
 ```
+
+### 포트 구성
+
+- **웹 대시보드 (Next.js)**: `http://localhost:3001`
+- **백엔드 API 서버**: `http://localhost:3000`
 
 ## 🤖 Generated with Claude Code
 
