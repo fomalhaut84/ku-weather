@@ -307,7 +307,14 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       const success = this.subscriptionManager.removeSubscription(subscription.id);
 
       if (success) {
-        logger.info(`웹에서 구독 삭제: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        // 구독 삭제 성공 시 토큰도 무효화하여 재활성화 방지
+        const tokenRevoked = await this.tokenService.revokeToken(token);
+        if (tokenRevoked) {
+          logger.info(`웹에서 구독 및 토큰 삭제: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        } else {
+          logger.warn(`구독은 삭제되었으나 토큰 무효화 실패: ${tokenInfo.platform}/${tokenInfo.userId}`);
+        }
+
         return {
           success: true,
           message: '구독이 성공적으로 삭제되었습니다.'
