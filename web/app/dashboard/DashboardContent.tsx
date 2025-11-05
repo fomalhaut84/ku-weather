@@ -40,6 +40,11 @@ const ChartView = dynamic(() => import('@/components/ChartView'), {
   ),
 });
 
+// NotificationManager도 클라이언트 사이드에서만 로드
+const NotificationManager = dynamic(() => import('@/components/NotificationManager'), {
+  ssr: false,
+});
+
 export default function DashboardContent() {
   const searchParams = useSearchParams();
 
@@ -65,6 +70,9 @@ export default function DashboardContent() {
   // 통계 표시 상태
   const [showStats, setShowStats] = useState(false);
   const [statsPeriod, setStatsPeriod] = useState<'7d' | '30d'>('7d');
+
+  // 브라우저 알림 상태
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
 
   // 특보 데이터 로드
   const loadAlerts = useCallback(async () => {
@@ -207,16 +215,28 @@ export default function DashboardContent() {
             </p>
           )}
 
-          {/* 자동 새로고침 토글 */}
-          <label className="flex items-center mt-4 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
-          </label>
+          {/* 자동 새로고침 및 알림 토글 */}
+          <div className="mt-4 space-y-2">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
+            </label>
+
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={notificationEnabled}
+                onChange={(e) => setNotificationEnabled(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm">🔔 브라우저 알림 (새로운 특보 발생 시)</span>
+            </label>
+          </div>
         </div>
 
         {/* 에러 메시지 */}
@@ -456,6 +476,12 @@ export default function DashboardContent() {
           </Link>
         </div>
       </div>
+
+      {/* 브라우저 알림 관리자 */}
+      <NotificationManager
+        enabled={notificationEnabled}
+        checkInterval={60000} // 1분마다 체크
+      />
     </main>
   );
 }

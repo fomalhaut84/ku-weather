@@ -36,7 +36,10 @@
       "Bash(gh api:*)",
       "Bash(git branch:*)",
       "Bash(git stash:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(npx create-next-app:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }
