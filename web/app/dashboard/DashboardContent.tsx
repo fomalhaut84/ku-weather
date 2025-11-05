@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { getCurrentAlerts, getAvailableRegions, getAvailableWarningTypes } from '@/lib/api';
 import type { WeatherAlert } from '@/types/alert';
 import type { Region, WarningType } from '@/types/subscription';
@@ -12,6 +13,19 @@ import {
   WARNING_TYPE_EMOJI,
   WARNING_LEVEL_COLORS
 } from '@/types/alert';
+
+// MapView는 클라이언트 사이드에서만 로드 (Leaflet SSR 이슈 방지)
+const MapView = dynamic(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">지도 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
 
 export default function DashboardContent() {
   const searchParams = useSearchParams();
@@ -31,6 +45,9 @@ export default function DashboardContent() {
 
   // 자동 새로고침
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // 지도 표시 상태
+  const [showMap, setShowMap] = useState(true);
 
   // 특보 데이터 로드
   const loadAlerts = useCallback(async () => {
@@ -134,6 +151,11 @@ export default function DashboardContent() {
     if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
     return `${Math.floor(diff / 86400)}일 전`;
   };
+
+  // 지도에서 지역 클릭 핸들러
+  const handleRegionClick = useCallback((upperRegion: string) => {
+    setSelectedRegion(upperRegion);
+  }, []);
 
   // 로딩 중
   if (loading) {
@@ -259,6 +281,34 @@ export default function DashboardContent() {
             >
               필터 초기화
             </button>
+          )}
+        </div>
+
+        {/* 지도 섹션 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">🗺️ 전국 특보 현황 지도</h2>
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              {showMap ? '지도 숨기기' : '지도 보기'}
+            </button>
+          </div>
+
+          {showMap && (
+            <div className="w-full h-[600px] rounded-lg overflow-hidden border border-gray-200">
+              <MapView
+                alerts={alerts}
+                onRegionClick={handleRegionClick}
+              />
+            </div>
+          )}
+
+          {!showMap && (
+            <p className="text-sm text-gray-500 text-center py-8">
+              지도를 보려면 &apos;지도 보기&apos;를 클릭하세요
+            </p>
           )}
         </div>
 
