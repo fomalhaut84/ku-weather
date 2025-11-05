@@ -518,27 +518,25 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   }
 
   private async generateWebToken(userId: string): Promise<string> {
-    // WebSubscriptionInterface가 있으면 데이터베이스 기반 토큰 생성
-    if (this.webInterface) {
-      try {
-        const subscription = this.subscriptionManager.getUserSubscription('slack', userId);
-        const displayName = subscription?.displayName || `Slack User ${userId}`;
-
-        const tokenInfo = await this.webInterface.generateAccessToken('slack', userId, displayName);
-        logger.info(`Slack 웹 토큰 생성 (DB): ${userId}`);
-        return tokenInfo.token;
-      } catch (error) {
-        logger.error('데이터베이스 토큰 생성 실패, 폴백 사용:', error);
-        // 실패 시 폴백
-      }
+    // WebSubscriptionInterface가 없으면 에러 발생
+    if (!this.webInterface) {
+      const error = new Error('WebSubscriptionInterface가 초기화되지 않았습니다. 관리자에게 문의하세요.');
+      logger.error('Slack 토큰 생성 실패: webInterface 없음');
+      throw error;
     }
 
-    // 폴백: 임시 토큰 생성 (하위 호환성)
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2);
-    const userHash = this.hashUserId(userId);
+    // 데이터베이스 기반 토큰 생성 (에러 시 전파)
+    try {
+      const subscription = this.subscriptionManager.getUserSubscription('slack', userId);
+      const displayName = subscription?.displayName || `Slack User ${userId}`;
 
-    return `SL_${timestamp}_${userHash}_${random}`;
+      const tokenInfo = await this.webInterface.generateAccessToken('slack', userId, displayName);
+      logger.info(`Slack 웹 토큰 생성 (DB): ${userId}`);
+      return tokenInfo.token;
+    } catch (error) {
+      logger.error('Slack 데이터베이스 토큰 생성 실패:', error);
+      throw new Error('토큰 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   }
 
   private hashUserId(userId: string): string {
