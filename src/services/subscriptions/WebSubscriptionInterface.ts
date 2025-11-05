@@ -113,6 +113,26 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
       );
 
       // 새로운 구독 정보 생성
+      // preferences 처리: 명시적 null을 보존하여 quietHours 비활성화 가능
+      let mergedPreferences = { ...existingSubscription?.preferences };
+      if (updateRequest.preferences !== undefined) {
+        // quietHours가 명시적으로 null이면 제거
+        const { quietHours, ...otherPreferences } = updateRequest.preferences;
+
+        mergedPreferences = {
+          ...mergedPreferences,
+          ...otherPreferences
+        };
+
+        if (quietHours === null) {
+          // null이면 기존 quietHours 제거
+          delete mergedPreferences.quietHours;
+        } else if (quietHours !== undefined) {
+          // 새로운 값이 있으면 설정
+          mergedPreferences.quietHours = quietHours;
+        }
+      }
+
       const newSubscription: Partial<UserSubscription> = {
         platform: tokenInfo.platform,
         userId: tokenInfo.userId,
@@ -121,13 +141,7 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
         enabled: updateRequest.enabled ?? existingSubscription?.enabled ?? true,
         displayName: updateRequest.displayName ?? existingSubscription?.displayName ??
           `${this.getPlatformDisplayName(tokenInfo.platform)} 사용자`,
-        preferences: {
-          ...existingSubscription?.preferences,
-          ...(updateRequest.preferences && {
-            ...updateRequest.preferences,
-            quietHours: updateRequest.preferences.quietHours || undefined
-          })
-        }
+        preferences: mergedPreferences
       };
 
       // 입력값 검증
