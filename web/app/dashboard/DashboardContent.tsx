@@ -27,6 +27,19 @@ const MapView = dynamic(() => import('@/components/MapView'), {
   ),
 });
 
+// ChartView도 클라이언트 사이드에서만 로드
+const ChartView = dynamic(() => import('@/components/ChartView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">차트 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
+
 export default function DashboardContent() {
   const searchParams = useSearchParams();
 
@@ -48,6 +61,10 @@ export default function DashboardContent() {
 
   // 지도 표시 상태
   const [showMap, setShowMap] = useState(true);
+
+  // 통계 표시 상태
+  const [showStats, setShowStats] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<'7d' | '30d'>('7d');
 
   // 특보 데이터 로드
   const loadAlerts = useCallback(async () => {
@@ -379,6 +396,53 @@ export default function DashboardContent() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* 통계 섹션 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">📊 특보 발생 통계</h2>
+            <div className="flex items-center gap-4">
+              {showStats && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatsPeriod('7d')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      statsPeriod === '7d'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 7일
+                  </button>
+                  <button
+                    onClick={() => setStatsPeriod('30d')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      statsPeriod === '30d'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 30일
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => setShowStats(!showStats)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {showStats ? '통계 숨기기' : '통계 보기'}
+              </button>
+            </div>
+          </div>
+
+          {showStats ? (
+            <ChartView period={statsPeriod} />
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">
+              통계를 보려면 &apos;통계 보기&apos;를 클릭하세요
+            </p>
           )}
         </div>
 
