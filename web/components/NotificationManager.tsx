@@ -18,6 +18,7 @@ export default function NotificationManager({
   const [isSupported, setIsSupported] = useState(false);
   const lastAlertsRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoadRef = useRef(true);
 
   // 브라우저 알림 지원 확인
   useEffect(() => {
@@ -64,14 +65,18 @@ export default function NotificationManager({
         alert => !lastAlertsRef.current.has(alert.id)
       );
 
-      // 새로운 특보가 있으면 알림 표시
-      if (newAlerts.length > 0 && lastAlertsRef.current.size > 0) {
-        // 초기 로드가 아닌 경우에만 알림
+      // 새로운 특보가 있으면 알림 표시 (초기 로드가 아닌 경우에만)
+      if (newAlerts.length > 0 && !isInitialLoadRef.current) {
         showNotifications(newAlerts);
       }
 
       // 현재 특보 ID 저장
       lastAlertsRef.current = currentAlertIds;
+
+      // 첫 체크 완료 후 초기 로드 플래그 해제
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false;
+      }
     } catch (error) {
       console.error('Failed to check for new alerts:', error);
     }
@@ -114,6 +119,9 @@ export default function NotificationManager({
       }
       return;
     }
+
+    // 알림 활성화 시 초기 로드 플래그 리셋
+    isInitialLoadRef.current = true;
 
     // 초기 체크
     checkForNewAlerts();
