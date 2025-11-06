@@ -115,8 +115,9 @@ async function main() {
     }
 
     // HTTP 서버 초기화 및 시작 (선택적)
+    let httpServer: HttpServer | undefined;
     if (config.serverEnabled) {
-      const httpServer = new HttpServer({
+      httpServer = new HttpServer({
         port: config.serverPort,
         environment: config.environment,
         corsOrigin: config.corsOrigin,
@@ -133,7 +134,7 @@ async function main() {
     }
 
     // 기상특보 모니터링 시작 (백그라운드)
-    await startMonitoring(weatherService, notificationService);
+    await startMonitoring(weatherService, notificationService, httpServer);
 
   } catch (error) {
     logger.error('애플리케이션 시작 중 오류 발생:', error);
@@ -141,7 +142,7 @@ async function main() {
   }
 }
 
-async function startMonitoring(weatherService: WeatherService, notificationService: MultiplatformNotificationService) {
+async function startMonitoring(weatherService: WeatherService, notificationService: MultiplatformNotificationService, httpServer?: HttpServer) {
   logger.info(`${config.checkIntervalMinutes}분 간격으로 기상특보 모니터링 시작`);
   
   // 특보구역 데이터 로드
@@ -205,18 +206,27 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
           }
         });
         console.log('\n=========================\n');
-        
+
+        // WebSocket으로 실시간 브로드캐스트
+        if (httpServer) {
+          try {
+            httpServer.broadcastAlertChanges(changes);
+          } catch (error) {
+            logger.error('WebSocket 브로드캐스트 실패:', error);
+          }
+        }
+
         // 다중 플랫폼 알림 전송
         try {
           const results = await notificationService.sendAlertChanges(changes);
           const successCount = results.filter(r => r.success).length;
           const failCount = results.length - successCount;
-          
+
           if (failCount === 0) {
             logger.info(`${changes.length}개 변동사항 알림 전송 완료 (${successCount}개 플랫폼 성공)`);
           } else {
             logger.warn(`${changes.length}개 변동사항 알림 전송 완료 (성공: ${successCount}, 실패: ${failCount})`);
-            
+
             // 실패한 플랫폼 로그 출력
             results.filter(r => !r.success).forEach(result => {
               logger.error(`${result.platform} 전송 실패: ${result.error}`);
