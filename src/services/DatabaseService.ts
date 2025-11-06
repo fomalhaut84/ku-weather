@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { WeatherAlert, AlertChange, AlertChangeType } from '../types/weather';
+import { WeatherAlert, AlertChange, AlertChangeType, CachedAlert } from '../types/weather';
 import { logger } from '../utils/logger';
 
 /**
@@ -156,51 +156,68 @@ export class DatabaseService {
    * - 캐시에 있는 특보: upsert
    * - 캐시에 없는 특보: command='6' (해제)으로 업데이트
    */
-  async syncCachedAlerts(cachedAlerts: Array<{
-    regionId: string;
-    regionName: string;
-    upperRegion?: string;
-    warningType: string;
-    level: string;
-    command: string;
-    announcedAt: string;
-    effectiveAt: string;
-    endTime?: string;
-  }>): Promise<void> {
+  async syncCachedAlerts(cachedAlerts: CachedAlert[]): Promise<void> {
     try {
+      logger.debug(`동기화할 캐시된 특보 데이터:`, JSON.stringify(cachedAlerts, null, 2));
+      
       // 1. 모든 캐시된 특보를 upsert
       if (cachedAlerts.length > 0) {
-        await Promise.all(cachedAlerts.map(alert =>
-          this.prisma.weatherAlert.upsert({
-            where: {
-              regionId_warningType: {
-                regionId: alert.regionId,
-                warningType: alert.warningType,
+        await Promise.all(cachedAlerts.map(async (alert, index) => {
+          try {
+            logger.debug(`특보 ${index + 1}/${cachedAlerts.length} 처리 중: ${alert.regionName} ${alert.warningType}`);
+            
+            // 날짜 변환 전 검증
+            const announcedAt = new Date(alert.announcedAt);
+            const effectiveAt = new Date(alert.effectiveAt);
+            const endTime = alert.endTime ? new Date(alert.endTime) : null;
+            
+            if (isNaN(announcedAt.getTime())) {
+              throw new Error(`Invalid announcedAt date: ${alert.announcedAt}`);
+            }
+            if (isNaN(effectiveAt.getTime())) {
+              throw new Error(`Invalid effectiveAt date: ${alert.effectiveAt}`);
+            }
+            if (alert.endTime && endTime && isNaN(endTime.getTime())) {
+              throw new Error(`Invalid endTime date: ${alert.endTime}`);
+            }
+            
+            return await this.prisma.weatherAlert.upsert({
+              where: {
+                regionId_warningType: {
+                  regionId: alert.regionId,
+                  warningType: alert.warningType,
+                },
               },
-            },
-            update: {
-              regionName: alert.regionName,
-              upperRegion: alert.upperRegion || null,
-              warningLevel: alert.level,
-              command: alert.command,
-              announcedAt: new Date(alert.announcedAt),
-              effectiveAt: new Date(alert.effectiveAt),
-              endTime: alert.endTime ? new Date(alert.endTime) : null,
-              updatedAt: new Date(),
-            },
-            create: {
-              regionId: alert.regionId,
-              regionName: alert.regionName,
-              upperRegion: alert.upperRegion || null,
-              warningType: alert.warningType,
-              warningLevel: alert.level,
-              command: alert.command,
-              announcedAt: new Date(alert.announcedAt),
-              effectiveAt: new Date(alert.effectiveAt),
-              endTime: alert.endTime ? new Date(alert.endTime) : null,
-            },
-          })
-        ));
+              update: {
+                regionName: alert.regionName,
+                upperRegion: alert.upperRegion || null,
+                warningLevel: alert.level,
+                command: alert.command,
+                announcedAt,
+                effectiveAt,
+                endTime,
+                updatedAt: new Date(),
+              },
+              create: {
+                regionId: alert.regionId,
+                regionName: alert.regionName,
+                upperRegion: alert.upperRegion || null,
+                warningType: alert.warningType,
+                warningLevel: alert.level,
+                command: alert.command,
+                announcedAt,
+                effectiveAt,
+                endTime,
+              },
+            });
+          } catch (alertError) {
+            logger.error(`특보 ${index + 1} 처리 실패:`, {
+              alert,
+              error: alertError instanceof Error ? alertError.message : String(alertError)
+            });
+            throw alertError;
+          }
+        }));
       }
 
       // 2. 캐시에 없는 특보들을 해제 상태(command='3')로 업데이트
