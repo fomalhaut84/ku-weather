@@ -107,9 +107,9 @@ describe('WeatherService', () => {
     });
 
     it('should return correct upper region for sea areas', () => {
-      expect((weatherService as any).getUpperRegionName('S1001000')).toBe('서해전해상');
-      expect((weatherService as any).getUpperRegionName('S1211000')).toBe('동해북부전해상');
-      expect((weatherService as any).getUpperRegionName('S1311000')).toBe('남해동부전해상');
+      expect((weatherService as any).getUpperRegionName('S1200000')).toBe('서해전해상'); // 서해전해상 직접
+      expect((weatherService as any).getUpperRegionName('S1150000')).toBe('동해중부전해상'); // 동해중부전해상 직접  
+      expect((weatherService as any).getUpperRegionName('S1311000')).toBe('남해동부전해상'); // 남해동부앞바다 → 남해동부전해상
     });
 
     it('should return region name for province-level regions', () => {
