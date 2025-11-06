@@ -297,7 +297,8 @@ describe('Config', () => {
         enabledPlatforms: ['slack'],
         telegramEnabled: false,
         serverPort: 3000,
-        serverEnabled: true
+        serverEnabled: true,
+        webDashboardUrl: 'https://weather.starryjeju.net'
       });
     });
 
@@ -321,7 +322,8 @@ describe('Config', () => {
         enabledPlatforms: ['slack'],
         telegramEnabled: false,
         serverPort: 3000,
-        serverEnabled: true
+        serverEnabled: true,
+        webDashboardUrl: 'https://weather.starryjeju.net'
       });
     });
   });

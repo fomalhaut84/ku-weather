@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { WeatherAlert, AlertChange, AlertChangeType } from '../types/weather';
+import { WeatherAlert, AlertChange, AlertChangeType, CachedAlert } from '../types/weather';
 import { logger } from '../utils/logger';
 
 /**
@@ -115,6 +115,19 @@ export class DatabaseService {
     try {
       const alert = change.current || change.previous!;
 
+      // CachedAlert 데이터 검증 (RESOLVED 타입에서 중요)
+      if (!alert.regionId || !alert.regionName || !alert.warningType || !alert.level) {
+        throw new Error(`AlertHistory 저장 실패 - 필수 필드 누락: ${JSON.stringify({
+          regionId: alert.regionId,
+          regionName: alert.regionName,
+          warningType: alert.warningType,
+          level: alert.level,
+          changeType: change.type
+        })}`);
+      }
+
+      logger.debug(`AlertHistory 저장 중: ${change.type} - ${alert.regionName} ${alert.warningType} ${alert.level}`);
+
       await this.prisma.alertHistory.create({
         data: {
           regionId: alert.regionId,
@@ -152,55 +165,89 @@ export class DatabaseService {
   }
 
   /**
+   * KMA 타임스탬프(YYYYMMDDHHmm)를 ISO Date 객체로 변환
+   * @param kmaTimestamp KMA API의 12자리 타임스탬프 (예: 202508011500)
+   * @returns Date 객체 (KST 타임존 적용)
+   */
+  private parseKmaTimestamp(kmaTimestamp: string): Date {
+    if (!kmaTimestamp || kmaTimestamp.length !== 12 || !/^\d{12}$/.test(kmaTimestamp)) {
+      throw new Error(`Invalid KMA timestamp format: ${kmaTimestamp} (expected: YYYYMMDDHHmm)`);
+    }
+    
+    const year = kmaTimestamp.substring(0, 4);
+    const month = kmaTimestamp.substring(4, 6);
+    const day = kmaTimestamp.substring(6, 8);
+    const hour = kmaTimestamp.substring(8, 10);
+    const minute = kmaTimestamp.substring(10, 12);
+    
+    // KST 타임존으로 Date 객체 생성 (ISO 형식: YYYY-MM-DDTHH:mm:00+09:00)
+    const isoString = `${year}-${month}-${day}T${hour}:${minute}:00+09:00`;
+    const date = new Date(isoString);
+    
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date created from KMA timestamp: ${kmaTimestamp} -> ${isoString}`);
+    }
+    
+    return date;
+  }
+
+  /**
    * CachedAlert 데이터를 데이터베이스에 동기화
    * - 캐시에 있는 특보: upsert
    * - 캐시에 없는 특보: command='6' (해제)으로 업데이트
    */
-  async syncCachedAlerts(cachedAlerts: Array<{
-    regionId: string;
-    regionName: string;
-    upperRegion?: string;
-    warningType: string;
-    level: string;
-    command: string;
-    announcedAt: string;
-    effectiveAt: string;
-    endTime?: string;
-  }>): Promise<void> {
+  async syncCachedAlerts(cachedAlerts: CachedAlert[]): Promise<void> {
     try {
+      logger.debug(`동기화할 캐시된 특보 데이터:`, JSON.stringify(cachedAlerts, null, 2));
+      
       // 1. 모든 캐시된 특보를 upsert
       if (cachedAlerts.length > 0) {
-        await Promise.all(cachedAlerts.map(alert =>
-          this.prisma.weatherAlert.upsert({
-            where: {
-              regionId_warningType: {
-                regionId: alert.regionId,
-                warningType: alert.warningType,
+        await Promise.all(cachedAlerts.map(async (alert, index) => {
+          try {
+            logger.debug(`특보 ${index + 1}/${cachedAlerts.length} 처리 중: ${alert.regionName} ${alert.warningType}`);
+            
+            // KMA 타임스탬프 변환 (YYYYMMDDHHmm -> Date 객체)
+            const announcedAt = this.parseKmaTimestamp(alert.announcedAt);
+            const effectiveAt = this.parseKmaTimestamp(alert.effectiveAt);
+            const endTime = alert.endTime ? this.parseKmaTimestamp(alert.endTime) : null;
+            
+            return await this.prisma.weatherAlert.upsert({
+              where: {
+                regionId_warningType: {
+                  regionId: alert.regionId,
+                  warningType: alert.warningType,
+                },
               },
-            },
-            update: {
-              regionName: alert.regionName,
-              upperRegion: alert.upperRegion || null,
-              warningLevel: alert.level,
-              command: alert.command,
-              announcedAt: new Date(alert.announcedAt),
-              effectiveAt: new Date(alert.effectiveAt),
-              endTime: alert.endTime ? new Date(alert.endTime) : null,
-              updatedAt: new Date(),
-            },
-            create: {
-              regionId: alert.regionId,
-              regionName: alert.regionName,
-              upperRegion: alert.upperRegion || null,
-              warningType: alert.warningType,
-              warningLevel: alert.level,
-              command: alert.command,
-              announcedAt: new Date(alert.announcedAt),
-              effectiveAt: new Date(alert.effectiveAt),
-              endTime: alert.endTime ? new Date(alert.endTime) : null,
-            },
-          })
-        ));
+              update: {
+                regionName: alert.regionName,
+                upperRegion: alert.upperRegion || null,
+                warningLevel: alert.level,
+                command: alert.command,
+                announcedAt,
+                effectiveAt,
+                endTime,
+                updatedAt: new Date(),
+              },
+              create: {
+                regionId: alert.regionId,
+                regionName: alert.regionName,
+                upperRegion: alert.upperRegion || null,
+                warningType: alert.warningType,
+                warningLevel: alert.level,
+                command: alert.command,
+                announcedAt,
+                effectiveAt,
+                endTime,
+              },
+            });
+          } catch (alertError) {
+            logger.error(`특보 ${index + 1} 처리 실패:`, {
+              alert,
+              error: alertError instanceof Error ? alertError.message : String(alertError)
+            });
+            throw alertError;
+          }
+        }));
       }
 
       // 2. 캐시에 없는 특보들을 해제 상태(command='3')로 업데이트

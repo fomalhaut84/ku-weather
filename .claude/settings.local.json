@@ -39,7 +39,8 @@
       "WebFetch(domain:github.com)",
       "Bash(npx create-next-app:*)",
       "Bash(cat:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(gh pr diff:*)"
     ],
     "deny": []
   }
