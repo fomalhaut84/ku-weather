@@ -203,7 +203,7 @@ export class DatabaseService {
         ));
       }
 
-      // 2. 캐시에 없는 특보들을 해제 상태(command='6')로 업데이트
+      // 2. 캐시에 없는 특보들을 해제 상태(command='3')로 업데이트
       let resolvedCount = 0;
       if (cachedAlerts.length > 0) {
         // 캐시에 있는 특보들의 키 생성
@@ -223,10 +223,10 @@ export class DatabaseService {
                 ]
               }))
             },
-            command: { not: '6' } // 이미 해제된 건 제외
+            command: { notIn: ['3', '4', '7'] } // 이미 해제된 건 제외 (3:해제, 4:대치해제, 7:변경해제)
           },
           data: {
-            command: '6', // 해제로 마킹
+            command: '3', // 해제로 마킹 (3: 해제)
             updatedAt: new Date()
           }
         });
@@ -235,10 +235,10 @@ export class DatabaseService {
         // 모든 특보가 해제된 경우 (cachedAlerts.length === 0)
         const result = await this.prisma.weatherAlert.updateMany({
           where: {
-            command: { not: '6' }
+            command: { notIn: ['3', '4', '7'] } // 이미 해제된 건 제외
           },
           data: {
-            command: '6',
+            command: '3', // 해제로 마킹 (3: 해제)
             updatedAt: new Date()
           }
         });
@@ -281,8 +281,9 @@ export class DatabaseService {
           warningType: filters?.warningType,
           warningLevel: filters?.warningLevel,
           upperRegion: filters?.upperRegion,
-          // 해제되지 않은 특보만 (CMD != 6)
-          command: { not: '6' },
+          // 해제되지 않은 특보만 (3:해제, 4:대치해제, 7:변경해제 제외)
+          // 6:변경은 활성 상태이므로 포함
+          command: { notIn: ['3', '4', '7'] },
         },
         orderBy: {
           announcedAt: 'desc',

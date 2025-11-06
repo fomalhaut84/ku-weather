@@ -160,8 +160,18 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
   } else {
     logger.warn(`일부 알림 플랫폼이 비정상 상태입니다. 정상: ${healthyPlatforms.map(([platform]) => platform).join(', ')}, 비정상: ${unhealthyPlatforms.map(([platform]) => platform).join(', ')}`);
   }
-  
+
+  // Mutex: 동시 실행 방지
+  let isCheckingWeather = false;
+
   const checkWeather = async () => {
+    // 이전 체크가 아직 진행 중이면 건너뜀
+    if (isCheckingWeather) {
+      logger.debug('이전 특보 확인이 아직 진행 중입니다. 이번 주기는 건너뜁니다.');
+      return;
+    }
+
+    isCheckingWeather = true;
     try {
       logger.debug('기상특보 변동 확인 중...');
       const changes = await weatherService.checkForAlertChanges(config.targetRegionIds, config.warningTypes, config.subcd);
@@ -253,6 +263,8 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
       }
     } catch (error) {
       logger.error('기상특보 변동 확인 중 오류:', error);
+    } finally {
+      isCheckingWeather = false;
     }
   };
   
