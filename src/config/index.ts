@@ -28,6 +28,8 @@ export interface Config {
   serverPort: number;
   serverEnabled: boolean;
   corsOrigin?: string;
+  // 웹 대시보드 설정
+  webDashboardUrl: string;
   // 새로운 다중 플랫폼 설정
   notificationConfig: NotificationConfig;
 }
@@ -55,6 +57,9 @@ function validateConfig(): Config {
   const serverPort = parseInt(process.env.PORT || '3000', 10);
   const serverEnabled = process.env.SERVER_ENABLED !== 'false'; // 기본값: true
   const corsOrigin = process.env.CORS_ORIGIN;
+
+  // 웹 대시보드 설정
+  const webDashboardUrl = process.env.WEB_DASHBOARD_URL || 'https://weather.starryjeju.net';
 
   // Telegram Webhook 모드 검증
   if (telegramEnabled && !telegramWebhookUrl) {
@@ -116,7 +121,8 @@ function validateConfig(): Config {
       webhookUrl: telegramWebhookUrl,
       webhookSecret: telegramWebhookSecret,
       nodeEnv
-    }
+    },
+    webDashboardUrl
   };
 
   const config: Config = {
@@ -137,6 +143,7 @@ function validateConfig(): Config {
     serverPort,
     serverEnabled,
     corsOrigin,
+    webDashboardUrl,
     notificationConfig
   };
 
@@ -152,6 +159,7 @@ function validateConfig(): Config {
     telegramEnabled: config.telegramEnabled,
     serverPort: config.serverPort,
     serverEnabled: config.serverEnabled,
+    webDashboardUrl: config.webDashboardUrl,
     enabledPlatforms: config.notificationConfig.platforms
   });
 
