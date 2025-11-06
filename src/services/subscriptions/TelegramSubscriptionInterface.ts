@@ -25,16 +25,19 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
   private commandParser: CommonCommandParser;
   private botToken?: string;
   private webInterface?: WebSubscriptionInterface;
+  private webDashboardUrl: string;
 
   constructor(
     subscriptionManager: SubscriptionManager,
     botToken?: string,
-    webInterface?: WebSubscriptionInterface
+    webInterface?: WebSubscriptionInterface,
+    webDashboardUrl: string = 'https://weather.starryjeju.net'
   ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.botToken = botToken;
     this.webInterface = webInterface;
+    this.webDashboardUrl = webDashboardUrl;
     logger.info('Telegram 구독 인터페이스 초기화 완료');
   }
 
@@ -288,10 +291,11 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
     try {
       const summary = this.commandParser.formatSubscriptionSummary(subscription);
       const webToken = await this.generateWebToken(params.userId);
-      
+
+
       return {
         success: true,
-        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\nhttps://weather.starryjeju.net/subscribe?token=${this.escapeMarkdown(webToken)}\n\n📝 명령어로 설정 변경:\n/subscribe \\<지역\\> \\- 지역 추가\n/unsubscribe \\<지역\\> \\- 지역 해제\n/quiet \\<시작\\> \\<끝\\> \\- 조용시간 설정`
+        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\n${this.webDashboardUrl}/subscribe?token=${this.escapeMarkdown(webToken)}\n\n📝 명령어로 설정 변경:\n/subscribe \\<지역\\> \\- 지역 추가\n/unsubscribe \\<지역\\> \\- 지역 해제\n/quiet \\<시작\\> \\<끝\\> \\- 조용시간 설정`
       };
 
     } catch (error) {

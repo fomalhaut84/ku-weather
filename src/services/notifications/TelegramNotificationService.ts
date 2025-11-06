@@ -27,8 +27,9 @@ export class TelegramNotificationService implements NotificationService {
   private isInitialized: boolean = false;
   private webhookUrl?: string;
   private webhookSecret?: string;
+  private webDashboardUrl: string;
 
-  constructor(private config: TelegramConfig & { webhookUrl?: string }) {
+  constructor(private config: TelegramConfig & { webhookUrl?: string; webDashboardUrl?: string }) {
     // Webhook 모드로 초기화 (polling 비활성화)
     // IPv4 강제 사용 + 타임아웃 설정으로 연결 안정성 향상
     // 이유: Node.js의 Happy Eyeballs 알고리즘이 IPv6를 먼저 시도하다가
@@ -52,13 +53,15 @@ export class TelegramNotificationService implements NotificationService {
 
     this.webhookUrl = config.webhookUrl;
     this.webhookSecret = config.webhookSecret;
+    this.webDashboardUrl = config.webDashboardUrl || 'https://weather.starryjeju.net';
 
     // Initialize subscription manager
     this.subscriptionManager = new SubscriptionManager();
     this.subscriptionInterface = new TelegramSubscriptionInterface(
       this.subscriptionManager,
       config.botToken,
-      undefined // webInterface는 나중에 setWebInterface()로 설정
+      undefined, // webInterface는 나중에 setWebInterface()로 설정
+      this.webDashboardUrl
     );
 
     // Legacy chatId를 자동으로 구독으로 전환
@@ -253,7 +256,7 @@ export class TelegramNotificationService implements NotificationService {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '📊 상세보기', url: 'https://weather.starryjeju.net' },
+              { text: '📊 상세보기', url: this.webDashboardUrl },
               { text: '🔕 알림설정', callback_data: 'settings:notifications' }
             ]
           ]
@@ -327,7 +330,7 @@ export class TelegramNotificationService implements NotificationService {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '📊 현황보기', url: 'https://weather.starryjeju.net' },
+              { text: '📊 현황보기', url: this.webDashboardUrl },
               { text: '⚙️ 설정', callback_data: 'settings:main' }
             ]
           ]
@@ -430,7 +433,7 @@ export class TelegramNotificationService implements NotificationService {
             reply_markup: {
               inline_keyboard: [
                 [
-                  { text: `📊 전체현황 (${userChanges.length}건)`, url: 'https://weather.starryjeju.net' },
+                  { text: `📊 전체현황 (${userChanges.length}건)`, url: this.webDashboardUrl },
                   { text: '🔔 알림설정', callback_data: 'settings:notifications' }
                 ]
               ]

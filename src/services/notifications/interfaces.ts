@@ -149,4 +149,5 @@ export interface NotificationConfig {
   discord?: DiscordConfig;
   email?: EmailConfig;
   environment?: string;
+  webDashboardUrl?: string;
 }

@@ -24,12 +24,13 @@ export class NotificationFactory {
   static createServices(config: NotificationConfig): NotificationService[] {
     const services: NotificationService[] = [];
     const environment = config.environment || 'development';
+    const webDashboardUrl = config.webDashboardUrl || 'https://weather.starryjeju.net';
 
     logger.info(`알림 서비스 생성 시작: ${config.platforms.join(', ')}`);
 
     for (const platform of config.platforms) {
       try {
-        const service = this.createSingleService(platform, config, environment);
+        const service = this.createSingleService(platform, config, environment, webDashboardUrl);
         if (service) {
           services.push(service);
           logger.info(`${platform} 서비스 생성 완료`);
@@ -55,24 +56,25 @@ export class NotificationFactory {
    * 특정 플랫폼의 단일 서비스 생성
    */
   private static createSingleService(
-    platform: string, 
-    config: NotificationConfig, 
-    environment: string
+    platform: string,
+    config: NotificationConfig,
+    environment: string,
+    webDashboardUrl: string
   ): NotificationService | null {
-    
+
     switch (platform.toLowerCase()) {
       case 'slack':
-        return this.createSlackService(config.slack, environment);
-        
+        return this.createSlackService(config.slack, environment, webDashboardUrl);
+
       case 'telegram':
-        return this.createTelegramService(config.telegram, environment);
-        
+        return this.createTelegramService(config.telegram, environment, webDashboardUrl);
+
       case 'discord':
-        return this.createDiscordService(config.discord, environment);
-        
+        return this.createDiscordService(config.discord, environment, webDashboardUrl);
+
       case 'email':
-        return this.createEmailService(config.email, environment);
-        
+        return this.createEmailService(config.email, environment, webDashboardUrl);
+
       default:
         logger.warn(`지원하지 않는 알림 플랫폼: ${platform}`);
         return null;
@@ -82,7 +84,7 @@ export class NotificationFactory {
   /**
    * Slack 알림 서비스 생성
    */
-  private static createSlackService(config?: SlackConfig, environment?: string): NotificationService | null {
+  private static createSlackService(config?: SlackConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
     if (!config) {
       logger.warn('Slack 설정이 없습니다');
       return null;
@@ -95,7 +97,7 @@ export class NotificationFactory {
 
     try {
       const service = new SlackNotificationService(config, environment);
-      
+
       if (!service.validateConfig()) {
         logger.error('Slack 설정 검증 실패');
         return null;
@@ -111,7 +113,7 @@ export class NotificationFactory {
   /**
    * Telegram 알림 서비스 생성 (향후 구현 예정)
    */
-  private static createTelegramService(config?: TelegramConfig, environment?: string): NotificationService | null {
+  private static createTelegramService(config?: TelegramConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
     if (!config) {
       logger.warn('Telegram 설정이 없습니다');
       return null;
@@ -122,8 +124,11 @@ export class NotificationFactory {
       return null;
     }
     try {
-      const service = new TelegramNotificationService(config);
-      
+      const service = new TelegramNotificationService({
+        ...config,
+        webDashboardUrl
+      });
+
       if (!service.validateConfig()) {
         logger.error('Telegram 설정 검증 실패');
         return null;
@@ -139,7 +144,7 @@ export class NotificationFactory {
   /**
    * Discord 알림 서비스 생성 (향후 구현 예정)
    */
-  private static createDiscordService(config?: DiscordConfig, environment?: string): NotificationService | null {
+  private static createDiscordService(config?: DiscordConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
     if (!config) {
       logger.warn('Discord 설정이 없습니다');
       return null;
@@ -158,7 +163,7 @@ export class NotificationFactory {
   /**
    * Email 알림 서비스 생성 (향후 구현 예정)
    */
-  private static createEmailService(config?: EmailConfig, environment?: string): NotificationService | null {
+  private static createEmailService(config?: EmailConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
     if (!config) {
       logger.warn('Email 설정이 없습니다');
       return null;
