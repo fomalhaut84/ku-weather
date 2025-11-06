@@ -165,6 +165,33 @@ export class DatabaseService {
   }
 
   /**
+   * KMA 타임스탬프(YYYYMMDDHHmm)를 ISO Date 객체로 변환
+   * @param kmaTimestamp KMA API의 12자리 타임스탬프 (예: 202508011500)
+   * @returns Date 객체 (KST 타임존 적용)
+   */
+  private parseKmaTimestamp(kmaTimestamp: string): Date {
+    if (!kmaTimestamp || kmaTimestamp.length !== 12 || !/^\d{12}$/.test(kmaTimestamp)) {
+      throw new Error(`Invalid KMA timestamp format: ${kmaTimestamp} (expected: YYYYMMDDHHmm)`);
+    }
+    
+    const year = kmaTimestamp.substring(0, 4);
+    const month = kmaTimestamp.substring(4, 6);
+    const day = kmaTimestamp.substring(6, 8);
+    const hour = kmaTimestamp.substring(8, 10);
+    const minute = kmaTimestamp.substring(10, 12);
+    
+    // KST 타임존으로 Date 객체 생성 (ISO 형식: YYYY-MM-DDTHH:mm:00+09:00)
+    const isoString = `${year}-${month}-${day}T${hour}:${minute}:00+09:00`;
+    const date = new Date(isoString);
+    
+    if (isNaN(date.getTime())) {
+      throw new Error(`Invalid date created from KMA timestamp: ${kmaTimestamp} -> ${isoString}`);
+    }
+    
+    return date;
+  }
+
+  /**
    * CachedAlert 데이터를 데이터베이스에 동기화
    * - 캐시에 있는 특보: upsert
    * - 캐시에 없는 특보: command='6' (해제)으로 업데이트
@@ -179,20 +206,10 @@ export class DatabaseService {
           try {
             logger.debug(`특보 ${index + 1}/${cachedAlerts.length} 처리 중: ${alert.regionName} ${alert.warningType}`);
             
-            // 날짜 변환 전 검증
-            const announcedAt = new Date(alert.announcedAt);
-            const effectiveAt = new Date(alert.effectiveAt);
-            const endTime = alert.endTime ? new Date(alert.endTime) : null;
-            
-            if (isNaN(announcedAt.getTime())) {
-              throw new Error(`Invalid announcedAt date: ${alert.announcedAt}`);
-            }
-            if (isNaN(effectiveAt.getTime())) {
-              throw new Error(`Invalid effectiveAt date: ${alert.effectiveAt}`);
-            }
-            if (alert.endTime && endTime && isNaN(endTime.getTime())) {
-              throw new Error(`Invalid endTime date: ${alert.endTime}`);
-            }
+            // KMA 타임스탬프 변환 (YYYYMMDDHHmm -> Date 객체)
+            const announcedAt = this.parseKmaTimestamp(alert.announcedAt);
+            const effectiveAt = this.parseKmaTimestamp(alert.effectiveAt);
+            const endTime = alert.endTime ? this.parseKmaTimestamp(alert.endTime) : null;
             
             return await this.prisma.weatherAlert.upsert({
               where: {
