@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { getCurrentAlerts, getAvailableRegions, getAvailableWarningTypes } from '@/lib/api';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import type { WeatherAlert } from '@/types/alert';
 import type { Region, WarningType } from '@/types/subscription';
 import {
@@ -12,6 +14,37 @@ import {
   WARNING_TYPE_EMOJI,
   WARNING_LEVEL_COLORS
 } from '@/types/alert';
+
+// MapView는 클라이언트 사이드에서만 로드 (Leaflet SSR 이슈 방지)
+const MapView = dynamic(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">지도 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
+
+// ChartView도 클라이언트 사이드에서만 로드
+const ChartView = dynamic(() => import('@/components/ChartView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">차트 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
+
+// NotificationManager도 클라이언트 사이드에서만 로드
+const NotificationManager = dynamic(() => import('@/components/NotificationManager'), {
+  ssr: false,
+});
 
 export default function DashboardContent() {
   const searchParams = useSearchParams();
@@ -32,6 +65,62 @@ export default function DashboardContent() {
   // 자동 새로고침
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  // 지도 표시 상태
+  const [showMap, setShowMap] = useState(true);
+
+  // 통계 표시 상태
+  const [showStats, setShowStats] = useState(false);
+  const [statsPeriod, setStatsPeriod] = useState<'7d' | '30d'>('7d');
+
+  // 브라우저 알림 상태
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
+
+  // WebSocket 실시간 업데이트
+  const [realtimeEnabled, setRealtimeEnabled] = useState(false);
+  const { isConnected, error: wsError } = useWebSocket({
+    enabled: realtimeEnabled,
+    onNewAlert: useCallback((alert: WeatherAlert) => {
+      // 새로운 특보를 추가하거나 기존 특보를 업데이트
+      setAlerts(prev => {
+        const existingIndex = prev.findIndex(a => a.id === alert.id);
+
+        if (existingIndex !== -1) {
+          // 기존 특보가 있으면 업데이트
+          const updated = [...prev];
+          updated[existingIndex] = alert;
+          return updated;
+        }
+
+        // 새로운 특보면 맨 앞에 추가
+        return [alert, ...prev];
+      });
+
+      // 브라우저 알림도 표시
+      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        const title = `${WARNING_TYPE_NAMES[alert.warningType] || alert.warningType} ${WARNING_LEVEL_NAMES[alert.warningLevel] || alert.warningLevel}`;
+        const body = `${alert.regionName}에 특보가 발표되었습니다.`;
+
+        const notification = new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: alert.id,
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          window.location.href = `/dashboard?region=${encodeURIComponent(alert.upperRegion || '')}`;
+          notification.close();
+        };
+
+        setTimeout(() => notification.close(), 10000);
+      }
+    }, [notificationEnabled]),
+    onAlertRemoved: useCallback((alertId: string) => {
+      // 특보 해제 시 목록에서 제거
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+    }, []),
+  });
+
   // 특보 데이터 로드
   const loadAlerts = useCallback(async () => {
     try {
@@ -46,6 +135,7 @@ export default function DashboardContent() {
 
       if (!response.success) {
         setError(response.error || '특보 데이터를 불러올 수 없습니다.');
+        setLoading(false);
         return;
       }
 
@@ -135,6 +225,11 @@ export default function DashboardContent() {
     return `${Math.floor(diff / 86400)}일 전`;
   };
 
+  // 지도에서 지역 클릭 핸들러
+  const handleRegionClick = useCallback((upperRegion: string) => {
+    setSelectedRegion(upperRegion);
+  }, []);
+
   // 로딩 중
   if (loading) {
     return (
@@ -168,16 +263,51 @@ export default function DashboardContent() {
             </p>
           )}
 
-          {/* 자동 새로고침 토글 */}
-          <label className="flex items-center mt-4 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
-          </label>
+          {/* 자동 새로고침 및 알림 토글 */}
+          <div className="mt-4 space-y-2">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
+            </label>
+
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={notificationEnabled}
+                onChange={(e) => setNotificationEnabled(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm">🔔 브라우저 알림 (새로운 특보 발생 시)</span>
+            </label>
+
+            <div className="flex items-center gap-2">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={realtimeEnabled}
+                  onChange={(e) => setRealtimeEnabled(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm">⚡ 실시간 업데이트 (WebSocket)</span>
+              </label>
+              {realtimeEnabled && (
+                <span className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                  {isConnected ? '연결됨' : '연결 중...'}
+                </span>
+              )}
+            </div>
+
+            {wsError && realtimeEnabled && (
+              <p className="text-xs text-red-600 ml-6">
+                * WebSocket 서버에 연결할 수 없습니다. 폴링 모드로 동작합니다.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* 에러 메시지 */}
@@ -262,6 +392,34 @@ export default function DashboardContent() {
           )}
         </div>
 
+        {/* 지도 섹션 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">🗺️ 전국 특보 현황 지도</h2>
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              {showMap ? '지도 숨기기' : '지도 보기'}
+            </button>
+          </div>
+
+          {showMap && (
+            <div className="w-full h-[600px] rounded-lg overflow-hidden border border-gray-200">
+              <MapView
+                alerts={alerts}
+                onRegionClick={handleRegionClick}
+              />
+            </div>
+          )}
+
+          {!showMap && (
+            <p className="text-sm text-gray-500 text-center py-8">
+              지도를 보려면 &apos;지도 보기&apos;를 클릭하세요
+            </p>
+          )}
+        </div>
+
         {/* 특보 목록 */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -332,6 +490,53 @@ export default function DashboardContent() {
           )}
         </div>
 
+        {/* 통계 섹션 */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">📊 특보 발생 통계</h2>
+            <div className="flex items-center gap-4">
+              {showStats && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setStatsPeriod('7d')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      statsPeriod === '7d'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 7일
+                  </button>
+                  <button
+                    onClick={() => setStatsPeriod('30d')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      statsPeriod === '30d'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 30일
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => setShowStats(!showStats)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {showStats ? '통계 숨기기' : '통계 보기'}
+              </button>
+            </div>
+          </div>
+
+          {showStats ? (
+            <ChartView period={statsPeriod} />
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-8">
+              통계를 보려면 &apos;통계 보기&apos;를 클릭하세요
+            </p>
+          )}
+        </div>
+
         {/* 하단 링크 */}
         <div className="text-center">
           <Link
@@ -342,6 +547,12 @@ export default function DashboardContent() {
           </Link>
         </div>
       </div>
+
+      {/* 브라우저 알림 관리자 */}
+      <NotificationManager
+        enabled={notificationEnabled}
+        checkInterval={60000} // 1분마다 체크
+      />
     </main>
   );
 }

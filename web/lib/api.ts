@@ -168,3 +168,48 @@ export async function getCurrentAlerts(filters?: {
     };
   }
 }
+
+/**
+ * 특보 통계 조회
+ */
+export interface AlertStatistics {
+  group: string;
+  count: number;
+  label?: string;
+}
+
+export async function getAlertStatistics(params: {
+  startDate: Date;
+  endDate: Date;
+  groupBy: 'region' | 'warningType' | 'level';
+}): Promise<ApiResponse<AlertStatistics[]>> {
+  try {
+    const queryParams = new URLSearchParams({
+      startDate: params.startDate.toISOString(),
+      endDate: params.endDate.toISOString(),
+      groupBy: params.groupBy,
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/alerts/statistics?${queryParams}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
