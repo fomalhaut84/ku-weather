@@ -167,14 +167,13 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
       const changes = await weatherService.checkForAlertChanges(config.targetRegionIds, config.warningTypes, config.subcd);
 
       // 현재 활성화된 모든 특보를 데이터베이스에 동기화
+      // 빈 배열인 경우에도 호출하여 모든 특보 해제 처리
       try {
         const cachedAlerts = weatherService.getCachedAlerts();
         logger.debug(`현재 캐시된 특보 ${cachedAlerts.length}개를 데이터베이스에 동기화 중...`);
 
-        if (cachedAlerts.length > 0) {
-          await databaseService.syncCachedAlerts(cachedAlerts);
-          logger.debug(`${cachedAlerts.length}개 현재 특보 데이터베이스 동기화 완료`);
-        }
+        await databaseService.syncCachedAlerts(cachedAlerts);
+        logger.debug(`특보 데이터베이스 동기화 완료`);
       } catch (dbError) {
         logger.error('현재 특보 데이터베이스 동기화 실패:', dbError);
         // DB 저장 실패해도 계속 진행
