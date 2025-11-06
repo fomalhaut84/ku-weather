@@ -95,8 +95,9 @@ describe('WeatherService', () => {
     });
 
     it('should return correct upper region for metropolitan cities', () => {
-      expect((weatherService as any).getUpperRegionName('L1110100')).toBe('서울특별시');
-      expect((weatherService as any).getUpperRegionName('L1120100')).toBe('부산광역시');
+      expect((weatherService as any).getUpperRegionName('L1100100')).toBe('서울특별시'); // 서울동남권
+      expect((weatherService as any).getUpperRegionName('L1110100')).toBe('인천광역시'); // 인천의 하위 지역
+      expect((weatherService as any).getUpperRegionName('L1150100')).toBe('부산광역시'); // 부산의 하위 지역  
       expect((weatherService as any).getUpperRegionName('L1010800')).toBe('인천광역시'); // 특별 케이스
     });
 
