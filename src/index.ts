@@ -160,12 +160,35 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
   } else {
     logger.warn(`일부 알림 플랫폼이 비정상 상태입니다. 정상: ${healthyPlatforms.map(([platform]) => platform).join(', ')}, 비정상: ${unhealthyPlatforms.map(([platform]) => platform).join(', ')}`);
   }
-  
+
+  // Mutex: 동시 실행 방지
+  let isCheckingWeather = false;
+
   const checkWeather = async () => {
+    // 이전 체크가 아직 진행 중이면 건너뜀
+    if (isCheckingWeather) {
+      logger.debug('이전 특보 확인이 아직 진행 중입니다. 이번 주기는 건너뜁니다.');
+      return;
+    }
+
+    isCheckingWeather = true;
     try {
       logger.debug('기상특보 변동 확인 중...');
       const changes = await weatherService.checkForAlertChanges(config.targetRegionIds, config.warningTypes, config.subcd);
-      
+
+      // 현재 활성화된 모든 특보를 데이터베이스에 동기화
+      // 빈 배열인 경우에도 호출하여 모든 특보 해제 처리
+      try {
+        const cachedAlerts = weatherService.getCachedAlerts();
+        logger.debug(`현재 캐시된 특보 ${cachedAlerts.length}개를 데이터베이스에 동기화 중...`);
+
+        await databaseService.syncCachedAlerts(cachedAlerts);
+        logger.debug(`특보 데이터베이스 동기화 완료`);
+      } catch (dbError) {
+        logger.error('현재 특보 데이터베이스 동기화 실패:', dbError);
+        // DB 저장 실패해도 계속 진행
+      }
+
       if (changes.length > 0) {
         logger.info(`${changes.length}개의 특보 변동사항 발견`);
 
@@ -240,6 +263,8 @@ async function startMonitoring(weatherService: WeatherService, notificationServi
       }
     } catch (error) {
       logger.error('기상특보 변동 확인 중 오류:', error);
+    } finally {
+      isCheckingWeather = false;
     }
   };
   

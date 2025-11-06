@@ -152,6 +152,107 @@ export class DatabaseService {
   }
 
   /**
+   * CachedAlert 데이터를 데이터베이스에 동기화
+   * - 캐시에 있는 특보: upsert
+   * - 캐시에 없는 특보: command='6' (해제)으로 업데이트
+   */
+  async syncCachedAlerts(cachedAlerts: Array<{
+    regionId: string;
+    regionName: string;
+    upperRegion?: string;
+    warningType: string;
+    level: string;
+    command: string;
+    announcedAt: string;
+    effectiveAt: string;
+    endTime?: string;
+  }>): Promise<void> {
+    try {
+      // 1. 모든 캐시된 특보를 upsert
+      if (cachedAlerts.length > 0) {
+        await Promise.all(cachedAlerts.map(alert =>
+          this.prisma.weatherAlert.upsert({
+            where: {
+              regionId_warningType: {
+                regionId: alert.regionId,
+                warningType: alert.warningType,
+              },
+            },
+            update: {
+              regionName: alert.regionName,
+              upperRegion: alert.upperRegion || null,
+              warningLevel: alert.level,
+              command: alert.command,
+              announcedAt: new Date(alert.announcedAt),
+              effectiveAt: new Date(alert.effectiveAt),
+              endTime: alert.endTime ? new Date(alert.endTime) : null,
+              updatedAt: new Date(),
+            },
+            create: {
+              regionId: alert.regionId,
+              regionName: alert.regionName,
+              upperRegion: alert.upperRegion || null,
+              warningType: alert.warningType,
+              warningLevel: alert.level,
+              command: alert.command,
+              announcedAt: new Date(alert.announcedAt),
+              effectiveAt: new Date(alert.effectiveAt),
+              endTime: alert.endTime ? new Date(alert.endTime) : null,
+            },
+          })
+        ));
+      }
+
+      // 2. 캐시에 없는 특보들을 해제 상태(command='3')로 업데이트
+      let resolvedCount = 0;
+      if (cachedAlerts.length > 0) {
+        // 캐시에 있는 특보들의 키 생성
+        const cachedKeys = cachedAlerts.map(a => ({
+          regionId: a.regionId,
+          warningType: a.warningType
+        }));
+
+        // 캐시에 없고 아직 해제되지 않은 특보들을 해제 상태로 업데이트
+        const result = await this.prisma.weatherAlert.updateMany({
+          where: {
+            NOT: {
+              OR: cachedKeys.map(key => ({
+                AND: [
+                  { regionId: key.regionId },
+                  { warningType: key.warningType }
+                ]
+              }))
+            },
+            command: { notIn: ['3', '4', '7'] } // 이미 해제된 건 제외 (3:해제, 4:대치해제, 7:변경해제)
+          },
+          data: {
+            command: '3', // 해제로 마킹 (3: 해제)
+            updatedAt: new Date()
+          }
+        });
+        resolvedCount = result.count;
+      } else {
+        // 모든 특보가 해제된 경우 (cachedAlerts.length === 0)
+        const result = await this.prisma.weatherAlert.updateMany({
+          where: {
+            command: { notIn: ['3', '4', '7'] } // 이미 해제된 건 제외
+          },
+          data: {
+            command: '3', // 해제로 마킹 (3: 해제)
+            updatedAt: new Date()
+          }
+        });
+        resolvedCount = result.count;
+      }
+
+      logger.debug(`캐시 특보 동기화 완료: ${cachedAlerts.length}개 활성, ${resolvedCount}개 해제`);
+    } catch (error) {
+      logger.error('캐시 특보 동기화 실패:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 여러 특보 이력 일괄 저장
    */
   async saveAlertHistories(changes: AlertChange[]): Promise<void> {
@@ -180,8 +281,9 @@ export class DatabaseService {
           warningType: filters?.warningType,
           warningLevel: filters?.warningLevel,
           upperRegion: filters?.upperRegion,
-          // 해제되지 않은 특보만 (CMD != 6)
-          command: { not: '6' },
+          // 해제되지 않은 특보만 (3:해제, 4:대치해제, 7:변경해제 제외)
+          // 6:변경은 활성 상태이므로 포함
+          command: { notIn: ['3', '4', '7'] },
         },
         orderBy: {
           announcedAt: 'desc',
