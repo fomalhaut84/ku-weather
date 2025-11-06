@@ -152,6 +152,61 @@ export class DatabaseService {
   }
 
   /**
+   * CachedAlert 데이터를 데이터베이스에 동기화
+   */
+  async syncCachedAlerts(cachedAlerts: Array<{
+    regionId: string;
+    regionName: string;
+    upperRegion?: string;
+    warningType: string;
+    level: string;
+    command: string;
+    announcedAt: string;
+    effectiveAt: string;
+    endTime?: string;
+  }>): Promise<void> {
+    try {
+      // 모든 캐시된 특보를 upsert
+      await Promise.all(cachedAlerts.map(alert =>
+        this.prisma.weatherAlert.upsert({
+          where: {
+            regionId_warningType: {
+              regionId: alert.regionId,
+              warningType: alert.warningType,
+            },
+          },
+          update: {
+            regionName: alert.regionName,
+            upperRegion: alert.upperRegion || null,
+            warningLevel: alert.level,
+            command: alert.command,
+            announcedAt: new Date(alert.announcedAt),
+            effectiveAt: new Date(alert.effectiveAt),
+            endTime: alert.endTime ? new Date(alert.endTime) : null,
+            updatedAt: new Date(),
+          },
+          create: {
+            regionId: alert.regionId,
+            regionName: alert.regionName,
+            upperRegion: alert.upperRegion || null,
+            warningType: alert.warningType,
+            warningLevel: alert.level,
+            command: alert.command,
+            announcedAt: new Date(alert.announcedAt),
+            effectiveAt: new Date(alert.effectiveAt),
+            endTime: alert.endTime ? new Date(alert.endTime) : null,
+          },
+        })
+      ));
+
+      logger.debug(`${cachedAlerts.length}개 캐시 특보 데이터베이스 동기화 완료`);
+    } catch (error) {
+      logger.error('캐시 특보 동기화 실패:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 여러 특보 이력 일괄 저장
    */
   async saveAlertHistories(changes: AlertChange[]): Promise<void> {
