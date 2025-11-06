@@ -35,16 +35,19 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
   private commandParser: CommonCommandParser;
   private smtpConfig?: any;
   private webInterface?: WebSubscriptionInterface;
+  private webDashboardUrl: string;
 
   constructor(
     subscriptionManager: SubscriptionManager,
     smtpConfig?: any,
-    webInterface?: WebSubscriptionInterface
+    webInterface?: WebSubscriptionInterface,
+    webDashboardUrl: string = 'https://weather.starryjeju.net'
   ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.smtpConfig = smtpConfig;
     this.webInterface = webInterface;
+    this.webDashboardUrl = webDashboardUrl;
     logger.info('Email 명령어 프로세서 초기화 완료');
   }
 
@@ -198,7 +201,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
     const text = `기상특보 구독이 설정되었습니다.\n\n` +
       `구독 정보:\n${summary}\n\n` +
       `설정 변경은 웹 페이지에서 가능합니다:\n` +
-      `https://weather.starryjeju.net/subscribe?token=${webToken}\n\n` +
+      `${this.webDashboardUrl}/subscribe?token=${webToken}\n\n` +
       this.getEmailFooter();
 
     const html = `
@@ -230,7 +233,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
               </div>
               <div class="web-link">
                 <p>더 자세한 설정은 웹 페이지에서 관리하세요:</p>
-                <a href="https://weather.starryjeju.net/subscribe?token=${webToken}" class="btn">
+                <a href="${this.webDashboardUrl}/subscribe?token=${webToken}" class="btn">
                   🌐 웹에서 설정 관리
                 </a>
               </div>
@@ -456,7 +459,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
       }
 
       message += `🌐 웹에서 상세 설정:\n` +
-        `https://weather.starryjeju.net/subscribe?token=${webToken}\n\n` +
+        `${this.webDashboardUrl}/subscribe?token=${webToken}\n\n` +
         `토큰: ${webToken.substring(0, 20)}... (24시간 유효)`;
 
       return {
@@ -515,7 +518,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
       `한국 기상청 기상특보 알림 시스템\n` +
       `이 이메일은 자동 생성되었습니다.\n` +
       `문의사항: admin@starryjeju.net\n` +
-      `웹사이트: https://weather.starryjeju.net`;
+      `웹사이트: ${this.webDashboardUrl}`;
   }
 
   private getHtmlHelpSection(): string {

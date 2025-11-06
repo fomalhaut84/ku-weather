@@ -56,16 +56,19 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   private commandParser: CommonCommandParser;
   private webhookUrl?: string;
   private webInterface?: WebSubscriptionInterface;
+  private webDashboardUrl: string;
 
   constructor(
     subscriptionManager: SubscriptionManager,
     webhookUrl?: string,
-    webInterface?: WebSubscriptionInterface
+    webInterface?: WebSubscriptionInterface,
+    webDashboardUrl: string = 'https://weather.starryjeju.net'
   ) {
     this.subscriptionManager = subscriptionManager;
     this.commandParser = new CommonCommandParser();
     this.webhookUrl = webhookUrl;
     this.webInterface = webInterface;
+    this.webDashboardUrl = webDashboardUrl;
     logger.info('Slack 인터랙티브 인터페이스 초기화 완료');
   }
 
@@ -161,7 +164,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
               type: 'button',
               text: { type: 'plain_text', text: '⚙️ 웹에서 설정' },
               action_id: 'open_web_settings',
-              url: `https://weather.starryjeju.net/subscribe?token=${webToken}`
+              url: `${this.webDashboardUrl}/subscribe?token=${webToken}`
             }
           ]
         }
@@ -395,8 +398,8 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
   private async handleSettingsCommand(params: SubscriptionCommandParams): Promise<SubscriptionCommandResult> {
     const webToken = await this.generateWebToken(params.userId);
-    const webUrl = `https://weather.starryjeju.net/subscribe?token=${webToken}`;
-    
+    const webUrl = `${this.webDashboardUrl}/subscribe?token=${webToken}`;
+
     const message = `⚙️ 개인 구독 설정\n\n` +
       `🌐 웹에서 설정: ${webUrl}\n\n` +
       `💡 또는 기상특보 메시지의 버튼을 이용하세요.\n` +
@@ -410,30 +413,30 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
     // 현재는 간단한 응답 메시지 반환
     const userId = payload.user.id;
     const webToken = await this.generateWebToken(userId);
-    
+
     return {
       success: true,
-      message: `🌍 지역 선택\n\n웹 설정 페이지에서 원하는 지역을 선택하세요:\nhttps://weather.starryjeju.net/subscribe?token=${webToken}#regions`
+      message: `🌍 지역 선택\n\n웹 설정 페이지에서 원하는 지역을 선택하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#regions`
     };
   }
 
   private async handleWarningSelection(payload: SlackButtonPayload): Promise<SubscriptionCommandResult> {
     const userId = payload.user.id;
     const webToken = await this.generateWebToken(userId);
-    
+
     return {
       success: true,
-      message: `⚠️ 특보 종류 선택\n\n웹 설정 페이지에서 원하는 특보를 선택하세요:\nhttps://weather.starryjeju.net/subscribe?token=${webToken}#warnings`
+      message: `⚠️ 특보 종류 선택\n\n웹 설정 페이지에서 원하는 특보를 선택하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#warnings`
     };
   }
 
   private async handleQuietHoursSetup(payload: SlackButtonPayload): Promise<SubscriptionCommandResult> {
     const userId = payload.user.id;
     const webToken = await this.generateWebToken(userId);
-    
+
     return {
       success: true,
-      message: `🔇 조용한 시간대 설정\n\n웹 설정 페이지에서 조용한 시간대를 설정하세요:\nhttps://weather.starryjeju.net/subscribe?token=${webToken}#quiet`
+      message: `🔇 조용한 시간대 설정\n\n웹 설정 페이지에서 조용한 시간대를 설정하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#quiet`
     };
   }
 
@@ -451,10 +454,10 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
     const summary = this.commandParser.formatSubscriptionSummary(subscription);
     const webToken = await this.generateWebToken(userId);
-    
+
     return {
       success: true,
-      message: `📋 현재 구독 설정\n\n${summary}\n\n🔧 설정 변경: https://weather.starryjeju.net/subscribe?token=${webToken}`
+      message: `📋 현재 구독 설정\n\n${summary}\n\n🔧 설정 변경: ${this.webDashboardUrl}/subscribe?token=${webToken}`
     };
   }
 
