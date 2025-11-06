@@ -115,6 +115,19 @@ export class DatabaseService {
     try {
       const alert = change.current || change.previous!;
 
+      // CachedAlert 데이터 검증 (RESOLVED 타입에서 중요)
+      if (!alert.regionId || !alert.regionName || !alert.warningType || !alert.level) {
+        throw new Error(`AlertHistory 저장 실패 - 필수 필드 누락: ${JSON.stringify({
+          regionId: alert.regionId,
+          regionName: alert.regionName,
+          warningType: alert.warningType,
+          level: alert.level,
+          changeType: change.type
+        })}`);
+      }
+
+      logger.debug(`AlertHistory 저장 중: ${change.type} - ${alert.regionName} ${alert.warningType} ${alert.level}`);
+
       await this.prisma.alertHistory.create({
         data: {
           regionId: alert.regionId,
