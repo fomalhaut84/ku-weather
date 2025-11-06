@@ -80,12 +80,18 @@ export default function DashboardContent() {
   const { isConnected, error: wsError } = useWebSocket({
     enabled: realtimeEnabled,
     onNewAlert: useCallback((alert: WeatherAlert) => {
-      // 새로운 특보를 목록에 추가
+      // 새로운 특보를 추가하거나 기존 특보를 업데이트
       setAlerts(prev => {
-        // 중복 체크
-        if (prev.some(a => a.id === alert.id)) {
-          return prev;
+        const existingIndex = prev.findIndex(a => a.id === alert.id);
+
+        if (existingIndex !== -1) {
+          // 기존 특보가 있으면 업데이트
+          const updated = [...prev];
+          updated[existingIndex] = alert;
+          return updated;
         }
+
+        // 새로운 특보면 맨 앞에 추가
         return [alert, ...prev];
       });
 
