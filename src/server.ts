@@ -1,6 +1,8 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { timingSafeEqual } from 'crypto';
+import { createServer, Server as HttpServerType } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { logger } from './utils/logger';
 import { MultiplatformNotificationService } from './services/notifications/MultiplatformNotificationService';
 import { WeatherService } from './services/weatherService';
@@ -9,6 +11,7 @@ import alertRoutes from './routes/alertRoutes';
 import subscriptionRoutes, { initializeSubscriptionRoutes } from './routes/subscriptionRoutes';
 import { TokenService } from './services/TokenService';
 import { databaseService } from './services/DatabaseService';
+import { AlertChange } from './types/weather';
 
 export interface ServerConfig {
   port: number;
@@ -25,6 +28,8 @@ export interface ServerConfig {
  */
 export class HttpServer {
   private app: Express;
+  private httpServer?: HttpServerType;
+  private io?: SocketIOServer;
   private config: ServerConfig;
   private notificationService?: MultiplatformNotificationService;
   private weatherService?: WeatherService;
@@ -352,13 +357,86 @@ export class HttpServer {
    */
   async start(): Promise<void> {
     return new Promise((resolve) => {
-      this.app.listen(this.config.port, () => {
+      // HTTP 서버 생성
+      this.httpServer = createServer(this.app);
+
+      // Socket.io 서버 생성
+      this.io = new SocketIOServer(this.httpServer, {
+        cors: {
+          origin: this.config.corsOrigin || '*',
+          methods: ['GET', 'POST']
+        },
+        transports: ['websocket', 'polling']
+      });
+
+      // Socket.io 연결 핸들러
+      this.io.on('connection', (socket) => {
+        logger.info(`[WebSocket] Client connected: ${socket.id}`);
+
+        socket.on('disconnect', (reason) => {
+          logger.info(`[WebSocket] Client disconnected: ${socket.id}, reason: ${reason}`);
+        });
+
+        socket.on('error', (error) => {
+          logger.error(`[WebSocket] Socket error: ${socket.id}`, error);
+        });
+      });
+
+      // HTTP 서버 시작
+      this.httpServer.listen(this.config.port, () => {
         logger.info(`HTTP Server started on port ${this.config.port}`);
+        logger.info(`WebSocket Server started on port ${this.config.port}`);
         logger.info(`Environment: ${this.config.environment}`);
         logger.info(`Health check: http://localhost:${this.config.port}/health`);
         resolve();
       });
     });
+  }
+
+  /**
+   * 특보 변동사항을 WebSocket으로 브로드캐스트
+   */
+  broadcastAlertChanges(changes: AlertChange[]): void {
+    if (!this.io) {
+      logger.warn('[WebSocket] Socket.io server not initialized, skipping broadcast');
+      return;
+    }
+
+    changes.forEach((change) => {
+      if (!this.io) return;
+
+      switch (change.type) {
+        case 'NEW':
+          // 새로운 특보
+          if (change.current) {
+            this.io.emit('alert:new', change.current);
+            logger.debug(`[WebSocket] Broadcast alert:new - ${change.current.regionName} ${change.current.warningType}`);
+          }
+          break;
+
+        case 'RESOLVED':
+          // 특보 해제
+          if (change.previous) {
+            const alertId = `${change.previous.regionId}_${change.previous.warningType}`;
+            this.io.emit('alert:removed', alertId);
+            logger.debug(`[WebSocket] Broadcast alert:removed - ${alertId}`);
+          }
+          break;
+
+        case 'LEVEL_UP':
+        case 'LEVEL_DOWN':
+        case 'TIME_EXTENDED':
+        case 'MODIFIED':
+          // 특보 업데이트
+          if (change.current) {
+            this.io.emit('alert:updated', change.current);
+            logger.debug(`[WebSocket] Broadcast alert:updated - ${change.current.regionName} ${change.current.warningType}`);
+          }
+          break;
+      }
+    });
+
+    logger.info(`[WebSocket] Broadcasted ${changes.length} alert changes to ${this.io.engine.clientsCount} clients`);
   }
 
   /**
