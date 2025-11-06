@@ -23,6 +23,10 @@ describe('Alert Routes', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Mock의 기본값을 설정하여 undefined rejection 방지
+    (databaseService.getCurrentAlerts as jest.Mock).mockResolvedValue([]);
+    (databaseService.getAlertHistory as jest.Mock).mockResolvedValue([]);
+    (databaseService.getAlertStatistics as jest.Mock).mockResolvedValue([]);
   });
 
   describe('GET /api/alerts/current', () => {
