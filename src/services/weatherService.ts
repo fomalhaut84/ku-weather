@@ -1327,21 +1327,49 @@ export class WeatherService {
         return null;
       }
 
-      // category별 데이터를 맵으로 집계
-      const dataMap: Record<string, string> = {};
-      let forecastDateTime = '';
-
+      // 1단계: 시간대별로 그룹화
+      const timeSlices = new Map<string, any[]>();
       for (const item of items) {
-        // 첫 번째 아이템의 예보 시각을 저장
-        if (!forecastDateTime && item.fcstDate && item.fcstTime) {
-          forecastDateTime = item.fcstDate + item.fcstTime;
+        if (item.fcstDate && item.fcstTime) {
+          const timeKey = item.fcstDate + item.fcstTime;
+          if (!timeSlices.has(timeKey)) {
+            timeSlices.set(timeKey, []);
+          }
+          timeSlices.get(timeKey)!.push(item);
         }
+      }
 
-        // category별 값을 저장
+      if (timeSlices.size === 0) {
+        logger.warn('유효한 예보 시간대가 없습니다');
+        return null;
+      }
+
+      // 2단계: 가장 가까운 미래 시간대 선택
+      const now = new Date();
+      const sortedTimes = Array.from(timeSlices.keys()).sort();
+      let selectedTime = sortedTimes[0]; // 기본값: 첫 번째 시간대
+
+      for (const timeKey of sortedTimes) {
+        const forecastTime = this.parseForecastTime(timeKey);
+        if (forecastTime >= now) {
+          selectedTime = timeKey;
+          break;
+        }
+      }
+
+      logger.debug(`선택된 예보 시간대: ${selectedTime} (총 ${timeSlices.size}개 시간대 중)`);
+
+      // 3단계: 선택된 시간대의 데이터만 사용
+      const selectedItems = timeSlices.get(selectedTime) || [];
+      const dataMap: Record<string, string> = {};
+
+      for (const item of selectedItems) {
         if (item.category && item.fcstValue !== undefined) {
           dataMap[item.category] = item.fcstValue;
         }
       }
+
+      const forecastDateTime = selectedTime;
 
       // WeatherForecast 객체 생성
       const forecast: WeatherForecast = {
