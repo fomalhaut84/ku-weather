@@ -1249,7 +1249,7 @@ export class WeatherService {
         ny: gridInfo.ny.toString(),
         numOfRows: '100',
         pageNo: '1',
-        dataType: 'CSV'
+        dataType: 'JSON'
       });
 
       const url = `${this.forecastUrl}?${params.toString()}`;
@@ -1260,10 +1260,10 @@ export class WeatherService {
         throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
       }
 
-      const csvData = await response.text();
+      const jsonData = await response.json();
 
-      // 4. CSV 파싱 및 데이터 집계
-      const forecast = this.parseForecastData(csvData, regionId, gridInfo.name);
+      // 4. JSON 파싱 및 데이터 집계
+      const forecast = this.parseForecastData(jsonData, regionId, gridInfo.name);
 
       if (!forecast) {
         logger.warn(`지역 ${gridInfo.name}(${regionId})의 예보 데이터를 파싱할 수 없습니다`);
@@ -1306,29 +1306,44 @@ export class WeatherService {
   }
 
   /**
-   * CSV 응답 데이터를 WeatherForecast 객체로 파싱
+   * JSON 응답 데이터를 WeatherForecast 객체로 파싱
    */
-  private parseForecastData(csvData: string, regionId: string, regionName: string): WeatherForecast | null {
+  private parseForecastData(jsonData: any, regionId: string, regionName: string): WeatherForecast | null {
     try {
-      const lines = csvData.trim().split('\n');
-      if (lines.length < 2) {
-        logger.warn('CSV 데이터가 비어있거나 헤더만 존재합니다');
+      // API 응답 검증
+      if (!jsonData || !jsonData.response) {
+        logger.warn('API 응답이 비어있습니다');
         return null;
       }
 
-      // CSV 헤더 파싱 (첫 줄)
-      // TM_FC, TM_EF, STN, WD, WS, SKY, T1H, REH, PTY, RN1, UUU, VVV, VEC, WSD, ...
-      const headers = lines[0].split(',').map(h => h.trim());
+      const response = jsonData.response;
 
-      // 데이터 집계를 위한 맵
+      // 헤더 검증
+      if (response.header?.resultCode !== '00') {
+        logger.warn(`API 오류: ${response.header?.resultMsg || 'Unknown error'}`);
+        return null;
+      }
+
+      // 데이터 추출
+      const items = response.body?.items?.item;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        logger.warn('예보 데이터가 비어있습니다');
+        return null;
+      }
+
+      // category별 데이터를 맵으로 집계
       const dataMap: Record<string, string> = {};
+      let forecastDateTime = '';
 
-      // 가장 최근 예보 시각의 데이터만 사용 (첫 번째 데이터 행)
-      if (lines.length > 1) {
-        const values = lines[1].split(',').map(v => v.trim());
+      for (const item of items) {
+        // 첫 번째 아이템의 예보 시각을 저장
+        if (!forecastDateTime && item.fcstDate && item.fcstTime) {
+          forecastDateTime = item.fcstDate + item.fcstTime;
+        }
 
-        for (let i = 0; i < headers.length && i < values.length; i++) {
-          dataMap[headers[i]] = values[i];
+        // category별 값을 저장
+        if (item.category && item.fcstValue !== undefined) {
+          dataMap[item.category] = item.fcstValue;
         }
       }
 
@@ -1336,7 +1351,7 @@ export class WeatherService {
       const forecast: WeatherForecast = {
         regionId,
         regionName,
-        forecastTime: this.parseForecastTime(dataMap['TM_FC'] || ''),
+        forecastTime: this.parseForecastTime(forecastDateTime),
         temperature: this.parseNumber(dataMap['T1H']),
         humidity: this.parseNumber(dataMap['REH']),
         skyCondition: this.parseNumber(dataMap['SKY']),
@@ -1357,7 +1372,7 @@ export class WeatherService {
 
       return forecast;
     } catch (error) {
-      logger.error('CSV 데이터 파싱 중 오류:', error);
+      logger.error('JSON 데이터 파싱 중 오류:', error);
       return null;
     }
   }
