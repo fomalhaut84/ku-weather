@@ -210,7 +210,15 @@ export default function DashboardContent() {
         const typeParam = searchParams.get('type');
         const levelParam = searchParams.get('level');
 
-        if (regionParam) setSelectedRegion(regionParam);
+        if (regionParam) {
+          // regionParam이 name일 수도 있고 code일 수도 있으므로 둘 다 확인
+          const regionObj = regionsRes.data?.find(
+            (r) => r.code === regionParam || r.name === regionParam
+          );
+          if (regionObj) {
+            setSelectedRegion(regionObj.code);
+          }
+        }
         if (typeParam) setSelectedWarningType(typeParam);
         if (levelParam) setSelectedWarningLevel(levelParam);
 
@@ -267,8 +275,12 @@ export default function DashboardContent() {
 
   // 지도에서 지역 클릭 핸들러
   const handleRegionClick = useCallback((upperRegion: string) => {
-    setSelectedRegion(upperRegion);
-  }, []);
+    // upperRegion은 지역 이름이므로 code로 변환
+    const regionObj = availableRegions.find((r) => r.name === upperRegion);
+    if (regionObj) {
+      setSelectedRegion(regionObj.code);
+    }
+  }, [availableRegions]);
 
   // 로딩 중
   if (loading) {
