@@ -1236,7 +1236,7 @@ export class WeatherService {
     // L로 시작하는 8자리 이상 코드면 광역시도 코드로 변환
     // 예: L1100510 → L1100000, L1010100 → L1010000
     if (regionId.startsWith('L') && regionId.length >= 8) {
-      const upperCode = regionId.substring(0, 7) + '000';
+      const upperCode = regionId.substring(0, 5) + '000';
       if (this.gridCoordinates.has(upperCode)) {
         logger.debug(`지역 코드 ${regionId}를 광역시도 코드 ${upperCode}로 매핑`);
         return upperCode;
