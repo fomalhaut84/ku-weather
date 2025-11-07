@@ -1,4 +1,4 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange } from '../types/weather';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, WeatherForecast } from '../types/weather';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
 import * as fs from 'fs';
@@ -7,6 +7,7 @@ import * as path from 'path';
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
+  private readonly forecastUrl = 'https://apihub.kma.go.kr/api/typ01/url/fct_afs_dl.php';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
   private alertCache: AlertCache = new AlertCache();
@@ -14,6 +15,64 @@ export class WeatherService {
   private isInitialized: boolean = false;
   private lastLogTime: Date | null = null;
   private lastApiCalls: string[] = [];
+
+  // 기상청 특보구역 코드 -> 격자 좌표 매핑
+  private readonly gridCoordinates: Map<string, { nx: number; ny: number; name: string }> = new Map([
+    // 서울특별시
+    ['L1100000', { nx: 60, ny: 127, name: '서울특별시' }],
+    ['L1100100', { nx: 60, ny: 127, name: '서울동남권' }],
+    ['L1100200', { nx: 60, ny: 127, name: '서울동북권' }],
+    ['L1100300', { nx: 60, ny: 127, name: '서울서남권' }],
+    ['L1100400', { nx: 60, ny: 127, name: '서울서북권' }],
+
+    // 부산광역시
+    ['L1200000', { nx: 98, ny: 76, name: '부산광역시' }],
+
+    // 대구광역시
+    ['L1300000', { nx: 89, ny: 90, name: '대구광역시' }],
+
+    // 인천광역시
+    ['L1400000', { nx: 55, ny: 124, name: '인천광역시' }],
+
+    // 광주광역시
+    ['L1500000', { nx: 58, ny: 74, name: '광주광역시' }],
+
+    // 대전광역시
+    ['L1600000', { nx: 67, ny: 100, name: '대전광역시' }],
+
+    // 울산광역시
+    ['L1700000', { nx: 102, ny: 84, name: '울산광역시' }],
+
+    // 세종특별자치시
+    ['L1800000', { nx: 66, ny: 103, name: '세종특별자치시' }],
+
+    // 경기도
+    ['L1010000', { nx: 60, ny: 120, name: '경기도' }],
+
+    // 강원특별자치도
+    ['L1020000', { nx: 73, ny: 134, name: '강원특별자치도' }],
+
+    // 충청북도
+    ['L1040000', { nx: 69, ny: 107, name: '충청북도' }],
+
+    // 충청남도
+    ['L1030000', { nx: 55, ny: 107, name: '충청남도' }],
+
+    // 전북특별자치도
+    ['L1050000', { nx: 63, ny: 89, name: '전북특별자치도' }],
+
+    // 전라남도
+    ['L1060000', { nx: 51, ny: 67, name: '전라남도' }],
+
+    // 경상북도
+    ['L1070000', { nx: 87, ny: 106, name: '경상북도' }],
+
+    // 경상남도
+    ['L1080000', { nx: 91, ny: 77, name: '경상남도' }],
+
+    // 제주특별자치도
+    ['L1090000', { nx: 52, ny: 38, name: '제주특별자치도' }],
+  ]);
 
   constructor(authKey: string) {
     this.authKey = authKey;
@@ -1160,6 +1219,203 @@ export class WeatherService {
     } catch (error) {
       logger.error('status.log 파일 저장 중 오류:', error);
     }
+  }
+
+  /**
+   * 초단기예보 데이터 조회
+   * @param regionId 지역 코드 (특보구역 코드)
+   * @returns 날씨 예보 데이터
+   */
+  async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
+    try {
+      // 1. 지역 코드를 격자 좌표로 변환
+      const gridInfo = this.gridCoordinates.get(regionId);
+      if (!gridInfo) {
+        logger.warn(`지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`);
+        return null;
+      }
+
+      // 2. 현재 시각 기준으로 API 파라미터 생성
+      const now = new Date();
+      const baseDate = this.formatDate(now); // YYYYMMDD
+      const baseTime = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
+
+      // 3. API 호출
+      const params = new URLSearchParams({
+        authKey: this.authKey,
+        base_date: baseDate,
+        base_time: baseTime,
+        nx: gridInfo.nx.toString(),
+        ny: gridInfo.ny.toString(),
+        numOfRows: '100',
+        pageNo: '1',
+        dataType: 'CSV'
+      });
+
+      const url = `${this.forecastUrl}?${params.toString()}`;
+      logger.debug(`초단기예보 API 호출: ${url}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+      }
+
+      const csvData = await response.text();
+
+      // 4. CSV 파싱 및 데이터 집계
+      const forecast = this.parseForecastData(csvData, regionId, gridInfo.name);
+
+      if (!forecast) {
+        logger.warn(`지역 ${gridInfo.name}(${regionId})의 예보 데이터를 파싱할 수 없습니다`);
+        return null;
+      }
+
+      logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공`);
+      return forecast;
+    } catch (error) {
+      logger.error(`날씨 예보 조회 중 오류 (지역: ${regionId}):`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 날짜를 YYYYMMDD 형식으로 변환
+   */
+  private formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  /**
+   * 초단기예보 기준시각 계산
+   * 매 시간 30분에 발표되므로, 30분 이전이면 이전 시각, 30분 이후면 현재 시각
+   */
+  private getBaseTime(date: Date): string {
+    const hour = date.getHours();
+    const minute = date.getMinutes();
+
+    // 30분 이전이면 이전 시각
+    const baseHour = minute < 30 ? hour - 1 : hour;
+
+    // 0시 이전이면 23시로
+    const adjustedHour = baseHour < 0 ? 23 : baseHour;
+
+    return `${String(adjustedHour).padStart(2, '0')}30`;
+  }
+
+  /**
+   * CSV 응답 데이터를 WeatherForecast 객체로 파싱
+   */
+  private parseForecastData(csvData: string, regionId: string, regionName: string): WeatherForecast | null {
+    try {
+      const lines = csvData.trim().split('\n');
+      if (lines.length < 2) {
+        logger.warn('CSV 데이터가 비어있거나 헤더만 존재합니다');
+        return null;
+      }
+
+      // CSV 헤더 파싱 (첫 줄)
+      // TM_FC, TM_EF, STN, WD, WS, SKY, T1H, REH, PTY, RN1, UUU, VVV, VEC, WSD, ...
+      const headers = lines[0].split(',').map(h => h.trim());
+
+      // 데이터 집계를 위한 맵
+      const dataMap: Record<string, string> = {};
+
+      // 가장 최근 예보 시각의 데이터만 사용 (첫 번째 데이터 행)
+      if (lines.length > 1) {
+        const values = lines[1].split(',').map(v => v.trim());
+
+        for (let i = 0; i < headers.length && i < values.length; i++) {
+          dataMap[headers[i]] = values[i];
+        }
+      }
+
+      // WeatherForecast 객체 생성
+      const forecast: WeatherForecast = {
+        regionId,
+        regionName,
+        forecastTime: this.parseForecastTime(dataMap['TM_FC'] || ''),
+        temperature: this.parseNumber(dataMap['T1H']),
+        humidity: this.parseNumber(dataMap['REH']),
+        skyCondition: this.parseNumber(dataMap['SKY']),
+        precipitationType: this.parseNumber(dataMap['PTY']),
+        precipitation: this.parseNumber(dataMap['RN1']),
+        windSpeed: this.parseNumber(dataMap['WSD']),
+        windDirection: this.parseNumber(dataMap['VEC']),
+      };
+
+      // 체감온도 계산
+      if (forecast.temperature !== undefined && forecast.windSpeed !== undefined) {
+        forecast.feelsLike = this.calculateFeelsLike(
+          forecast.temperature,
+          forecast.windSpeed,
+          forecast.humidity
+        );
+      }
+
+      return forecast;
+    } catch (error) {
+      logger.error('CSV 데이터 파싱 중 오류:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 예보 시각 문자열을 Date 객체로 변환
+   * 형식: YYYYMMDDHHmm
+   */
+  private parseForecastTime(timeStr: string): Date {
+    if (!timeStr || timeStr.length < 12) {
+      return new Date();
+    }
+
+    const year = parseInt(timeStr.substring(0, 4));
+    const month = parseInt(timeStr.substring(4, 6)) - 1;
+    const day = parseInt(timeStr.substring(6, 8));
+    const hour = parseInt(timeStr.substring(8, 10));
+    const minute = parseInt(timeStr.substring(10, 12));
+
+    return new Date(year, month, day, hour, minute);
+  }
+
+  /**
+   * 문자열을 숫자로 변환 (실패 시 undefined)
+   */
+  private parseNumber(value: string | undefined): number | undefined {
+    if (!value || value === '') return undefined;
+    const num = parseFloat(value);
+    return isNaN(num) ? undefined : num;
+  }
+
+  /**
+   * 체감온도 계산 (Windchill & Heat Index)
+   * @param temp 기온 (°C)
+   * @param windSpeed 풍속 (m/s)
+   * @param humidity 습도 (%)
+   */
+  private calculateFeelsLike(temp: number, windSpeed: number, humidity?: number): number {
+    // 10°C 이하: Windchill (바람찬기 지수)
+    if (temp <= 10 && windSpeed > 1.3) {
+      const windKmh = windSpeed * 3.6; // m/s -> km/h
+      const windchill = 13.12 + 0.6215 * temp - 11.37 * Math.pow(windKmh, 0.16) + 0.3965 * temp * Math.pow(windKmh, 0.16);
+      return Math.round(windchill * 10) / 10;
+    }
+
+    // 27°C 이상 + 습도 40% 이상: Heat Index (불쾌지수)
+    if (temp >= 27 && humidity !== undefined && humidity >= 40) {
+      const tempF = temp * 9 / 5 + 32; // °C -> °F
+      const heatIndex = -42.379 + 2.04901523 * tempF + 10.14333127 * humidity
+        - 0.22475541 * tempF * humidity - 0.00683783 * tempF * tempF
+        - 0.05481717 * humidity * humidity + 0.00122874 * tempF * tempF * humidity
+        + 0.00085282 * tempF * humidity * humidity - 0.00000199 * tempF * tempF * humidity * humidity;
+      const heatIndexC = (heatIndex - 32) * 5 / 9; // °F -> °C
+      return Math.round(heatIndexC * 10) / 10;
+    }
+
+    // 그 외: 실제 기온 그대로
+    return temp;
   }
 
 }
