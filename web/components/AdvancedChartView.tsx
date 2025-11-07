@@ -98,8 +98,23 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
 
       const histories: AlertHistory[] = response.data;
 
-      // 월별 집계
+      // 기간 내 모든 월 생성 (0으로 초기화)
+      const allMonths: string[] = [];
+      const current = new Date(startDate);
+      current.setDate(1); // 매월 1일로 설정
+      const end = new Date(endDate);
+      end.setDate(1);
+
+      while (current <= end) {
+        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+        allMonths.push(monthKey);
+        current.setMonth(current.getMonth() + 1);
+      }
+
+      // 월별 집계 (모든 월을 0으로 초기화)
       const monthlyMap = new Map<string, number>();
+      allMonths.forEach(month => monthlyMap.set(month, 0));
+
       const seasonalMap = new Map<string, number>();
       const yearlyMap = new Map<string, number>();
       const warningTypeMonthlyMap = new Map<string, Map<string, number>>();
@@ -123,15 +138,18 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
         const warningType = history.warningType;
         if (!warningTypeMonthlyMap.has(warningType)) {
           warningTypeMonthlyMap.set(warningType, new Map<string, number>());
+          // 모든 월을 0으로 초기화
+          allMonths.forEach(month => warningTypeMonthlyMap.get(warningType)!.set(month, 0));
         }
         const typeMonthlyMap = warningTypeMonthlyMap.get(warningType)!;
         typeMonthlyMap.set(monthKey, (typeMonthlyMap.get(monthKey) || 0) + 1);
       });
 
-      // 월별 데이터 정렬
-      const monthly = Array.from(monthlyMap.entries())
-        .map(([month, count]) => ({ month, count }))
-        .sort((a, b) => a.month.localeCompare(b.month));
+      // 월별 데이터 (모든 월 포함, 정렬됨)
+      const monthly = allMonths.map(month => ({
+        month,
+        count: monthlyMap.get(month) || 0,
+      }));
 
       setMonthlyData(monthly);
 
