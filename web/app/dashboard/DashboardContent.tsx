@@ -67,6 +67,11 @@ const HeatmapView = dynamic(() => import('@/components/HeatmapView'), {
   ),
 });
 
+// WeatherForecastCard도 클라이언트 사이드에서만 로드
+const WeatherForecastCard = dynamic(() => import('@/components/WeatherForecastCard'), {
+  ssr: false,
+});
+
 // NotificationManager도 클라이언트 사이드에서만 로드
 const NotificationManager = dynamic(() => import('@/components/NotificationManager'), {
   ssr: false,
@@ -448,6 +453,13 @@ export default function DashboardContent() {
             </p>
           )}
         </div>
+
+        {/* 날씨 예보 카드 */}
+        {selectedRegion && (
+          <div className="mb-6">
+            <WeatherForecastCard regionId={selectedRegion} />
+          </div>
+        )}
 
         {/* 특보 목록 */}
         <div className="mb-6">

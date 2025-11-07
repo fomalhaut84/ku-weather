@@ -270,3 +270,49 @@ export async function getAlertHistory(params: {
     };
   }
 }
+
+/**
+ * 날씨 예보 조회
+ */
+export interface WeatherForecast {
+  regionId: string;
+  regionName: string;
+  forecastTime: string;
+  temperature?: number;
+  feelsLike?: number;
+  minTemperature?: number;
+  maxTemperature?: number;
+  precipitationProbability?: number;
+  precipitation?: number;
+  humidity?: number;
+  skyCondition?: number;
+  precipitationType?: number;
+  windSpeed?: number;
+  windDirection?: number;
+}
+
+export async function getWeatherForecast(regionId: string): Promise<ApiResponse<WeatherForecast>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/forecast/${regionId}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
