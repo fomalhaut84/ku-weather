@@ -161,7 +161,13 @@ export default function DashboardContent() {
       setError(null);
 
       const filters: any = {};
-      if (selectedRegion) filters.upperRegion = selectedRegion;
+      if (selectedRegion) {
+        // 지역 코드를 지역 이름으로 변환
+        const selectedRegionObj = availableRegions.find((r) => r.code === selectedRegion);
+        if (selectedRegionObj) {
+          filters.upperRegion = selectedRegionObj.name;
+        }
+      }
       if (selectedWarningType) filters.warningType = selectedWarningType;
       if (selectedWarningLevel) filters.warningLevel = selectedWarningLevel;
 
@@ -367,7 +373,7 @@ export default function DashboardContent() {
               >
                 <option value="">전체 지역</option>
                 {availableRegions.map((region) => (
-                  <option key={region.code} value={region.name}>
+                  <option key={region.code} value={region.code}>
                     {region.name}
                   </option>
                 ))}
