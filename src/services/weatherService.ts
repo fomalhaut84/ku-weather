@@ -1210,21 +1210,62 @@ export class WeatherService {
   }
 
   /**
+   * 한국 표준시(KST, UTC+9) 기준 현재 시간 반환
+   * 서버가 UTC나 다른 시간대에서 실행되더라도 KST 시간을 정확히 계산
+   */
+  private getKSTNow(): Date {
+    const now = new Date();
+    // 현재 시간을 UTC 기준으로 변환
+    const utcMillis = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    // UTC에 9시간(KST 오프셋) 추가
+    const kstMillis = utcMillis + (9 * 60 * 60 * 1000);
+    return new Date(kstMillis);
+  }
+
+  /**
+   * 하위 지역 코드를 광역시도 코드로 변환
+   * @param regionId 지역 코드 (예: L1100510)
+   * @returns 광역시도 코드 (예: L1100000)
+   */
+  private getUpperRegionCode(regionId: string): string {
+    // 이미 gridCoordinates에 있으면 그대로 반환
+    if (this.gridCoordinates.has(regionId)) {
+      return regionId;
+    }
+
+    // L로 시작하는 8자리 이상 코드면 광역시도 코드로 변환
+    // 예: L1100510 → L1100000, L1010100 → L1010000
+    if (regionId.startsWith('L') && regionId.length >= 8) {
+      const upperCode = regionId.substring(0, 7) + '000';
+      if (this.gridCoordinates.has(upperCode)) {
+        logger.debug(`지역 코드 ${regionId}를 광역시도 코드 ${upperCode}로 매핑`);
+        return upperCode;
+      }
+    }
+
+    // 찾지 못하면 원본 반환
+    return regionId;
+  }
+
+  /**
    * 초단기예보 데이터 조회
    * @param regionId 지역 코드 (특보구역 코드)
    * @returns 날씨 예보 데이터
    */
   async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
     try {
-      // 1. 지역 코드를 격자 좌표로 변환
-      const gridInfo = this.gridCoordinates.get(regionId);
+      // 1. 지역 코드를 광역시도 코드로 변환 (필요한 경우)
+      const mappedRegionId = this.getUpperRegionCode(regionId);
+
+      // 2. 격자 좌표로 변환
+      const gridInfo = this.gridCoordinates.get(mappedRegionId);
       if (!gridInfo) {
-        logger.warn(`지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`);
+        logger.warn(`지역 코드 ${regionId} (매핑: ${mappedRegionId})에 대한 격자 좌표를 찾을 수 없습니다`);
         return null;
       }
 
-      // 2. 현재 시각 기준으로 API 파라미터 생성
-      const now = new Date();
+      // 3. KST 기준 현재 시각으로 API 파라미터 생성
+      const now = this.getKSTNow();
       const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
 
       // 자정 이전 시간대(00:00~00:30)에서 23:30으로 롤백되면 전날 날짜 사용
@@ -1402,12 +1443,13 @@ export class WeatherService {
   }
 
   /**
-   * 예보 시각 문자열을 Date 객체로 변환
+   * 예보 시각 문자열을 Date 객체로 변환 (KST 기준)
    * 형식: YYYYMMDDHHmm
+   * API 응답은 KST 시간이므로 UTC로 변환하여 저장
    */
   private parseForecastTime(timeStr: string): Date {
     if (!timeStr || timeStr.length < 12) {
-      return new Date();
+      return this.getKSTNow();
     }
 
     const year = parseInt(timeStr.substring(0, 4));
@@ -1416,7 +1458,10 @@ export class WeatherService {
     const hour = parseInt(timeStr.substring(8, 10));
     const minute = parseInt(timeStr.substring(10, 12));
 
-    return new Date(year, month, day, hour, minute);
+    // API 응답은 KST 시간(UTC+9)이므로, UTC로 변환
+    // Date.UTC는 UTC 밀리초를 반환하므로, KST에서 9시간을 빼야 함
+    const utcTime = Date.UTC(year, month, day, hour, minute) - 9 * 60 * 60 * 1000;
+    return new Date(utcTime);
   }
 
   /**
