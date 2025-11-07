@@ -1225,8 +1225,11 @@ export class WeatherService {
 
       // 2. 현재 시각 기준으로 API 파라미터 생성
       const now = new Date();
-      const baseDate = this.formatDate(now); // YYYYMMDD
-      const baseTime = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
+      const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
+
+      // 자정 이전 시간대(00:00~00:30)에서 23:30으로 롤백되면 전날 날짜 사용
+      const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
+      const baseDate = this.formatDate(baseDateTime); // YYYYMMDD
 
       // 3. API 호출
       const params = new URLSearchParams({
@@ -1279,18 +1282,23 @@ export class WeatherService {
   /**
    * 초단기예보 기준시각 계산
    * 매 시간 30분에 발표되므로, 30분 이전이면 이전 시각, 30분 이후면 현재 시각
+   * @returns baseTime: 시각(HHmm), needsPreviousDay: 전날 날짜가 필요한지 여부
    */
-  private getBaseTime(date: Date): string {
+  private getBaseTime(date: Date): { baseTime: string; needsPreviousDay: boolean } {
     const hour = date.getHours();
     const minute = date.getMinutes();
 
     // 30분 이전이면 이전 시각
     const baseHour = minute < 30 ? hour - 1 : hour;
 
-    // 0시 이전이면 23시로
-    const adjustedHour = baseHour < 0 ? 23 : baseHour;
+    // 0시 이전이면 23시로 (전날 날짜가 필요함)
+    const needsPreviousDay = baseHour < 0;
+    const adjustedHour = needsPreviousDay ? 23 : baseHour;
 
-    return `${String(adjustedHour).padStart(2, '0')}30`;
+    return {
+      baseTime: `${String(adjustedHour).padStart(2, '0')}30`,
+      needsPreviousDay
+    };
   }
 
   /**

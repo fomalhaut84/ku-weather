@@ -1,15 +1,16 @@
 import { logger } from '../../utils/logger';
-import { 
-  NotificationService, 
-  NotificationConfig, 
-  SlackConfig, 
-  TelegramConfig, 
-  DiscordConfig, 
-  EmailConfig 
+import {
+  NotificationService,
+  NotificationConfig,
+  SlackConfig,
+  TelegramConfig,
+  DiscordConfig,
+  EmailConfig
 } from './interfaces';
 import { SlackNotificationService } from './SlackNotificationService';
 import { MultiplatformNotificationService } from './MultiplatformNotificationService';
 import { TelegramNotificationService } from './TelegramNotificationService';
+import { WeatherService } from '../weatherService';
 
 /**
  * 알림 서비스 팩토리
@@ -21,7 +22,7 @@ export class NotificationFactory {
   /**
    * 설정에 따라 개별 알림 서비스들을 생성
    */
-  static createServices(config: NotificationConfig): NotificationService[] {
+  static createServices(config: NotificationConfig, weatherService?: WeatherService): NotificationService[] {
     const services: NotificationService[] = [];
     const environment = config.environment || 'development';
     const webDashboardUrl = config.webDashboardUrl || 'https://weather.starryjeju.net';
@@ -30,7 +31,7 @@ export class NotificationFactory {
 
     for (const platform of config.platforms) {
       try {
-        const service = this.createSingleService(platform, config, environment, webDashboardUrl);
+        const service = this.createSingleService(platform, config, environment, webDashboardUrl, weatherService);
         if (service) {
           services.push(service);
           logger.info(`${platform} 서비스 생성 완료`);
@@ -47,8 +48,8 @@ export class NotificationFactory {
   /**
    * 다중 플랫폼 매니저를 생성
    */
-  static createMultiplatformService(config: NotificationConfig): MultiplatformNotificationService {
-    const services = this.createServices(config);
+  static createMultiplatformService(config: NotificationConfig, weatherService?: WeatherService): MultiplatformNotificationService {
+    const services = this.createServices(config, weatherService);
     return new MultiplatformNotificationService(services);
   }
 
@@ -59,15 +60,16 @@ export class NotificationFactory {
     platform: string,
     config: NotificationConfig,
     environment: string,
-    webDashboardUrl: string
+    webDashboardUrl: string,
+    weatherService?: WeatherService
   ): NotificationService | null {
 
     switch (platform.toLowerCase()) {
       case 'slack':
-        return this.createSlackService(config.slack, environment, webDashboardUrl);
+        return this.createSlackService(config.slack, environment, webDashboardUrl, weatherService);
 
       case 'telegram':
-        return this.createTelegramService(config.telegram, environment, webDashboardUrl);
+        return this.createTelegramService(config.telegram, environment, webDashboardUrl, weatherService);
 
       case 'discord':
         return this.createDiscordService(config.discord, environment, webDashboardUrl);
@@ -84,7 +86,7 @@ export class NotificationFactory {
   /**
    * Slack 알림 서비스 생성
    */
-  private static createSlackService(config?: SlackConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
+  private static createSlackService(config?: SlackConfig, environment?: string, webDashboardUrl?: string, weatherService?: WeatherService): NotificationService | null {
     if (!config) {
       logger.warn('Slack 설정이 없습니다');
       return null;
@@ -96,7 +98,7 @@ export class NotificationFactory {
     }
 
     try {
-      const service = new SlackNotificationService(config, environment);
+      const service = new SlackNotificationService(config, environment, weatherService);
 
       if (!service.validateConfig()) {
         logger.error('Slack 설정 검증 실패');
@@ -113,7 +115,7 @@ export class NotificationFactory {
   /**
    * Telegram 알림 서비스 생성 (향후 구현 예정)
    */
-  private static createTelegramService(config?: TelegramConfig, environment?: string, webDashboardUrl?: string): NotificationService | null {
+  private static createTelegramService(config?: TelegramConfig, environment?: string, webDashboardUrl?: string, weatherService?: WeatherService): NotificationService | null {
     if (!config) {
       logger.warn('Telegram 설정이 없습니다');
       return null;
@@ -127,7 +129,7 @@ export class NotificationFactory {
       const service = new TelegramNotificationService({
         ...config,
         webDashboardUrl
-      });
+      }, weatherService);
 
       if (!service.validateConfig()) {
         logger.error('Telegram 설정 검증 실패');
