@@ -295,7 +295,7 @@ export class TelegramSubscriptionInterface implements PlatformSubscriptionInterf
 
       return {
         success: true,
-        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\n${this.webDashboardUrl}/subscribe?token=${this.escapeMarkdown(webToken)}\n\n📝 명령어로 설정 변경:\n/subscribe \\<지역\\> \\- 지역 추가\n/unsubscribe \\<지역\\> \\- 지역 해제\n/quiet \\<시작\\> \\<끝\\> \\- 조용시간 설정`
+        message: `📋 내 구독 현황\n\n${summary}\n\n🔧 웹에서 상세 설정:\n${this.webDashboardUrl}/settings?token=${this.escapeMarkdown(webToken)}\n\n📝 명령어로 설정 변경:\n/subscribe \\<지역\\> \\- 지역 추가\n/unsubscribe \\<지역\\> \\- 지역 해제\n/quiet \\<시작\\> \\<끝\\> \\- 조용시간 설정`
       };
 
     } catch (error) {

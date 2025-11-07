@@ -201,7 +201,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
     const text = `기상특보 구독이 설정되었습니다.\n\n` +
       `구독 정보:\n${summary}\n\n` +
       `설정 변경은 웹 페이지에서 가능합니다:\n` +
-      `${this.webDashboardUrl}/subscribe?token=${webToken}\n\n` +
+      `${this.webDashboardUrl}/settings?token=${webToken}\n\n` +
       this.getEmailFooter();
 
     const html = `
@@ -233,7 +233,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
               </div>
               <div class="web-link">
                 <p>더 자세한 설정은 웹 페이지에서 관리하세요:</p>
-                <a href="${this.webDashboardUrl}/subscribe?token=${webToken}" class="btn">
+                <a href="${this.webDashboardUrl}/settings?token=${webToken}" class="btn">
                   🌐 웹에서 설정 관리
                 </a>
               </div>
@@ -459,7 +459,7 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
       }
 
       message += `🌐 웹에서 상세 설정:\n` +
-        `${this.webDashboardUrl}/subscribe?token=${webToken}\n\n` +
+        `${this.webDashboardUrl}/settings?token=${webToken}\n\n` +
         `토큰: ${webToken.substring(0, 20)}... (24시간 유효)`;
 
       return {

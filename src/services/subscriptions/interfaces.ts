@@ -229,7 +229,7 @@ export interface SubscriptionCommandTemplates {
   
   // 웹 인터페이스 URL 패턴
   webUrls: {
-    subscription: string; // "/subscribe?token={token}"
+    subscription: string; // "/settings?token={token}"
     settings: string;     // "/settings?token={token}"
     stats: string;        // "/stats?token={token}"
   };
