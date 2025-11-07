@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { NotificationService, NotificationResult, TelegramConfig } from './interfaces';
-import { WeatherAlert, AlertChange, AlertChangeType } from '../../types/weather';
+import { WeatherAlert, AlertChange, AlertChangeType, WeatherForecast } from '../../types/weather';
 import { logger } from '../../utils/logger';
 import {
   formatDateTime,
@@ -14,6 +14,7 @@ import { groupAlertChanges, getLevelName, getLevelEmoji, formatRegionList } from
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
 import { SubscriptionCommandParams } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
+import { WeatherService } from '../weatherService';
 
 export class TelegramNotificationService implements NotificationService {
   readonly platformName = 'telegram';
@@ -28,8 +29,13 @@ export class TelegramNotificationService implements NotificationService {
   private webhookUrl?: string;
   private webhookSecret?: string;
   private webDashboardUrl: string;
+  private weatherService?: WeatherService;
 
-  constructor(private config: TelegramConfig & { webhookUrl?: string; webDashboardUrl?: string }) {
+  constructor(
+    private config: TelegramConfig & { webhookUrl?: string; webDashboardUrl?: string },
+    weatherService?: WeatherService
+  ) {
+    this.weatherService = weatherService;
     // Webhook 모드로 초기화 (polling 비활성화)
     // IPv4 강제 사용 + 타임아웃 설정으로 연결 안정성 향상
     // 이유: Node.js의 Happy Eyeballs 알고리즘이 IPv6를 먼저 시도하다가
@@ -419,6 +425,27 @@ export class TelegramNotificationService implements NotificationService {
         }];
       }
 
+      // 날씨 예보를 미리 조회하여 캐시 (중복 API 호출 방지)
+      const forecastCache = new Map<string, WeatherForecast | null>();
+      if (this.weatherService) {
+        const regionIds = new Set<string>();
+        for (const change of changes) {
+          if (change.type === 'NEW' && change.current?.regionId) {
+            regionIds.add(change.current.regionId);
+          }
+        }
+
+        for (const regionId of regionIds) {
+          try {
+            const forecast = await this.weatherService.getWeatherForecast(regionId);
+            forecastCache.set(regionId, forecast);
+          } catch (error) {
+            logger.debug(`날씨 예보 조회 실패 (${regionId}):`, error);
+            forecastCache.set(regionId, null);
+          }
+        }
+      }
+
       // 각 구독자에게 해당 구독자의 관심사에 맞는 변경사항만 포함된 배치 메시지 전송
       let successCount = 0;
       let failureCount = 0;
@@ -426,7 +453,7 @@ export class TelegramNotificationService implements NotificationService {
       for (const [userId, userChanges] of subscriberChanges.entries()) {
         try {
           // 해당 구독자의 관련 변경사항만으로 메시지 생성
-          const message = this.formatBatchAlertChanges(userChanges);
+          const message = await this.formatBatchAlertChanges(userChanges, forecastCache);
 
           const options = {
             parse_mode: 'Markdown' as const,
@@ -556,7 +583,7 @@ ${details}
 _한국 기상청_`;
   }
 
-  private formatBatchAlertChanges(changes: AlertChange[]): string {
+  private async formatBatchAlertChanges(changes: AlertChange[], forecastCache?: Map<string, WeatherForecast | null>): Promise<string> {
     const env = this.config.nodeEnv === 'development' ? '[DEV] ' :
                this.config.nodeEnv === 'staging' ? '[STAGING] ' : '';
 
@@ -567,7 +594,8 @@ _한국 기상청_`;
 
     let currentLevel = '';
 
-    groupedAlerts.forEach((group, groupIndex) => {
+    for (let groupIndex = 0; groupIndex < groupedAlerts.length; groupIndex++) {
+      const group = groupedAlerts[groupIndex];
       // 수준 헤더 (수준이 변경될 때만)
       if (group.level !== currentLevel) {
         currentLevel = group.level;
@@ -591,14 +619,59 @@ _한국 기상청_`;
       }
       message += regionTexts.join('\n');
 
+      // 날씨 정보 추가 (첫 번째 변경사항의 지역ID 사용, 캐시에서 조회)
+      if (forecastCache && group.changeType === 'NEW' && groupIndex === 0) {
+        const firstChange = changes.find(c =>
+          c.current?.warningType === group.warningType &&
+          (c.current?.level === group.level || c.current?.command === group.level)
+        );
+
+        if (firstChange?.current?.regionId) {
+          const forecast = forecastCache.get(firstChange.current.regionId);
+          if (forecast) {
+            const weatherInfo = this.formatWeatherInfo(forecast);
+            message += `\n${weatherInfo}`;
+          }
+        }
+      }
+
       // 그룹 간 구분
       if (groupIndex < groupedAlerts.length - 1) {
         message += '\n\n';
       }
-    });
+    }
 
     message += `\n\n_한국 기상청_`;
     return message;
+  }
+
+  /**
+   * 날씨 예보 정보를 포맷팅
+   */
+  private formatWeatherInfo(forecast: WeatherForecast): string {
+    const parts: string[] = [];
+
+    if (forecast.temperature !== undefined) {
+      parts.push(`🌡️ ${forecast.temperature}°C`);
+    }
+
+    if (forecast.feelsLike !== undefined && forecast.feelsLike !== forecast.temperature) {
+      parts.push(`(체감 ${forecast.feelsLike}°C)`);
+    }
+
+    if (forecast.precipitationProbability !== undefined) {
+      parts.push(`☔ ${forecast.precipitationProbability}%`);
+    }
+
+    if (forecast.humidity !== undefined) {
+      parts.push(`💧 ${forecast.humidity}%`);
+    }
+
+    if (parts.length === 0) {
+      return '';
+    }
+
+    return `  📊 현재 날씨: ${parts.join(' ')}`;
   }
 
   private getChangeEmoji(type: AlertChangeType): string {

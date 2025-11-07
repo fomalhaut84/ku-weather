@@ -164,7 +164,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
               type: 'button',
               text: { type: 'plain_text', text: '⚙️ 웹에서 설정' },
               action_id: 'open_web_settings',
-              url: `${this.webDashboardUrl}/subscribe?token=${webToken}`
+              url: `${this.webDashboardUrl}/settings?token=${webToken}`
             }
           ]
         }
@@ -398,7 +398,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
   private async handleSettingsCommand(params: SubscriptionCommandParams): Promise<SubscriptionCommandResult> {
     const webToken = await this.generateWebToken(params.userId);
-    const webUrl = `${this.webDashboardUrl}/subscribe?token=${webToken}`;
+    const webUrl = `${this.webDashboardUrl}/settings?token=${webToken}`;
 
     const message = `⚙️ 개인 구독 설정\n\n` +
       `🌐 웹에서 설정: ${webUrl}\n\n` +
@@ -416,7 +416,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
     return {
       success: true,
-      message: `🌍 지역 선택\n\n웹 설정 페이지에서 원하는 지역을 선택하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#regions`
+      message: `🌍 지역 선택\n\n웹 설정 페이지에서 원하는 지역을 선택하세요:\n${this.webDashboardUrl}/settings?token=${webToken}#regions`
     };
   }
 
@@ -426,7 +426,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
     return {
       success: true,
-      message: `⚠️ 특보 종류 선택\n\n웹 설정 페이지에서 원하는 특보를 선택하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#warnings`
+      message: `⚠️ 특보 종류 선택\n\n웹 설정 페이지에서 원하는 특보를 선택하세요:\n${this.webDashboardUrl}/settings?token=${webToken}#warnings`
     };
   }
 
@@ -436,7 +436,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
     return {
       success: true,
-      message: `🔇 조용한 시간대 설정\n\n웹 설정 페이지에서 조용한 시간대를 설정하세요:\n${this.webDashboardUrl}/subscribe?token=${webToken}#quiet`
+      message: `🔇 조용한 시간대 설정\n\n웹 설정 페이지에서 조용한 시간대를 설정하세요:\n${this.webDashboardUrl}/settings?token=${webToken}#quiet`
     };
   }
 
@@ -457,7 +457,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
 
     return {
       success: true,
-      message: `📋 현재 구독 설정\n\n${summary}\n\n🔧 설정 변경: ${this.webDashboardUrl}/subscribe?token=${webToken}`
+      message: `📋 현재 구독 설정\n\n${summary}\n\n🔧 설정 변경: ${this.webDashboardUrl}/settings?token=${webToken}`
     };
   }
 

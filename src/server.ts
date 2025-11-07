@@ -225,6 +225,51 @@ export class HttpServer {
       }
     });
 
+    // 웹 대시보드 API: 날씨 예보 조회
+    this.app.get('/api/forecast/:regionId', async (req: Request, res: Response) => {
+      try {
+        // WeatherService가 주입되어 있는지 확인
+        if (!this.weatherService) {
+          logger.error('WeatherService not injected');
+          return res.status(500).json({
+            success: false,
+            error: 'Service not available'
+          });
+        }
+
+        const regionId = req.params.regionId;
+
+        // 지역 코드 검증
+        if (!regionId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Region ID is required'
+          });
+        }
+
+        // 단기예보 데이터 조회
+        const forecast = await this.weatherService.getWeatherForecast(regionId);
+
+        if (!forecast) {
+          return res.status(404).json({
+            success: false,
+            error: 'Forecast data not available for this region'
+          });
+        }
+
+        res.json({
+          success: true,
+          data: forecast
+        });
+      } catch (error) {
+        logger.error('Error fetching forecast:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Internal server error'
+        });
+      }
+    });
+
     // 웹 대시보드 API: 사용자 구독 정보 조회
     this.app.get('/api/subscriptions/:token', async (req: Request, res: Response) => {
       try {

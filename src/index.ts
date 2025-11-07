@@ -79,8 +79,8 @@ async function main() {
 
     const weatherService = new WeatherService(config.weatherApiKey);
 
-    // 새로운 다중 플랫폼 알림 서비스 초기화
-    const notificationService = NotificationFactory.createMultiplatformService(config.notificationConfig);
+    // 새로운 다중 플랫폼 알림 서비스 초기화 (weatherService 주입)
+    const notificationService = NotificationFactory.createMultiplatformService(config.notificationConfig, weatherService);
 
     // 설정 유효성 검사
     const validation = NotificationFactory.validateConfig(config.notificationConfig);

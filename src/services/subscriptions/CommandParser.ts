@@ -17,34 +17,28 @@ import {
  * 지역 코드 매핑 (사용자 친화적 이름)
  */
 export const REGION_MAPPINGS: RegionMapping = {
-  // 수도권
+  // 서울특별시
   'seoul': { code: 'L1100000', name: '서울특별시', aliases: ['seoul', '서울', 'Seoul'] },
+
+  // 광역시
+  'incheon': { code: 'L1110000', name: '인천광역시', aliases: ['incheon', '인천', 'Incheon'] },
+  'daejeon': { code: 'L1120000', name: '대전광역시', aliases: ['daejeon', '대전', 'Daejeon'] },
+  'gwangju': { code: 'L1130000', name: '광주광역시', aliases: ['gwangju', '광주', 'Gwangju'] },
+  'daegu': { code: 'L1140000', name: '대구광역시', aliases: ['daegu', '대구', 'Daegu'] },
+  'busan': { code: 'L1150000', name: '부산광역시', aliases: ['busan', '부산', 'Busan'] },
+  'ulsan': { code: 'L1160000', name: '울산광역시', aliases: ['ulsan', '울산', 'Ulsan'] },
+  'sejong': { code: 'L1170000', name: '세종특별자치시', aliases: ['sejong', '세종', 'Sejong'] },
+
+  // 도
   'gyeonggi': { code: 'L1010000', name: '경기도', aliases: ['gyeonggi', '경기', 'Gyeonggi'] },
-  'incheon': { code: 'L2300000', name: '인천광역시', aliases: ['incheon', '인천', 'Incheon'] },
-  
-  // 영남권
-  'busan': { code: 'L2600000', name: '부산광역시', aliases: ['busan', '부산', 'Busan'] },
-  'daegu': { code: 'L2700000', name: '대구광역시', aliases: ['daegu', '대구', 'Daegu'] },
-  'ulsan': { code: 'L3100000', name: '울산광역시', aliases: ['ulsan', '울산', 'Ulsan'] },
-  'gyeongnam': { code: 'L3000000', name: '경상남도', aliases: ['gyeongnam', '경남', 'Gyeongnam'] },
-  'gyeongbuk': { code: 'L2900000', name: '경상북도', aliases: ['gyeongbuk', '경북', 'Gyeongbuk'] },
-  
-  // 호남권
-  'gwangju': { code: 'L2400000', name: '광주광역시', aliases: ['gwangju', '광주', 'Gwangju'] },
-  'jeonnam': { code: 'L4600000', name: '전라남도', aliases: ['jeonnam', '전남', 'Jeonnam'] },
-  'jeonbuk': { code: 'L4500000', name: '전라북도', aliases: ['jeonbuk', '전북', 'Jeonbuk'] },
-  
-  // 충청권
-  'daejeon': { code: 'L2500000', name: '대전광역시', aliases: ['daejeon', '대전', 'Daejeon'] },
-  'sejong': { code: 'L3600000', name: '세종특별자치시', aliases: ['sejong', '세종', 'Sejong'] },
-  'chungnam': { code: 'L4400000', name: '충청남도', aliases: ['chungnam', '충남', 'Chungnam'] },
-  'chungbuk': { code: 'L4300000', name: '충청북도', aliases: ['chungbuk', '충북', 'Chungbuk'] },
-  
-  // 강원권
-  'gangwon': { code: 'L4200000', name: '강원도', aliases: ['gangwon', '강원', 'Gangwon'] },
-  
-  // 제주권
-  'jeju': { code: 'L5010000', name: '제주특별자치도', aliases: ['jeju', '제주', 'Jeju'] },
+  'gangwon': { code: 'L1020000', name: '강원특별자치도', aliases: ['gangwon', '강원', 'Gangwon'] },
+  'chungnam': { code: 'L1030000', name: '충청남도', aliases: ['chungnam', '충남', 'Chungnam'] },
+  'chungbuk': { code: 'L1040000', name: '충청북도', aliases: ['chungbuk', '충북', 'Chungbuk'] },
+  'jeonbuk': { code: 'L1050000', name: '전북특별자치도', aliases: ['jeonbuk', '전북', 'Jeonbuk'] },
+  'jeonnam': { code: 'L1060000', name: '전라남도', aliases: ['jeonnam', '전남', 'Jeonnam'] },
+  'gyeongbuk': { code: 'L1070000', name: '경상북도', aliases: ['gyeongbuk', '경북', 'Gyeongbuk'] },
+  'gyeongnam': { code: 'L1080000', name: '경상남도', aliases: ['gyeongnam', '경남', 'Gyeongnam'] },
+  'jeju': { code: 'L1090000', name: '제주특별자치도', aliases: ['jeju', '제주', 'Jeju'] },
   
   // 특수 지역
   'nationwide': { code: '', name: '전국', aliases: ['all', 'nationwide', '전국', '전체'] }

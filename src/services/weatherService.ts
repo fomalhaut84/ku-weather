@@ -1,4 +1,4 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange } from '../types/weather';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, WeatherForecast } from '../types/weather';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
 import * as fs from 'fs';
@@ -7,6 +7,7 @@ import * as path from 'path';
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
+  private readonly forecastUrl = 'https://apihub.kma.go.kr/api/typ01/url/fct_afs_dl.php';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
   private alertCache: AlertCache = new AlertCache();
@@ -14,6 +15,52 @@ export class WeatherService {
   private isInitialized: boolean = false;
   private lastLogTime: Date | null = null;
   private lastApiCalls: string[] = [];
+
+  // 기상청 특보구역 코드 -> 격자 좌표 매핑
+  private readonly gridCoordinates: Map<string, { nx: number; ny: number; name: string }> = new Map([
+    // 서울특별시
+    ['L1100000', { nx: 60, ny: 127, name: '서울특별시' }],
+    ['L1100100', { nx: 60, ny: 127, name: '서울동남권' }],
+    ['L1100200', { nx: 60, ny: 127, name: '서울동북권' }],
+    ['L1100300', { nx: 60, ny: 127, name: '서울서남권' }],
+    ['L1100400', { nx: 60, ny: 127, name: '서울서북권' }],
+
+    // 광역시
+    ['L1110000', { nx: 55, ny: 124, name: '인천광역시' }],
+    ['L1120000', { nx: 67, ny: 100, name: '대전광역시' }],
+    ['L1130000', { nx: 58, ny: 74, name: '광주광역시' }],
+    ['L1140000', { nx: 89, ny: 90, name: '대구광역시' }],
+    ['L1150000', { nx: 98, ny: 76, name: '부산광역시' }],
+    ['L1160000', { nx: 102, ny: 84, name: '울산광역시' }],
+    ['L1170000', { nx: 66, ny: 103, name: '세종특별자치시' }],
+
+    // 경기도
+    ['L1010000', { nx: 60, ny: 120, name: '경기도' }],
+
+    // 강원특별자치도
+    ['L1020000', { nx: 73, ny: 134, name: '강원특별자치도' }],
+
+    // 충청남도
+    ['L1030000', { nx: 55, ny: 107, name: '충청남도' }],
+
+    // 충청북도
+    ['L1040000', { nx: 69, ny: 107, name: '충청북도' }],
+
+    // 전북특별자치도
+    ['L1050000', { nx: 63, ny: 89, name: '전북특별자치도' }],
+
+    // 전라남도
+    ['L1060000', { nx: 51, ny: 67, name: '전라남도' }],
+
+    // 경상북도
+    ['L1070000', { nx: 87, ny: 106, name: '경상북도' }],
+
+    // 경상남도
+    ['L1080000', { nx: 91, ny: 77, name: '경상남도' }],
+
+    // 제주특별자치도
+    ['L1090000', { nx: 52, ny: 38, name: '제주특별자치도' }],
+  ]);
 
   constructor(authKey: string) {
     this.authKey = authKey;
@@ -1160,6 +1207,299 @@ export class WeatherService {
     } catch (error) {
       logger.error('status.log 파일 저장 중 오류:', error);
     }
+  }
+
+  /**
+   * 한국 표준시(KST, UTC+9) 기준 현재 시간 반환
+   * 서버가 UTC나 다른 시간대에서 실행되더라도 KST 시간을 정확히 계산
+   */
+  private getKSTNow(): Date {
+    const now = new Date();
+    // 현재 시간을 UTC 기준으로 변환
+    const utcMillis = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+    // UTC에 9시간(KST 오프셋) 추가
+    const kstMillis = utcMillis + (9 * 60 * 60 * 1000);
+    return new Date(kstMillis);
+  }
+
+  /**
+   * 하위 지역 코드를 광역시도 코드로 변환
+   * @param regionId 지역 코드 (예: L1100510)
+   * @returns 광역시도 코드 (예: L1100000)
+   */
+  private getUpperRegionCode(regionId: string): string {
+    // 이미 gridCoordinates에 있으면 그대로 반환
+    if (this.gridCoordinates.has(regionId)) {
+      return regionId;
+    }
+
+    // L로 시작하는 8자리 이상 코드면 광역시도 코드로 변환
+    // 예: L1100510 → L1100000, L1010100 → L1010000
+    if (regionId.startsWith('L') && regionId.length >= 8) {
+      const upperCode = regionId.substring(0, 5) + '000';
+      if (this.gridCoordinates.has(upperCode)) {
+        logger.debug(`지역 코드 ${regionId}를 광역시도 코드 ${upperCode}로 매핑`);
+        return upperCode;
+      }
+    }
+
+    // 찾지 못하면 원본 반환
+    return regionId;
+  }
+
+  /**
+   * 초단기예보 데이터 조회
+   * @param regionId 지역 코드 (특보구역 코드)
+   * @returns 날씨 예보 데이터
+   */
+  async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
+    try {
+      // 1. 지역 코드를 광역시도 코드로 변환 (필요한 경우)
+      const mappedRegionId = this.getUpperRegionCode(regionId);
+
+      // 2. 격자 좌표로 변환
+      const gridInfo = this.gridCoordinates.get(mappedRegionId);
+      if (!gridInfo) {
+        logger.warn(`지역 코드 ${regionId} (매핑: ${mappedRegionId})에 대한 격자 좌표를 찾을 수 없습니다`);
+        return null;
+      }
+
+      // 3. KST 기준 현재 시각으로 API 파라미터 생성
+      const now = this.getKSTNow();
+      const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
+
+      // 자정 이전 시간대(00:00~00:30)에서 23:30으로 롤백되면 전날 날짜 사용
+      const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
+      const baseDate = this.formatDate(baseDateTime); // YYYYMMDD
+
+      // 3. API 호출
+      const params = new URLSearchParams({
+        authKey: this.authKey,
+        base_date: baseDate,
+        base_time: baseTime,
+        nx: gridInfo.nx.toString(),
+        ny: gridInfo.ny.toString(),
+        numOfRows: '100',
+        pageNo: '1',
+        dataType: 'JSON'
+      });
+
+      const url = `${this.forecastUrl}?${params.toString()}`;
+      logger.debug(`초단기예보 API 호출: ${url}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+      }
+
+      const jsonData = await response.json();
+
+      // 4. JSON 파싱 및 데이터 집계
+      const forecast = this.parseForecastData(jsonData, regionId, gridInfo.name);
+
+      if (!forecast) {
+        logger.warn(`지역 ${gridInfo.name}(${regionId})의 예보 데이터를 파싱할 수 없습니다`);
+        return null;
+      }
+
+      logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공`);
+      return forecast;
+    } catch (error) {
+      logger.error(`날씨 예보 조회 중 오류 (지역: ${regionId}):`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 날짜를 YYYYMMDD 형식으로 변환
+   */
+  private formatDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+  }
+
+  /**
+   * 초단기예보 기준시각 계산
+   * 매 시간 30분에 발표되므로, 30분 이전이면 이전 시각, 30분 이후면 현재 시각
+   * @returns baseTime: 시각(HHmm), needsPreviousDay: 전날 날짜가 필요한지 여부
+   */
+  private getBaseTime(date: Date): { baseTime: string; needsPreviousDay: boolean } {
+    const hour = date.getHours();
+    const minute = date.getMinutes();
+
+    // 30분 이전이면 이전 시각
+    const baseHour = minute < 30 ? hour - 1 : hour;
+
+    // 0시 이전이면 23시로 (전날 날짜가 필요함)
+    const needsPreviousDay = baseHour < 0;
+    const adjustedHour = needsPreviousDay ? 23 : baseHour;
+
+    return {
+      baseTime: `${String(adjustedHour).padStart(2, '0')}30`,
+      needsPreviousDay
+    };
+  }
+
+  /**
+   * JSON 응답 데이터를 WeatherForecast 객체로 파싱
+   */
+  private parseForecastData(jsonData: any, regionId: string, regionName: string): WeatherForecast | null {
+    try {
+      // API 응답 검증
+      if (!jsonData || !jsonData.response) {
+        logger.warn('API 응답이 비어있습니다');
+        return null;
+      }
+
+      const response = jsonData.response;
+
+      // 헤더 검증
+      if (response.header?.resultCode !== '00') {
+        logger.warn(`API 오류: ${response.header?.resultMsg || 'Unknown error'}`);
+        return null;
+      }
+
+      // 데이터 추출
+      const items = response.body?.items?.item;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        logger.warn('예보 데이터가 비어있습니다');
+        return null;
+      }
+
+      // 1단계: 시간대별로 그룹화
+      const timeSlices = new Map<string, any[]>();
+      for (const item of items) {
+        if (item.fcstDate && item.fcstTime) {
+          const timeKey = item.fcstDate + item.fcstTime;
+          if (!timeSlices.has(timeKey)) {
+            timeSlices.set(timeKey, []);
+          }
+          timeSlices.get(timeKey)!.push(item);
+        }
+      }
+
+      if (timeSlices.size === 0) {
+        logger.warn('유효한 예보 시간대가 없습니다');
+        return null;
+      }
+
+      // 2단계: 가장 가까운 미래 시간대 선택
+      const now = new Date();
+      const sortedTimes = Array.from(timeSlices.keys()).sort();
+      let selectedTime = sortedTimes[0]; // 기본값: 첫 번째 시간대
+
+      for (const timeKey of sortedTimes) {
+        const forecastTime = this.parseForecastTime(timeKey);
+        if (forecastTime >= now) {
+          selectedTime = timeKey;
+          break;
+        }
+      }
+
+      logger.debug(`선택된 예보 시간대: ${selectedTime} (총 ${timeSlices.size}개 시간대 중)`);
+
+      // 3단계: 선택된 시간대의 데이터만 사용
+      const selectedItems = timeSlices.get(selectedTime) || [];
+      const dataMap: Record<string, string> = {};
+
+      for (const item of selectedItems) {
+        if (item.category && item.fcstValue !== undefined) {
+          dataMap[item.category] = item.fcstValue;
+        }
+      }
+
+      const forecastDateTime = selectedTime;
+
+      // WeatherForecast 객체 생성
+      const forecast: WeatherForecast = {
+        regionId,
+        regionName,
+        forecastTime: this.parseForecastTime(forecastDateTime),
+        temperature: this.parseNumber(dataMap['T1H']),
+        humidity: this.parseNumber(dataMap['REH']),
+        skyCondition: this.parseNumber(dataMap['SKY']),
+        precipitationType: this.parseNumber(dataMap['PTY']),
+        precipitation: this.parseNumber(dataMap['RN1']),
+        windSpeed: this.parseNumber(dataMap['WSD']),
+        windDirection: this.parseNumber(dataMap['VEC']),
+      };
+
+      // 체감온도 계산
+      if (forecast.temperature !== undefined && forecast.windSpeed !== undefined) {
+        forecast.feelsLike = this.calculateFeelsLike(
+          forecast.temperature,
+          forecast.windSpeed,
+          forecast.humidity
+        );
+      }
+
+      return forecast;
+    } catch (error) {
+      logger.error('JSON 데이터 파싱 중 오류:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 예보 시각 문자열을 Date 객체로 변환 (KST 기준)
+   * 형식: YYYYMMDDHHmm
+   * API 응답은 KST 시간이므로 UTC로 변환하여 저장
+   */
+  private parseForecastTime(timeStr: string): Date {
+    if (!timeStr || timeStr.length < 12) {
+      return this.getKSTNow();
+    }
+
+    const year = parseInt(timeStr.substring(0, 4));
+    const month = parseInt(timeStr.substring(4, 6)) - 1;
+    const day = parseInt(timeStr.substring(6, 8));
+    const hour = parseInt(timeStr.substring(8, 10));
+    const minute = parseInt(timeStr.substring(10, 12));
+
+    // API 응답은 KST 시간(UTC+9)이므로, UTC로 변환
+    // Date.UTC는 UTC 밀리초를 반환하므로, KST에서 9시간을 빼야 함
+    const utcTime = Date.UTC(year, month, day, hour, minute) - 9 * 60 * 60 * 1000;
+    return new Date(utcTime);
+  }
+
+  /**
+   * 문자열을 숫자로 변환 (실패 시 undefined)
+   */
+  private parseNumber(value: string | undefined): number | undefined {
+    if (!value || value === '') return undefined;
+    const num = parseFloat(value);
+    return isNaN(num) ? undefined : num;
+  }
+
+  /**
+   * 체감온도 계산 (Windchill & Heat Index)
+   * @param temp 기온 (°C)
+   * @param windSpeed 풍속 (m/s)
+   * @param humidity 습도 (%)
+   */
+  private calculateFeelsLike(temp: number, windSpeed: number, humidity?: number): number {
+    // 10°C 이하: Windchill (바람찬기 지수)
+    if (temp <= 10 && windSpeed > 1.3) {
+      const windKmh = windSpeed * 3.6; // m/s -> km/h
+      const windchill = 13.12 + 0.6215 * temp - 11.37 * Math.pow(windKmh, 0.16) + 0.3965 * temp * Math.pow(windKmh, 0.16);
+      return Math.round(windchill * 10) / 10;
+    }
+
+    // 27°C 이상 + 습도 40% 이상: Heat Index (불쾌지수)
+    if (temp >= 27 && humidity !== undefined && humidity >= 40) {
+      const tempF = temp * 9 / 5 + 32; // °C -> °F
+      const heatIndex = -42.379 + 2.04901523 * tempF + 10.14333127 * humidity
+        - 0.22475541 * tempF * humidity - 0.00683783 * tempF * tempF
+        - 0.05481717 * humidity * humidity + 0.00122874 * tempF * tempF * humidity
+        + 0.00085282 * tempF * humidity * humidity - 0.00000199 * tempF * tempF * humidity * humidity;
+      const heatIndexC = (heatIndex - 32) * 5 / 9; // °F -> °C
+      return Math.round(heatIndexC * 10) / 10;
+    }
+
+    // 그 외: 실제 기온 그대로
+    return temp;
   }
 
 }
