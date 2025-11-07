@@ -70,16 +70,16 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
       const endDate = new Date();
       const startDate = new Date();
 
-      // 기간 설정
+      // 기간 설정 (현재 달 포함 N개월)
       switch (period) {
         case '6m':
-          startDate.setMonth(startDate.getMonth() - 6);
+          startDate.setMonth(startDate.getMonth() - 5); // 6개월 = 현재 + 5개월 전
           break;
         case '1y':
-          startDate.setFullYear(startDate.getFullYear() - 1);
+          startDate.setMonth(startDate.getMonth() - 11); // 12개월 = 현재 + 11개월 전
           break;
         case '2y':
-          startDate.setFullYear(startDate.getFullYear() - 2);
+          startDate.setMonth(startDate.getMonth() - 23); // 24개월 = 현재 + 23개월 전
           break;
       }
 
