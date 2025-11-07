@@ -131,5 +131,63 @@ export type AlertChangeType =
   | 'LEVEL_DOWN'
   /** 시간 연장: 발효시각이 변경됨 */
   | 'TIME_EXTENDED'
-  /** 내용 변경: 동일 수준에서 내용이 변경됨 */  
+  /** 내용 변경: 동일 수준에서 내용이 변경됨 */
   | 'MODIFIED';
+
+/**
+ * 단기예보 데이터
+ */
+export interface WeatherForecast {
+  /** 지역 코드 */
+  regionId: string;
+  /** 지역명 */
+  regionName: string;
+  /** 예보 시각 */
+  forecastTime: Date;
+  /** 기온 (°C) */
+  temperature?: number;
+  /** 체감온도 (°C) */
+  feelsLike?: number;
+  /** 일 최저기온 (°C) */
+  minTemperature?: number;
+  /** 일 최고기온 (°C) */
+  maxTemperature?: number;
+  /** 강수확률 (%) */
+  precipitationProbability?: number;
+  /** 1시간 강수량 (mm) */
+  precipitation?: number;
+  /** 습도 (%) */
+  humidity?: number;
+  /** 하늘상태 (1:맑음, 3:구름많음, 4:흐림) */
+  skyCondition?: number;
+  /** 강수형태 (0:없음, 1:비, 2:비/눈, 3:눈, 5:빗방울, 6:빗방울눈날림, 7:눈날림) */
+  precipitationType?: number;
+  /** 풍속 (m/s) */
+  windSpeed?: number;
+  /** 풍향 (deg) */
+  windDirection?: number;
+  /** 낙뢰 확률 (%) */
+  lightningProbability?: number;
+}
+
+/**
+ * 하늘상태 코드
+ */
+export enum SkyCondition {
+  CLEAR = 1,      // 맑음
+  PARTLY_CLOUDY = 3,  // 구름많음
+  CLOUDY = 4      // 흐림
+}
+
+/**
+ * 강수형태 코드
+ */
+export enum PrecipitationType {
+  NONE = 0,           // 없음
+  RAIN = 1,           // 비
+  RAIN_SNOW = 2,      // 비/눈
+  SNOW = 3,           // 눈
+  RAIN_DROP = 5,      // 빗방울
+  RAIN_DROP_SNOW = 6, // 빗방울눈날림
+  SNOW_FLURRY = 7     // 눈날림
+}
