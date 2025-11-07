@@ -236,8 +236,8 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
       },
       borderColor: 'rgba(255, 255, 255, 0.5)',
       borderWidth: 1,
-      width: ({ chart }: any) => (chart.chartArea || {}).width / timeLabels.length - 1,
-      height: ({ chart }: any) => (chart.chartArea || {}).height / regionLabels.length - 1,
+      width: ({ chart }: any) => (chart.chartArea || {}).width / Math.max(timeLabels.length, 1) - 1,
+      height: ({ chart }: any) => (chart.chartArea || {}).height / Math.max(regionLabels.length, 1) - 1,
     }],
   };
 
@@ -253,8 +253,8 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
       },
       borderColor: 'rgba(255, 255, 255, 0.5)',
       borderWidth: 1,
-      width: ({ chart }: any) => (chart.chartArea || {}).width / monthLabels.length - 1,
-      height: ({ chart }: any) => (chart.chartArea || {}).height / regionLabels.length - 1,
+      width: ({ chart }: any) => (chart.chartArea || {}).width / Math.max(monthLabels.length, 1) - 1,
+      height: ({ chart }: any) => (chart.chartArea || {}).height / Math.max(regionLabels.length, 1) - 1,
     }],
   };
 
@@ -270,8 +270,8 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
       },
       borderColor: 'rgba(255, 255, 255, 0.5)',
       borderWidth: 1,
-      width: ({ chart }: any) => (chart.chartArea || {}).width / regionLabels.length - 1,
-      height: ({ chart }: any) => (chart.chartArea || {}).height / warningTypeLabels.length - 1,
+      width: ({ chart }: any) => (chart.chartArea || {}).width / Math.max(regionLabels.length, 1) - 1,
+      height: ({ chart }: any) => (chart.chartArea || {}).height / Math.max(warningTypeLabels.length, 1) - 1,
     }],
   };
 
