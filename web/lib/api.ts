@@ -213,3 +213,60 @@ export async function getAlertStatistics(params: {
     };
   }
 }
+
+/**
+ * 특보 이력 조회
+ */
+export interface AlertHistory {
+  id: string;
+  regionId: string;
+  regionName: string;
+  upperRegion: string | null;
+  warningType: string;
+  warningLevel: string;
+  changeType: 'NEW' | 'RESOLVED' | 'LEVEL_UP' | 'LEVEL_DOWN' | 'TIME_EXTENDED' | 'MODIFIED';
+  previousData: any;
+  currentData: any;
+  timestamp: string;
+}
+
+export async function getAlertHistory(params: {
+  startDate: Date;
+  endDate: Date;
+  regionId?: string;
+  warningType?: string;
+  changeType?: string;
+}): Promise<ApiResponse<AlertHistory[]>> {
+  try {
+    const queryParams = new URLSearchParams({
+      startDate: params.startDate.toISOString(),
+      endDate: params.endDate.toISOString(),
+    });
+
+    if (params.regionId) queryParams.append('regionId', params.regionId);
+    if (params.warningType) queryParams.append('warningType', params.warningType);
+    if (params.changeType) queryParams.append('changeType', params.changeType);
+
+    const response = await fetch(`${API_BASE_URL}/api/alerts/history?${queryParams}`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}

@@ -41,6 +41,19 @@ const ChartView = dynamic(() => import('@/components/ChartView'), {
   ),
 });
 
+// AdvancedChartView도 클라이언트 사이드에서만 로드
+const AdvancedChartView = dynamic(() => import('@/components/AdvancedChartView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">고급 차트 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
+
 // NotificationManager도 클라이언트 사이드에서만 로드
 const NotificationManager = dynamic(() => import('@/components/NotificationManager'), {
   ssr: false,
@@ -70,7 +83,9 @@ export default function DashboardContent() {
 
   // 통계 표시 상태
   const [showStats, setShowStats] = useState(false);
+  const [statsTab, setStatsTab] = useState<'basic' | 'advanced'>('basic');
   const [statsPeriod, setStatsPeriod] = useState<'7d' | '30d'>('7d');
+  const [advancedPeriod, setAdvancedPeriod] = useState<'6m' | '1y' | '2y'>('1y');
 
   // 브라우저 알림 상태
   const [notificationEnabled, setNotificationEnabled] = useState(false);
@@ -494,9 +509,43 @@ export default function DashboardContent() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">📊 특보 발생 통계</h2>
-            <div className="flex items-center gap-4">
-              {showStats && (
-                <div className="flex gap-2">
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              {showStats ? '통계 숨기기' : '통계 보기'}
+            </button>
+          </div>
+
+          {showStats ? (
+            <>
+              {/* 탭 네비게이션 */}
+              <div className="flex gap-4 mb-4 border-b">
+                <button
+                  onClick={() => setStatsTab('basic')}
+                  className={`px-4 py-2 font-medium transition-colors ${
+                    statsTab === 'basic'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  기본 통계
+                </button>
+                <button
+                  onClick={() => setStatsTab('advanced')}
+                  className={`px-4 py-2 font-medium transition-colors ${
+                    statsTab === 'advanced'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  고급 통계 (월별/계절별/연도별)
+                </button>
+              </div>
+
+              {/* 기간 선택 버튼 */}
+              {statsTab === 'basic' ? (
+                <div className="flex gap-2 mb-4">
                   <button
                     onClick={() => setStatsPeriod('7d')}
                     className={`px-3 py-1 rounded text-sm ${
@@ -518,18 +567,48 @@ export default function DashboardContent() {
                     최근 30일
                   </button>
                 </div>
+              ) : (
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => setAdvancedPeriod('6m')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      advancedPeriod === '6m'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 6개월
+                  </button>
+                  <button
+                    onClick={() => setAdvancedPeriod('1y')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      advancedPeriod === '1y'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 1년
+                  </button>
+                  <button
+                    onClick={() => setAdvancedPeriod('2y')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      advancedPeriod === '2y'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 2년
+                  </button>
+                </div>
               )}
-              <button
-                onClick={() => setShowStats(!showStats)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                {showStats ? '통계 숨기기' : '통계 보기'}
-              </button>
-            </div>
-          </div>
 
-          {showStats ? (
-            <ChartView period={statsPeriod} />
+              {/* 차트 렌더링 */}
+              {statsTab === 'basic' ? (
+                <ChartView period={statsPeriod} />
+              ) : (
+                <AdvancedChartView period={advancedPeriod} />
+              )}
+            </>
           ) : (
             <p className="text-sm text-gray-500 text-center py-8">
               통계를 보려면 &apos;통계 보기&apos;를 클릭하세요
