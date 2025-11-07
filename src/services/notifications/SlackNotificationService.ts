@@ -1,10 +1,11 @@
-import { WeatherAlert, AlertChange, AlertChangeType } from '../../types/weather';
+import { WeatherAlert, AlertChange, AlertChangeType, WeatherForecast } from '../../types/weather';
 import { logger } from '../../utils/logger';
 import { NotificationService, NotificationResult, SlackConfig } from './interfaces';
+import { WeatherService } from '../weatherService';
 
 /**
  * Slack 알림 서비스
- * 
+ *
  * 기존 SlackService 로직을 NotificationService 인터페이스에 맞게 리팩토링
  */
 export class SlackNotificationService implements NotificationService {
@@ -13,11 +14,17 @@ export class SlackNotificationService implements NotificationService {
   private readonly webhookUrl: string;
   private readonly environment: string;
   private readonly batchMode: boolean;
+  private weatherService?: WeatherService;
 
-  constructor(config: SlackConfig, environment: string = 'development') {
+  constructor(
+    config: SlackConfig,
+    environment: string = 'development',
+    weatherService?: WeatherService
+  ) {
     this.webhookUrl = config.webhookUrl;
     this.environment = environment;
     this.batchMode = config.batchMode ?? true;
+    this.weatherService = weatherService;
 
     if (!this.validateConfig()) {
       throw new Error('Slack 설정이 유효하지 않습니다');
@@ -141,12 +148,34 @@ export class SlackNotificationService implements NotificationService {
    */
   private async sendBatchedAlertChanges(changes: AlertChange[]): Promise<NotificationResult> {
     const startTime = Date.now();
-    
+
     try {
-      const attachments = changes.map((change, index) => {
+      const attachments: any[] = [];
+      let addedWeatherInfo = false;
+
+      for (let i = 0; i < changes.length; i++) {
+        const change = changes[i];
         const config = this.getChangeTypeConfig(change.type);
-        return this.createBatchChangeAttachment(change, config, index === changes.length - 1);
-      });
+        const attachment = this.createBatchChangeAttachment(change, config, i === changes.length - 1);
+
+        // 첫 번째 신규 발표 특보에 날씨 정보 추가
+        if (!addedWeatherInfo && change.type === 'NEW' && this.weatherService && change.current?.regionId) {
+          try {
+            const forecast = await this.weatherService.getWeatherForecast(change.current.regionId);
+            if (forecast) {
+              const weatherField = this.formatWeatherField(forecast);
+              if (weatherField) {
+                attachment.fields.push(weatherField);
+                addedWeatherInfo = true;
+              }
+            }
+          } catch (error) {
+            logger.debug('날씨 예보 조회 실패:', error);
+          }
+        }
+
+        attachments.push(attachment);
+      }
 
       const payload = {
         text: `${this.getEnvironmentPrefix()}🌦️ 기상특보 변동 알림 (${changes.length}건)`,
@@ -154,11 +183,11 @@ export class SlackNotificationService implements NotificationService {
       };
 
       const response = await this.sendToSlack(payload);
-      
+
       if (response.ok) {
         logger.info(`Slack 배치 변동 알림 전송 완료: ${changes.length}건`);
       }
-      
+
       return {
         platform: this.platformName,
         success: response.ok,
@@ -167,7 +196,7 @@ export class SlackNotificationService implements NotificationService {
       };
     } catch (error) {
       logger.error('Slack 배치 변동 알림 전송 실패:', error);
-      
+
       return {
         platform: this.platformName,
         success: false,
@@ -175,6 +204,39 @@ export class SlackNotificationService implements NotificationService {
         error: error instanceof Error ? error.message : String(error)
       };
     }
+  }
+
+  /**
+   * 날씨 예보 정보를 Slack 필드로 포맷팅
+   */
+  private formatWeatherField(forecast: WeatherForecast): any | null {
+    const parts: string[] = [];
+
+    if (forecast.temperature !== undefined) {
+      parts.push(`🌡️ ${forecast.temperature}°C`);
+    }
+
+    if (forecast.feelsLike !== undefined && forecast.feelsLike !== forecast.temperature) {
+      parts.push(`(체감 ${forecast.feelsLike}°C)`);
+    }
+
+    if (forecast.precipitationProbability !== undefined) {
+      parts.push(`☔ ${forecast.precipitationProbability}%`);
+    }
+
+    if (forecast.humidity !== undefined) {
+      parts.push(`💧 ${forecast.humidity}%`);
+    }
+
+    if (parts.length === 0) {
+      return null;
+    }
+
+    return {
+      title: '📊 현재 날씨',
+      value: parts.join(' '),
+      short: false
+    };
   }
 
   /**
