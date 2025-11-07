@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "chart.js": "^4.5.1",
+    "chartjs-chart-matrix": "^3.0.0",
     "leaflet": "^1.9.4",
     "next": "^15.1.6",
     "react": "^19.0.0",

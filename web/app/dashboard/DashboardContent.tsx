@@ -54,6 +54,19 @@ const AdvancedChartView = dynamic(() => import('@/components/AdvancedChartView')
   ),
 });
 
+// HeatmapView도 클라이언트 사이드에서만 로드
+const HeatmapView = dynamic(() => import('@/components/HeatmapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-12">
+      <div className="text-center">
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
+        <p className="mt-4 text-gray-600">히트맵 로딩 중...</p>
+      </div>
+    </div>
+  ),
+});
+
 // NotificationManager도 클라이언트 사이드에서만 로드
 const NotificationManager = dynamic(() => import('@/components/NotificationManager'), {
   ssr: false,
@@ -83,9 +96,10 @@ export default function DashboardContent() {
 
   // 통계 표시 상태
   const [showStats, setShowStats] = useState(false);
-  const [statsTab, setStatsTab] = useState<'basic' | 'advanced'>('basic');
+  const [statsTab, setStatsTab] = useState<'basic' | 'advanced' | 'heatmap'>('basic');
   const [statsPeriod, setStatsPeriod] = useState<'7d' | '30d'>('7d');
   const [advancedPeriod, setAdvancedPeriod] = useState<'6m' | '1y' | '2y'>('1y');
+  const [heatmapPeriod, setHeatmapPeriod] = useState<'6m' | '1y' | '2y'>('1y');
 
   // 브라우저 알림 상태
   const [notificationEnabled, setNotificationEnabled] = useState(false);
@@ -541,6 +555,16 @@ export default function DashboardContent() {
                 >
                   고급 통계 (월별/계절별/연도별)
                 </button>
+                <button
+                  onClick={() => setStatsTab('heatmap')}
+                  className={`px-4 py-2 font-medium transition-colors ${
+                    statsTab === 'heatmap'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  히트맵 (지역/시간/특보별)
+                </button>
               </div>
 
               {/* 기간 선택 버튼 */}
@@ -567,7 +591,7 @@ export default function DashboardContent() {
                     최근 30일
                   </button>
                 </div>
-              ) : (
+              ) : statsTab === 'advanced' ? (
                 <div className="flex gap-2 mb-4">
                   <button
                     onClick={() => setAdvancedPeriod('6m')}
@@ -600,13 +624,48 @@ export default function DashboardContent() {
                     최근 2년
                   </button>
                 </div>
+              ) : (
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={() => setHeatmapPeriod('6m')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      heatmapPeriod === '6m'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 6개월
+                  </button>
+                  <button
+                    onClick={() => setHeatmapPeriod('1y')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      heatmapPeriod === '1y'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 1년
+                  </button>
+                  <button
+                    onClick={() => setHeatmapPeriod('2y')}
+                    className={`px-3 py-1 rounded text-sm ${
+                      heatmapPeriod === '2y'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    최근 2년
+                  </button>
+                </div>
               )}
 
               {/* 차트 렌더링 */}
               {statsTab === 'basic' ? (
                 <ChartView period={statsPeriod} />
-              ) : (
+              ) : statsTab === 'advanced' ? (
                 <AdvancedChartView period={advancedPeriod} />
+              ) : (
+                <HeatmapView period={heatmapPeriod} />
               )}
             </>
           ) : (
