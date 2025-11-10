@@ -122,8 +122,9 @@ codex review main..dev
 
 한국 기상청 공공API를 활용하여 특정 지역의 기상특보 정보를 모니터링하고, 특보 또는 예비특보 발생 시 다중 플랫폼으로 알림을 전송하는 Node.js 기반 프로젝트입니다.
 
-**현재 버전**: v1.0.4 (안정화 릴리즈)
+**현재 버전**: v2.0.0-rc (Release Candidate)
 **안정성**: 프로덕션 환경 검증 완료
+**주요 업데이트**: 웹 대시보드 구현, 데이터베이스 연동, 360개 테스트
 
 **완료된 기능들의 상세 내용은 [CLAUDE-COMPLETE.md](./CLAUDE-COMPLETE.md)를 참조하세요.**
 
@@ -131,82 +132,110 @@ codex review main..dev
 
 - `npm run build` - TypeScript 소스코드를 JavaScript로 컴파일
 - `npm run start` - 컴파일된 애플리케이션 실행
-- `npm test` - 단위 테스트 실행 (177개 테스트, 73.73% 커버리지)
+- `npm test` - 단위 테스트 실행 (**360개 테스트**, 39%+ 커버리지)
 - `npm run test:watch` - 테스트 감시 모드 실행
 - `npm run test:coverage` - 커버리지 리포트 포함 테스트 실행
 - `npm run test:ci` - CI/CD용 테스트 실행
+- `cd web && npm run dev` - 웹 대시보드 개발 서버 실행 (포트 3001)
+- `cd web && npm run build` - 웹 대시보드 프로덕션 빌드
 
 ## 프로젝트 구조
 
 ```
 src/
-├── __tests__/        # 테스트 파일 (177개 단위 테스트)
+├── __tests__/        # 백엔드 테스트 파일 (360개 단위 테스트)
 │   ├── config/       # Config 모듈 테스트 (21개, 100% 커버리지)
-│   ├── services/     # 서비스 모듈 테스트 (135개)
-│   │   ├── alertCache.test.ts    # AlertCache 테스트 (50개, 종합 테스트 포함)
-│   │   ├── slackService.test.ts  # SlackService 테스트 (48개, 배치 전송 포함)
-│   │   ├── weatherService.test.ts # WeatherService 테스트 (42개, 통합 시나리오 포함)
-│   │   └── notifications/        # 다중 플랫폼 알림 테스트 (31개 테스트)
-│   │   └── subscriptions/        # 하이브리드 구독 관리 테스트 (4개 테스트)
-│   ├── types/        # Types 모듈 테스트 (7개, 100% 커버리지)
-│   └── utils/        # 유틸리티 테스트 (13개, 100% 커버리지)
+│   ├── services/     # 서비스 모듈 테스트
+│   │   ├── alertCache.test.ts    # AlertCache 테스트 (종합 테스트 포함)
+│   │   ├── slackService.test.ts  # SlackService 테스트 (배치 전송 포함)
+│   │   ├── weatherService.test.ts # WeatherService 테스트 (통합 시나리오 포함)
+│   │   ├── notifications/        # 다중 플랫폼 알림 테스트
+│   │   ├── subscriptions/        # 하이브리드 구독 관리 테스트
+│   │   └── routes/               # REST API 라우트 테스트
+│   ├── types/        # Types 모듈 테스트 (100% 커버리지)
+│   └── utils/        # 유틸리티 테스트 (100% 커버리지)
 ├── config/           # 환경 설정 관리
 ├── services/         # 핵심 서비스
 │   ├── WeatherService.ts      # 기상청 API 연동
-│   ├── SlackService.ts        # Slack 알림 서비스 (레거시)
+│   ├── DatabaseService.ts     # PostgreSQL + Prisma 연동
 │   ├── AlertCache.ts          # 특보 변동 감지 캐시
 │   ├── notifications/         # 다중 플랫폼 알림 시스템
 │   └── subscriptions/         # 하이브리드 구독 관리 시스템
+├── routes/           # REST API 라우트
+│   ├── alertRoutes.ts         # 특보 조회 API
+│   └── subscriptionRoutes.ts  # 구독 관리 API
 ├── types/            # TypeScript 타입 정의
 ├── utils/            # 유틸리티 함수 (로거 등)
+├── server.ts         # Express 서버 (API + WebSocket)
 └── index.ts          # 메인 애플리케이션 진입점
+
+web/                  # Next.js 웹 대시보드 (v15.1.6)
+├── app/              # App Router 페이지
+│   ├── dashboard/    # 실시간 특보 현황
+│   └── settings/     # 구독 설정 관리
+├── components/       # React 컴포넌트
+│   ├── MapView.tsx              # Leaflet 지도 시각화
+│   ├── ChartView.tsx            # Chart.js 통계 차트
+│   ├── AdvancedChartView.tsx    # 월별/계절별/연도별 차트
+│   ├── HeatmapView.tsx          # 히트맵 3종
+│   ├── WeatherForecastCard.tsx  # 날씨 예보 카드
+│   └── NotificationManager.tsx  # 브라우저 알림
+├── lib/              # 유틸리티 및 API 클라이언트
+└── hooks/            # React Hooks
 ```
 
 ## 현재 상태
 
 ### ✅ 완료된 핵심 기능들
-- ✅ **완전한 테스트 프레임워크** (Jest, 177개 테스트, **73.73% 커버리지**)
+- ✅ **웹 대시보드 (Issue #26)** - 90% 완료
+  - Phase 1 MVP: 실시간 특보 현황, 필터링 시스템
+  - Phase 2 고도화: 지도/차트, WebSocket 실시간 업데이트, 브라우저 알림
+  - Phase 3 엔터프라이즈: 히트맵 3종, 날씨 예보 API 연동, 고급 통계 차트
+  - 남은 작업: 구독 설정 관리 페이지, 사용자 인증 강화
+- ✅ **데이터베이스 연동 (Issue #67)** - 100% 완료
+  - PostgreSQL + Prisma ORM
+  - REST API: `/api/alerts/current`, `/history`, `/statistics`, `/forecast/:regionId`
+  - DB 동기화 및 성능 최적화 완료
+- ✅ **완전한 테스트 프레임워크** (Jest, **360개 테스트**, 39%+ 커버리지)
 - ✅ **Slack 배치 메시지 전송 시스템** (95% 메시지 수 감소)
 - ✅ **특보 변동 감지 시스템** (AlertCache 기반, CMD 기반 해제 로직)
-- ✅ **다중 플랫폼 알림 시스템** (Telegram, Discord, Email 지원)
+- ✅ **다중 플랫폼 알림 시스템** (Telegram, Discord, Email 인터페이스 구현)
 - ✅ **하이브리드 구독 관리 시스템** (개인별 맞춤 구독)
-- ✅ **Critical Hotfix v1.0.1** (지역 필터링 버그 수정, 프로덕션 안정성 확보)
-- ✅ **Hotfix v1.0.4** (기상특보 해제 알림 누락 문제 개선, 99.9%+ 안정성 달성)
-- ✅ **Telegram Bot API Phase 1** (Markdown 파싱 오류 해결, 150개 테스트 통과)
+- ✅ **WebSocket 실시간 업데이트** (Socket.io)
 - ✅ **프로덕션 급 품질 보증** (모든 핵심 모듈 철저한 테스트)
 
 *상세 내용은 [CLAUDE-COMPLETE.md](./CLAUDE-COMPLETE.md) 참조*
 
-## 🚨 **최근 완료 작업** (2025년 9월 25일)
+## 🚨 **최근 완료 작업** (2025년 11월 3-7일)
 
-### **Telegram Bot API Integration Phase 1 완료**
+### **웹 대시보드 Phase 1-3 및 데이터베이스 연동 완료**
 
-**GitHub 이슈 #23**의 Phase 1이 완료되었습니다. PR #47을 통해 Telegram Bot API 통합 및 Markdown 파싱 오류를 해결했습니다.
+**GitHub 이슈 #26**의 대부분이 완료되었습니다. 5일간 10개 PR을 연속으로 머지하며 웹 대시보드를 구축했습니다.
 
-#### **완료된 내용**
-- ✅ **TelegramNotificationService 구현**: 기상특보 알림 전송
-- ✅ **TelegramSubscriptionInterface 구현**: Bot 명령어 처리 시스템
-- ✅ **Markdown 안전성 보장**: `/list` 명령어 파싱 오류 완전 해결
-- ✅ **포괄적인 테스트 커버리지**: 4개 신규 테스트 추가 (총 150개)
-- ✅ **환경변수 설정 지원**: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+#### **완료된 PR (11/3 - 11/7)**
+- ✅ **PR #76** (11/3): 데이터베이스 연동 (PostgreSQL + Prisma)
+- ✅ **PR #77** (11/5): 웹 대시보드 Phase 1 MVP 완료
+- ✅ **PR #78** (11/5): Next.js 포트 3001로 변경
+- ✅ **PR #79** (11/6): Phase 2 고도화 (지도/차트/실시간)
+- ✅ **PR #80** (11/6): WebSocket 실시간 특보 업데이트
+- ✅ **PR #81** (11/6): 현재 특보 표시 버그 수정
+- ✅ **PR #82** (11/6): 환경별 대시보드 URL 설정
+- ✅ **PR #83** (11/6): DB 동기화 안정성 개선
+- ✅ **PR #84** (11/7): 고급 통계 차트 (월별/계절별/연도별)
+- ✅ **PR #85** (11/7): Phase 3 고급 기능 (히트맵, 날씨 API)
 
-#### **핵심 해결사항**
-```bash
-# 이전 문제
-ETELEGRAM: 400 Bad Request: can't parse entities:
-Can't find end of the entity starting at byte offset 266
-
-# 해결 방법 - escapeMarkdown 함수 구현
-private escapeMarkdown(text: string): string {
-  return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
-}
-```
+#### **주요 기능**
+- ✅ **실시간 특보 현황 대시보드**: Leaflet 지도 + Chart.js 차트
+- ✅ **WebSocket 실시간 업데이트**: 새로고침 없이 즉시 반영
+- ✅ **히트맵 3종**: 지역×시간, 월×지역, 특보×지역
+- ✅ **날씨 예보 통합**: 기상청 단기예보 API 연동
+- ✅ **데이터베이스 완전 연동**: PostgreSQL + REST API
 
 #### **개선 효과**
-- ✅ **Telegram `/list` 명령어 완전 수정** - 파싱 오류 없음
-- ✅ **150개 테스트 100% 통과** - 품질 안정성 보장
-- ✅ **74%+ 코드 커버리지 유지** - 기존 품질 지표 유지
-- ✅ **기존 기능과 완전 호환** - Breaking Change 없음
+- ✅ **360개 테스트 통과** (177개 → 360개, +103% 증가)
+- ✅ **웹 대시보드 90% 완료** - 프로덕션 준비 완료
+- ✅ **데이터베이스 기반 분석** - 특보 이력 및 통계 제공
+- ✅ **실시간 사용자 경험** - WebSocket + 브라우저 알림
 
 ## 향후 개발 계획
 
@@ -241,106 +270,57 @@ private escapeMarkdown(text: string): string {
 - [ ] 플랫폼별 성공률 추적 및 통합 모니터링 대시보드
 - [ ] 성능 최적화 및 병렬 전송 시스템
 
-## TODO: 데이터베이스 연동 (특보 이력 관리)
+## ✅ 완료: 데이터베이스 연동 (Issue #67)
 
-### 기능 요구사항
-현재는 메모리에서만 동작하지만, 특보 이력 관리 및 데이터 분석을 위해 데이터베이스 연동이 필요함.
+**PostgreSQL + Prisma ORM 완전 구현** (PR #76, #83)
+- ✅ 데이터베이스 스키마 설계 및 마이그레이션
+- ✅ WeatherAlert, AlertHistory 테이블 구현
+- ✅ REST API 엔드포인트: `/api/alerts/current`, `/history`, `/statistics`
+- ✅ DB 동기화 및 race condition 해결
+- ✅ 성능 최적화 (인덱스, 쿼리 최적화)
 
-### 구현해야 할 기능들
+*상세 내용은 Issue #67 및 CLAUDE-COMPLETE.md 참조*
 
-#### 1. 데이터베이스 선택 및 설정
-- [ ] 데이터베이스 선택 (SQLite/PostgreSQL/MongoDB 검토)
-- [ ] ORM/ODM 선택 (TypeORM, Prisma, Mongoose 등)
-- [ ] 데이터베이스 연결 설정 및 환경변수 관리
-- [ ] 마이그레이션 시스템 구축
+---
 
-#### 2. 데이터 모델 설계
-- [ ] **WeatherAlert 테이블**
-  ```sql
-  - id (Primary Key)
-  - region_id (지역코드)
-  - region_name (지역명)
-  - warning_type (특보종류)
-  - warning_level (특보수준)
-  - command (특보명령)
-  - announced_at (발표시각)
-  - effective_at (발효시각)
-  - created_at (생성시각)
-  - updated_at (수정시각)
-  ```
-- [ ] **AlertHistory 테이블** (변동 이력)
-- [ ] **RegionMapping 테이블** (지역 매핑 정보)
+## 🔄 진행 중: 웹 대시보드 (Issue #26) - 90% 완료
 
-#### 3. 데이터 저장 로직
-- [ ] 특보 데이터 자동 저장
-- [ ] 중복 데이터 처리 (upsert 로직)
-- [ ] 이력 데이터 관리 (변동 감지 시 이력 생성)
-- [ ] 데이터 정리 정책 (오래된 데이터 자동 삭제)
+### ✅ **완료된 기능** (PR #77-85)
 
-#### 4. 조회 및 분석 기능
-- [ ] 특보 이력 조회 API
-- [ ] 지역별/기간별 특보 통계
-- [ ] 특보 빈도 분석
-- [ ] 대시보드용 데이터 제공
+#### Phase 1: MVP (100% 완료)
+- ✅ 실시간 특보 현황 페이지 (데이터베이스 기반)
+- ✅ 지역별/특보별/수준별 필터링
+- ✅ URL 파라미터 지원
+- ✅ 모바일 반응형 디자인
+- ✅ 환경별 대시보드 URL 설정
 
-#### 5. 성능 최적화
-- [ ] 인덱스 설정 (지역코드, 날짜 등)
-- [ ] 쿼리 최적화
-- [ ] 연결 풀 관리
-- [ ] 캐싱 전략
+#### Phase 2: 고도화 (100% 완료)
+- ✅ Leaflet 지도 시각화
+- ✅ Chart.js 통계 차트
+- ✅ 타임라인 뷰
+- ✅ WebSocket 실시간 업데이트
+- ✅ 브라우저 알림
 
-### 구현 우선순위
-1. **High**: 기본 데이터베이스 설정 및 특보 데이터 저장
-2. **Medium**: 이력 관리 및 조회 기능
-3. **Low**: 분석 기능 및 성능 최적화
+#### Phase 3: 엔터프라이즈 (70% 완료)
+- ✅ 히트맵 3종 (지역×시간, 월×지역, 특보×지역)
+- ✅ 날씨 예보 API 연동 및 통합
+- ✅ 고급 통계 차트 (월별/계절별/연도별)
+- ❌ 개인별 구독 설정 관리 페이지 (미완료)
+- ❌ 사용자 인증 강화 (미완료)
 
-## TODO: 기상특보 현황 웹 대시보드 개발
+### 🎯 **남은 작업** (10%)
 
-### 🎯 기획 개요
+#### 우선순위 High
+- [ ] **개인별 구독 설정 관리 페이지**
+  - 통합 토큰 기반 인증 UI
+  - WebSubscriptionInterface 연동
+  - 구독 CRUD 인터페이스
 
-Slack 알림에서 클릭 한 번으로 접근 가능한 **실시간 기상특보 현황 웹 대시보드**를 개발하여 사용자 편의성을 극대화합니다.
+#### 우선순위 Medium
+- [ ] 구독 통계 대시보드
+- [ ] OAuth 2.0 사용자 인증 (선택사항)
 
-#### 핵심 목표
-- **원클릭 접근**: Slack 알림 → 웹 대시보드 즉시 이동
-- **실시간 현황**: 현재 발효 중인 모든 특보를 직관적으로 표시
-- **개인화**: 지역별, 특보 종류별 맞춤 필터링
-- **모바일 최적화**: Slack 앱에서의 완벽한 사용성
-
-### 📋 단계별 개발 계획
-
-#### **Phase 1: MVP (최소 기능 제품) - 2-3주**
-
-##### 🎨 **기본 UI/UX 설계**
-```
-┌─────────────────────────────────────────┐
-│ 🌦️ 기상특보 현황 대시보드               │
-├─────────────────────────────────────────┤
-│ [전체지역 ▼] [전체특보 ▼] [🔄 새로고침] │
-├─────────────────────────────────────────┤
-│ 📍 서울특별시 | 🔥 폭염 | ⚠️ 주의보     │
-│ 발표: 2025-01-28 09:00                   │
-│ 발효: 2025-01-28 10:00                   │
-├─────────────────────────────────────────┤
-│ 📍 부산광역시 | 🌧️ 호우 | 🚨 경보      │
-│ 발표: 2025-01-28 08:30                   │
-│ 발효: 2025-01-28 09:00                   │
-└─────────────────────────────────────────┘
-```
-
-##### ✨ **MVP 핵심 기능**
-- [ ] **실시간 특보 목록**: 현재 발효 중인 모든 특보 표시
-- [ ] **지역별 필터링**: 드롭다운으로 특정 지역 선택 가능
-- [ ] **특보 종류별 필터링**: 폭염, 호우, 강풍 등 종류별 필터
-- [ ] **자동 새로고침**: 5-10분 간격으로 데이터 업데이트
-- [ ] **Slack 연동**: 각 알림 메시지에 "📊 현황보기" 링크 추가
-- [ ] **URL 파라미터**: 특정 지역/특보 하이라이트 기능
-- [ ] **모바일 반응형**: Slack 앱에서의 최적 사용성
-
-### 🚀 권장 구현 방식
-
-**2-3주 MVP 개발**을 통해 핵심 가치를 빠르게 검증하고, 사용자 피드백을 받아 단계적으로 고도화하는 전략을 권장합니다.
-
-특히 **Slack 연동**이 이 프로젝트의 차별화 포인트이므로, 알림과 대시보드 간의 매끄러운 사용자 경험에 집중하는 것이 중요합니다.
+**상세 내용은 Issue #26 참조**
 
 ## API 참고사항
 
