@@ -33,7 +33,8 @@ export class TelegramNotificationService implements NotificationService {
 
   constructor(
     private config: TelegramConfig & { webhookUrl?: string; webDashboardUrl?: string },
-    weatherService?: WeatherService
+    weatherService?: WeatherService,
+    subscriptionManager?: SubscriptionManager
   ) {
     this.weatherService = weatherService;
     // Webhook 모드로 초기화 (polling 비활성화)
@@ -61,8 +62,14 @@ export class TelegramNotificationService implements NotificationService {
     this.webhookSecret = config.webhookSecret;
     this.webDashboardUrl = config.webDashboardUrl || 'https://weather.starryjeju.net';
 
-    // Initialize subscription manager
-    this.subscriptionManager = new SubscriptionManager();
+    // Initialize subscription manager (외부 주입 또는 새로 생성)
+    this.subscriptionManager = subscriptionManager || new SubscriptionManager();
+    if (subscriptionManager) {
+      logger.info('TelegramNotificationService: 외부 SubscriptionManager 사용');
+    } else {
+      logger.warn('TelegramNotificationService: 새로운 SubscriptionManager 생성 (권장하지 않음)');
+    }
+
     this.subscriptionInterface = new TelegramSubscriptionInterface(
       this.subscriptionManager,
       config.botToken,
