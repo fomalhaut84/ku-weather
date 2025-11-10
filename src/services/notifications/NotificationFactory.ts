@@ -10,6 +10,7 @@ import {
 import { SlackNotificationService } from './SlackNotificationService';
 import { MultiplatformNotificationService } from './MultiplatformNotificationService';
 import { TelegramNotificationService } from './TelegramNotificationService';
+import { SubscriptionManager } from './SubscriptionManager';
 import { WeatherService } from '../weatherService';
 
 /**
@@ -22,7 +23,7 @@ export class NotificationFactory {
   /**
    * 설정에 따라 개별 알림 서비스들을 생성
    */
-  static createServices(config: NotificationConfig, weatherService?: WeatherService): NotificationService[] {
+  static createServices(config: NotificationConfig, weatherService?: WeatherService, subscriptionManager?: SubscriptionManager): NotificationService[] {
     const services: NotificationService[] = [];
     const environment = config.environment || 'development';
     const webDashboardUrl = config.webDashboardUrl || 'https://weather.starryjeju.net';
@@ -31,7 +32,7 @@ export class NotificationFactory {
 
     for (const platform of config.platforms) {
       try {
-        const service = this.createSingleService(platform, config, environment, webDashboardUrl, weatherService);
+        const service = this.createSingleService(platform, config, environment, webDashboardUrl, weatherService, subscriptionManager);
         if (service) {
           services.push(service);
           logger.info(`${platform} 서비스 생성 완료`);
@@ -49,8 +50,15 @@ export class NotificationFactory {
    * 다중 플랫폼 매니저를 생성
    */
   static createMultiplatformService(config: NotificationConfig, weatherService?: WeatherService): MultiplatformNotificationService {
-    const services = this.createServices(config, weatherService);
-    return new MultiplatformNotificationService(services);
+    // 공유 SubscriptionManager 생성
+    const subscriptionManager = new SubscriptionManager();
+    logger.info('공유 SubscriptionManager 생성 - 모든 알림 서비스가 동일한 구독 데이터 사용');
+
+    // 모든 서비스에 공유 SubscriptionManager 전달
+    const services = this.createServices(config, weatherService, subscriptionManager);
+
+    // MultiplatformNotificationService에도 공유 SubscriptionManager 전달
+    return new MultiplatformNotificationService(services, subscriptionManager);
   }
 
   /**
@@ -61,7 +69,8 @@ export class NotificationFactory {
     config: NotificationConfig,
     environment: string,
     webDashboardUrl: string,
-    weatherService?: WeatherService
+    weatherService?: WeatherService,
+    subscriptionManager?: SubscriptionManager
   ): NotificationService | null {
 
     switch (platform.toLowerCase()) {
@@ -69,7 +78,7 @@ export class NotificationFactory {
         return this.createSlackService(config.slack, environment, webDashboardUrl, weatherService);
 
       case 'telegram':
-        return this.createTelegramService(config.telegram, environment, webDashboardUrl, weatherService);
+        return this.createTelegramService(config.telegram, environment, webDashboardUrl, weatherService, subscriptionManager);
 
       case 'discord':
         return this.createDiscordService(config.discord, environment, webDashboardUrl);
@@ -115,7 +124,7 @@ export class NotificationFactory {
   /**
    * Telegram 알림 서비스 생성 (향후 구현 예정)
    */
-  private static createTelegramService(config?: TelegramConfig, environment?: string, webDashboardUrl?: string, weatherService?: WeatherService): NotificationService | null {
+  private static createTelegramService(config?: TelegramConfig, environment?: string, webDashboardUrl?: string, weatherService?: WeatherService, subscriptionManager?: SubscriptionManager): NotificationService | null {
     if (!config) {
       logger.warn('Telegram 설정이 없습니다');
       return null;
@@ -129,7 +138,7 @@ export class NotificationFactory {
       const service = new TelegramNotificationService({
         ...config,
         webDashboardUrl
-      }, weatherService);
+      }, weatherService, subscriptionManager);
 
       if (!service.validateConfig()) {
         logger.error('Telegram 설정 검증 실패');
