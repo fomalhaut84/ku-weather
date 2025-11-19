@@ -212,36 +212,75 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
             const regionData = feature.data?.data;
             if (!regionData) return null;
 
+            // 육상 특보를 특보 종류별로 그루핑
+            const landAlertGroups = regionData.landAlerts.reduce((acc: any, alert: WeatherAlert) => {
+              const key = `${alert.warningType}-${alert.warningLevel}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  type: alert.warningType,
+                  level: alert.warningLevel,
+                  regions: [],
+                };
+              }
+              acc[key].regions.push(alert.regionName || alert.upperRegion);
+              return acc;
+            }, {});
+
+            // 해상 특보를 특보 종류별로 그루핑
+            const marineAlertGroups = regionData.marineAlerts.reduce((acc: any, alert: WeatherAlert) => {
+              const key = `${alert.warningType}-${alert.warningLevel}`;
+              if (!acc[key]) {
+                acc[key] = {
+                  type: alert.warningType,
+                  level: alert.warningLevel,
+                  regions: [],
+                };
+              }
+              acc[key].regions.push(alert.regionName || alert.upperRegion || '해상');
+              return acc;
+            }, {});
+
             return (
-              <div className="bg-slate-900 text-white rounded-lg p-3 shadow-xl max-w-xs">
-                <div className="font-semibold text-base mb-2">{feature.label}</div>
-                {regionData.landAlerts.length > 0 ? (
-                  <div className="space-y-1 text-sm">
-                    {regionData.landAlerts.map((alert: WeatherAlert) => (
-                      <div key={alert.id} className="flex items-center gap-2">
-                        <span className="text-yellow-400">●</span>
-                        <span>
-                          {WARNING_TYPE_NAMES[alert.warningType] || alert.warningType}{' '}
-                          {WARNING_LEVEL_NAMES[alert.warningLevel]}
-                        </span>
+              <div className="bg-slate-900/95 backdrop-blur-sm text-white rounded-lg p-3 shadow-xl max-w-sm">
+                <div className="font-bold text-base mb-2 border-b border-slate-700 pb-2">{feature.label}</div>
+                {Object.keys(landAlertGroups).length > 0 ? (
+                  <div className="space-y-2 text-sm">
+                    {Object.values(landAlertGroups).map((group: any, idx: number) => (
+                      <div key={idx}>
+                        <div className="flex items-center gap-2 font-semibold text-yellow-400">
+                          <span>●</span>
+                          <span>
+                            {WARNING_TYPE_NAMES[group.type] || group.type}{' '}
+                            {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
+                          </span>
+                        </div>
+                        <div className="ml-5 text-xs text-slate-300 mt-1">
+                          {group.regions.join(', ')}
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-sm text-slate-300">특보 없음</div>
+                  <div className="text-sm text-slate-400">육상 특보 없음</div>
                 )}
-                {regionData.marineAlerts.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-slate-700">
-                    <div className="text-xs text-blue-300 font-semibold mb-1">
-                      해상 특보 {regionData.marineAlerts.length}건
+                {Object.keys(marineAlertGroups).length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-slate-700">
+                    <div className="text-xs text-blue-300 font-bold mb-2">
+                      🌊 해상 특보 {regionData.marineAlerts.length}건
                     </div>
-                    <div className="space-y-1 text-sm">
-                      {regionData.marineAlerts.slice(0, 3).map((alert: WeatherAlert) => (
-                        <div key={alert.id} className="flex items-center gap-2">
-                          <span className="text-blue-400">🌊</span>
-                          <span className="text-xs">
-                            {WARNING_TYPE_NAMES[alert.warningType]} {WARNING_LEVEL_NAMES[alert.warningLevel]}
-                          </span>
+                    <div className="space-y-2 text-sm">
+                      {Object.values(marineAlertGroups).map((group: any, idx: number) => (
+                        <div key={idx}>
+                          <div className="flex items-center gap-2 font-semibold text-blue-400">
+                            <span>●</span>
+                            <span>
+                              {WARNING_TYPE_NAMES[group.type]} {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
+                            </span>
+                          </div>
+                          <div className="ml-5 text-xs text-slate-300 mt-1">
+                            {group.regions.slice(0, 5).join(', ')}
+                            {group.regions.length > 5 && ` 외 ${group.regions.length - 5}곳`}
+                          </div>
                         </div>
                       ))}
                     </div>
