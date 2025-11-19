@@ -64,9 +64,9 @@ export const nivoTheme: Theme = {
   },
   labels: {
     text: {
-      fontSize: 11,
-      fill: '#475569',
-      fontWeight: 600,
+      fontSize: 12,
+      fill: '#1e293b',
+      fontWeight: 700,
     },
   },
   legends: {

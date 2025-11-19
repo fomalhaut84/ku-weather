@@ -250,7 +250,18 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
               </div>
             );
           }}
-          theme={nivoTheme}
+          theme={{
+            ...nivoTheme,
+            labels: {
+              text: {
+                ...nivoTheme.labels?.text,
+                fill: '#1e293b',
+                fontWeight: 700,
+                fontSize: 12,
+                textShadow: '0 0 3px #ffffff, 0 0 3px #ffffff, 0 0 3px #ffffff',
+              },
+            },
+          }}
           legends={[
             {
               anchor: 'bottom-left',
