@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState } from 'react';
+import { memo, useMemo, useState, useEffect } from 'react';
 import { ResponsiveChoropleth } from '@nivo/geo';
 import type { FeatureCollection } from 'geojson';
 import type { WeatherAlert } from '@/types/alert';
@@ -17,25 +17,48 @@ interface MapViewProps {
 function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
   const [zoom, setZoom] = useState(2200);
   const [showMarineAlerts, setShowMarineAlerts] = useState(true);
+  const [geoJsonData, setGeoJsonData] = useState<FeatureCollection>({
+    type: 'FeatureCollection',
+    features: [],
+  });
+  const [isLoadingGeoJson, setIsLoadingGeoJson] = useState(true);
 
   // 특보 데이터 전처리
   const regionDataMap = useChoroplethData(alerts);
   const marineStats = useMarineAlertStats(alerts);
 
-  // GeoJSON 데이터 로드 및 ID 설정
-  const geoJsonData = useMemo<FeatureCollection>(() => {
-    try {
-      const data = require('@/public/data/skorea-provinces-geo.json');
-      // 각 feature에 명시적인 id 추가 (Nivo가 key로 사용)
-      const featuresWithId = data.features.map((feature: any) => ({
-        ...feature,
-        id: feature.properties?.code || feature.properties?.name,
-      }));
-      return { ...data, features: featuresWithId };
-    } catch (error) {
-      console.error('GeoJSON 로드 실패:', error);
-      return { type: 'FeatureCollection', features: [] };
+  // GeoJSON 데이터를 비동기로 로드 (번들 크기 최적화)
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGeoJson() {
+      try {
+        const response = await fetch('/data/skorea-provinces-geo.json');
+        if (!response.ok) throw new Error('GeoJSON 로드 실패');
+
+        const data = await response.json();
+
+        if (!isMounted) return;
+
+        // 각 feature에 명시적인 id 추가 (Nivo가 key로 사용)
+        const featuresWithId = data.features.map((feature: any) => ({
+          ...feature,
+          id: feature.properties?.code || feature.properties?.name,
+        }));
+
+        setGeoJsonData({ ...data, features: featuresWithId });
+        setIsLoadingGeoJson(false);
+      } catch (error) {
+        console.error('GeoJSON 로드 실패:', error);
+        setIsLoadingGeoJson(false);
+      }
     }
+
+    loadGeoJson();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Choropleth 데이터 생성
@@ -46,13 +69,25 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
       const regionData = regionDataMap.get(upperRegion);
 
       return {
-        id: geoJsonName,
+        id: feature.id || feature.properties?.code || geoJsonName, // feature.id와 일치
         label: geoJsonName,
         value: regionData?.maxWarningLevel || 0,
         data: regionData,
       };
     });
   }, [geoJsonData, regionDataMap]);
+
+  // 로딩 중일 때
+  if (isLoadingGeoJson) {
+    return (
+      <div className="relative w-full h-[480px] bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <div className="text-slate-600">지도 데이터 로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full flex flex-col">
@@ -119,8 +154,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
                 <div className="font-semibold text-base mb-2">{feature.label}</div>
                 {regionData.landAlerts.length > 0 ? (
                   <div className="space-y-1 text-sm">
-                    {regionData.landAlerts.map((alert: WeatherAlert, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
+                    {regionData.landAlerts.map((alert: WeatherAlert) => (
+                      <div key={alert.id} className="flex items-center gap-2">
                         <span className="text-yellow-400">●</span>
                         <span>
                           {WARNING_TYPE_NAMES[alert.warningType] || alert.warningType}{' '}
@@ -138,8 +173,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
                       해상 특보 {regionData.marineAlerts.length}건
                     </div>
                     <div className="space-y-1 text-sm">
-                      {regionData.marineAlerts.slice(0, 3).map((alert: WeatherAlert, idx: number) => (
-                        <div key={idx} className="flex items-center gap-2">
+                      {regionData.marineAlerts.slice(0, 3).map((alert: WeatherAlert) => (
+                        <div key={alert.id} className="flex items-center gap-2">
                           <span className="text-blue-400">🌊</span>
                           <span className="text-xs">
                             {WARNING_TYPE_NAMES[alert.warningType]} {WARNING_LEVEL_NAMES[alert.warningLevel]}
@@ -192,9 +227,9 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
             </h3>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {marineStats.alerts.slice(0, 8).map((alert: WeatherAlert, idx: number) => (
+            {marineStats.alerts.slice(0, 8).map((alert: WeatherAlert) => (
               <div
-                key={idx}
+                key={alert.id}
                 className="bg-white rounded-lg p-3 border border-blue-200 text-sm"
               >
                 <div className="font-semibold text-blue-900 mb-1">

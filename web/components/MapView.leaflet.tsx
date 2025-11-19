@@ -145,14 +145,24 @@ export default function MapView({ alerts, onRegionClick }: MapViewProps) {
         radius: level > 0 ? 20 : 15, // 특보 발생 시 마커 크기 증가
       });
 
-      // 툴팁 업데이트
+      // 툴팁 업데이트 (XSS 방지를 위해 DOM 노드 생성)
       const alerts = regionAlerts.get(upperRegion);
       if (alerts && alerts.length > 0) {
-        const tooltipContent = `<strong>${upperRegion}</strong><br>` +
-          alerts
-            .map(a => `${getWarningTypeName(a.warningType)} ${getWarningLevelName(a.warningLevel)}`)
-            .join('<br>');
-        marker.bindTooltip(tooltipContent, {
+        const container = document.createElement('div');
+
+        const title = document.createElement('strong');
+        title.textContent = upperRegion;
+        container.appendChild(title);
+
+        alerts.forEach(a => {
+          container.appendChild(document.createElement('br'));
+          const alertText = document.createTextNode(
+            `${getWarningTypeName(a.warningType)} ${getWarningLevelName(a.warningLevel)}`
+          );
+          container.appendChild(alertText);
+        });
+
+        marker.bindTooltip(container, {
           permanent: false,
           direction: 'top',
         });
