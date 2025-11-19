@@ -51,6 +51,7 @@ router.get('/current', async (req: Request, res: Response) => {
       let normalizedRegion = upperRegion as string;
       if (normalizedRegion === '강원특별자치도') normalizedRegion = '강원도';
       if (normalizedRegion === '전북특별자치도') normalizedRegion = '전라북도';
+      if (normalizedRegion === '제주특별자치도') normalizedRegion = '제주도';
       filters.upperRegion = normalizedRegion;
     }
 

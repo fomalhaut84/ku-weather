@@ -281,13 +281,15 @@ export default function DashboardContent() {
       // 정확한 이름 매칭
       if (r.name === upperRegion) return true;
 
-      // "강원도" → "강원특별자치도", "전라북도" → "전북특별자치도" 매칭
+      // 특별자치도 → 일반명 매칭
       if (upperRegion === '강원도' && r.name === '강원특별자치도') return true;
       if (upperRegion === '전라북도' && r.name === '전북특별자치도') return true;
+      if (upperRegion === '제주도' && r.name === '제주특별자치도') return true;
 
-      // 반대 방향: "강원특별자치도" → "강원도", "전북특별자치도" → "전라북도"
+      // 일반명 → 특별자치도 매칭 (반대 방향)
       if (upperRegion === '강원특별자치도' && r.name === '강원도') return true;
       if (upperRegion === '전북특별자치도' && r.name === '전라북도') return true;
+      if (upperRegion === '제주특별자치도' && r.name === '제주도') return true;
 
       return false;
     });
