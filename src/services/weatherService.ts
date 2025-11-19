@@ -1292,7 +1292,20 @@ export class WeatherService {
         throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
       }
 
-      const jsonData = await response.json();
+      // JSON 파싱 에러 처리 개선 (HTML 응답 감지)
+      const responseText = await response.text();
+      let jsonData;
+
+      try {
+        jsonData = JSON.parse(responseText);
+      } catch (parseError) {
+        // HTML 에러 응답인 경우 (예: #START7777...)
+        if (responseText.includes('#START')) {
+          logger.warn(`날씨 예보 API가 HTML 에러 응답을 반환했습니다 (지역: ${regionId})`);
+          return null;
+        }
+        throw new Error(`JSON 파싱 실패: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
 
       // 4. JSON 파싱 및 데이터 집계
       const forecast = this.parseForecastData(jsonData, regionId, gridInfo.name);
@@ -1305,7 +1318,8 @@ export class WeatherService {
       logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공`);
       return forecast;
     } catch (error) {
-      logger.error(`날씨 예보 조회 중 오류 (지역: ${regionId}):`, error);
+      // 날씨 예보는 필수 기능이 아니므로 warn 레벨로 로깅
+      logger.warn(`날씨 예보 조회 실패 (지역: ${regionId}):`, error instanceof Error ? error.message : String(error));
       return null;
     }
   }
