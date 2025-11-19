@@ -33,10 +33,14 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
 
     async function loadGeoJson() {
       try {
+        console.log('[MapView.nivo] GeoJSON 로드 시작...');
         const response = await fetch('/data/skorea-provinces-geo.json');
-        if (!response.ok) throw new Error('GeoJSON 로드 실패');
+        console.log('[MapView.nivo] fetch 응답:', response.status, response.ok);
+
+        if (!response.ok) throw new Error(`GeoJSON 로드 실패: ${response.status}`);
 
         const data = await response.json();
+        console.log('[MapView.nivo] GeoJSON 파싱 완료, features:', data.features?.length);
 
         if (!isMounted) return;
 
@@ -46,10 +50,12 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
           id: feature.properties?.code || feature.properties?.name,
         }));
 
+        console.log('[MapView.nivo] featuresWithId 생성 완료:', featuresWithId.length);
         setGeoJsonData({ ...data, features: featuresWithId });
         setIsLoadingGeoJson(false);
+        console.log('[MapView.nivo] GeoJSON 로드 완료!');
       } catch (error) {
-        console.error('GeoJSON 로드 실패:', error);
+        console.error('[MapView.nivo] GeoJSON 로드 실패:', error);
         setIsLoadingGeoJson(false);
       }
     }
@@ -63,7 +69,7 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
 
   // Choropleth 데이터 생성
   const choroplethData = useMemo(() => {
-    return geoJsonData.features.map((feature) => {
+    const data = geoJsonData.features.map((feature) => {
       const geoJsonName = feature.properties?.name || '';
       const upperRegion = REGION_NAME_MAP[geoJsonName] || geoJsonName;
       const regionData = regionDataMap.get(upperRegion);
@@ -75,10 +81,13 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
         data: regionData,
       };
     });
+    console.log('[MapView.nivo] choroplethData 생성:', data.length, 'items');
+    return data;
   }, [geoJsonData, regionDataMap]);
 
   // 로딩 중일 때
   if (isLoadingGeoJson) {
+    console.log('[MapView.nivo] 로딩 중...');
     return (
       <div className="relative w-full h-[480px] bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center">
         <div className="text-center">
@@ -89,10 +98,12 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
     );
   }
 
+  console.log('[MapView.nivo] 렌더링 시작 - features:', geoJsonData.features.length, 'choroplethData:', choroplethData.length);
+
   return (
-    <div className="relative w-full h-full flex flex-col">
+    <div className="relative w-full flex flex-col">
       {/* 지도 영역 */}
-      <div className="relative flex-1 min-h-[400px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="relative w-full h-[600px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {/* 줌 컨트롤 */}
         <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
           <button
@@ -119,10 +130,15 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
         </div>
 
         {/* Choropleth 지도 */}
-        <ResponsiveChoropleth
-          data={choroplethData}
-          features={geoJsonData.features}
-          margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+        {geoJsonData.features.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-slate-500">GeoJSON 데이터가 없습니다</div>
+          </div>
+        ) : (
+          <ResponsiveChoropleth
+            data={choroplethData}
+            features={geoJsonData.features}
+            margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
           colors={[
             LAND_ALERT_COLORS[0],
             LAND_ALERT_COLORS[1],
@@ -207,7 +223,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
               ],
             },
           ]}
-        />
+          />
+        )}
       </div>
 
       {/* 해상 특보 요약 */}

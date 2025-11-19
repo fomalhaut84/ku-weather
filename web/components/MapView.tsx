@@ -22,8 +22,11 @@ interface MapViewProps {
 // Feature Flag 확인
 const USE_NIVO_MAP = process.env.NEXT_PUBLIC_USE_NIVO_MAP === 'true';
 
+console.log('[MapView] Feature Flag - USE_NIVO_MAP:', USE_NIVO_MAP, 'env:', process.env.NEXT_PUBLIC_USE_NIVO_MAP);
+
 export default function MapView(props: MapViewProps) {
   const MapComponent = USE_NIVO_MAP ? MapViewNivo : MapViewLeaflet;
+  console.log('[MapView] 선택된 컴포넌트:', USE_NIVO_MAP ? 'Nivo' : 'Leaflet');
 
   return (
     <Suspense
