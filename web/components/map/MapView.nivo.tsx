@@ -33,15 +33,10 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
 
     async function loadGeoJson() {
       try {
-        console.log('[MapView.nivo] GeoJSON 로드 시작...');
         const response = await fetch('/data/skorea-provinces-geo.json');
-        console.log('[MapView.nivo] fetch 응답:', response.status, response.ok);
-
         if (!response.ok) throw new Error(`GeoJSON 로드 실패: ${response.status}`);
 
         const data = await response.json();
-        console.log('[MapView.nivo] GeoJSON 파싱 완료, features:', data.features?.length);
-
         if (!isMounted) return;
 
         // 각 feature에 명시적인 id 추가 (Nivo가 key로 사용)
@@ -50,10 +45,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
           id: feature.properties?.code || feature.properties?.name,
         }));
 
-        console.log('[MapView.nivo] featuresWithId 생성 완료:', featuresWithId.length);
         setGeoJsonData({ ...data, features: featuresWithId });
         setIsLoadingGeoJson(false);
-        console.log('[MapView.nivo] GeoJSON 로드 완료!');
       } catch (error) {
         console.error('[MapView.nivo] GeoJSON 로드 실패:', error);
         setIsLoadingGeoJson(false);
@@ -81,19 +74,11 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
         data: regionData,
       };
     });
-    console.log('[MapView.nivo] choroplethData 생성:', data.length, 'items');
-    console.log('[MapView.nivo] ID 매칭 확인:');
-    data.slice(0, 3).forEach((d, i) => {
-      const feature = geoJsonData.features[i];
-      console.log(`  [${i}] data.id="${d.id}", feature.id="${feature.id}", match=${d.id === feature.id}, value=${d.value}`);
-    });
-    console.log('[MapView.nivo] Value 분포:', data.map(d => d.value).join(', '));
     return data;
   }, [geoJsonData, regionDataMap]);
 
   // 로딩 중일 때
   if (isLoadingGeoJson) {
-    console.log('[MapView.nivo] 로딩 중...');
     return (
       <div className="relative w-full h-[480px] bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-center">
         <div className="text-center">
@@ -103,11 +88,6 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
       </div>
     );
   }
-
-  console.log('[MapView.nivo] 렌더링 시작 - features:', geoJsonData.features.length, 'choroplethData:', choroplethData.length);
-  console.log('[MapView.nivo] 첫 번째 feature 샘플:', geoJsonData.features[0]);
-  console.log('[MapView.nivo] 첫 번째 feature geometry:', geoJsonData.features[0]?.geometry);
-  console.log('[MapView.nivo] 첫 번째 choropleth 데이터:', choroplethData[0]);
 
   return (
     <div className="relative w-full flex flex-col">
@@ -137,6 +117,59 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
             초기화
           </button>
         </div>
+
+        {/* 지도 내 해상 특보 패널 */}
+        {marineStats.totalCount > 0 && (
+          <div className="absolute left-4 bottom-4 z-10 max-w-xs">
+            {showMarineAlerts ? (
+              <div className="bg-white/95 backdrop-blur-sm border border-blue-300 rounded-lg p-3 shadow-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🌊</span>
+                    <h3 className="font-semibold text-blue-900 text-sm">
+                      해상 특보 {marineStats.totalCount}건
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setShowMarineAlerts(false)}
+                    className="text-blue-600 hover:text-blue-800 text-lg leading-none"
+                    aria-label="닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {marineStats.alerts.slice(0, 6).map((alert: WeatherAlert) => (
+                    <div
+                      key={alert.id}
+                      className="text-xs bg-blue-50 rounded px-2 py-1.5 border border-blue-200"
+                    >
+                      <div className="font-semibold text-blue-900">
+                        {alert.regionName || alert.upperRegion || '해상'}
+                      </div>
+                      <div className="text-blue-700">
+                        {WARNING_TYPE_NAMES[alert.warningType]} {WARNING_LEVEL_NAMES[alert.warningLevel]}
+                      </div>
+                    </div>
+                  ))}
+                  {marineStats.totalCount > 6 && (
+                    <div className="text-xs text-blue-700 text-center pt-1">
+                      외 {marineStats.totalCount - 6}건
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowMarineAlerts(true)}
+                className="bg-white/95 backdrop-blur-sm hover:bg-blue-50 border border-blue-300 rounded-lg px-3 py-2 text-blue-900 font-medium text-sm shadow-lg transition-colors flex items-center gap-2"
+              >
+                <span>🌊</span>
+                <span>해상 특보 {marineStats.totalCount}건</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Choropleth 지도 */}
         {geoJsonData.features.length === 0 ? (
@@ -240,56 +273,6 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
           />
         )}
       </div>
-
-      {/* 해상 특보 요약 */}
-      {marineStats.totalCount > 0 && showMarineAlerts && (
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 relative">
-          <button
-            onClick={() => setShowMarineAlerts(false)}
-            className="absolute top-2 right-2 text-blue-600 hover:text-blue-800 text-xl"
-            aria-label="닫기"
-          >
-            ×
-          </button>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-2xl">🌊</span>
-            <h3 className="font-semibold text-blue-900">
-              해상 특보 {marineStats.totalCount}건
-            </h3>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {marineStats.alerts.slice(0, 8).map((alert: WeatherAlert) => (
-              <div
-                key={alert.id}
-                className="bg-white rounded-lg p-3 border border-blue-200 text-sm"
-              >
-                <div className="font-semibold text-blue-900 mb-1">
-                  {alert.upperRegion || '기타'}
-                </div>
-                <div className="text-blue-700">
-                  {WARNING_TYPE_NAMES[alert.warningType]} {WARNING_LEVEL_NAMES[alert.warningLevel]}
-                </div>
-                <div className="text-xs text-blue-600 mt-1">{alert.regionName}</div>
-              </div>
-            ))}
-          </div>
-          {marineStats.totalCount > 8 && (
-            <div className="mt-3 text-center text-sm text-blue-700">
-              외 {marineStats.totalCount - 8}건
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 해상 특보 숨김 시 표시 버튼 */}
-      {marineStats.totalCount > 0 && !showMarineAlerts && (
-        <button
-          onClick={() => setShowMarineAlerts(true)}
-          className="mt-4 w-full bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded-xl p-3 text-blue-900 font-medium transition-colors"
-        >
-          🌊 해상 특보 {marineStats.totalCount}건 보기
-        </button>
-      )}
     </div>
   );
 }
