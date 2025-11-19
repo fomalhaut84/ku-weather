@@ -300,7 +300,7 @@ export default function DashboardContent() {
         {/* 헤더 */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold">📊 기상특보 현황</h1>
+            <h1 className="text-3xl font-bold text-slate-800">📊 기상특보 현황</h1>
             <button
               onClick={() => loadAlerts()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -605,7 +605,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       statsPeriod === '7d'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 7일
@@ -615,7 +615,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       statsPeriod === '30d'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 30일
@@ -628,7 +628,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '6m'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 6개월
@@ -638,7 +638,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '1y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 1년
@@ -648,7 +648,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '2y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 2년
@@ -661,7 +661,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '6m'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 6개월
@@ -671,7 +671,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '1y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 1년
@@ -681,7 +681,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '2y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 2년

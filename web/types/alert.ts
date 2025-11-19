@@ -71,7 +71,7 @@ export const WARNING_TYPE_EMOJI: Record<string, string> = {
 
 // 특보 수준별 색상 클래스
 export const WARNING_LEVEL_COLORS: Record<string, string> = {
-  '1': 'bg-yellow-100 border-yellow-300 text-yellow-800',
-  '2': 'bg-orange-100 border-orange-300 text-orange-800',
-  '3': 'bg-red-100 border-red-300 text-red-800'
+  '1': 'bg-blue-50 border-blue-400 text-blue-900',
+  '2': 'bg-yellow-50 border-yellow-500 text-yellow-900',
+  '3': 'bg-red-50 border-red-500 text-red-900'
 };
