@@ -4,7 +4,8 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import type { WeatherAlert } from '@/types/alert';
 
-// 한국 주요 지역 좌표 (upperRegion 기준)
+// 한국 주요 지역 좌표 (DB upperRegion 기준)
+// DB 지역명과 일치하도록 수정 (Nivo와 동일)
 const REGION_COORDINATES: Record<string, [number, number]> = {
   '서울특별시': [37.5665, 126.9780],
   '부산광역시': [35.1796, 129.0756],
@@ -22,7 +23,7 @@ const REGION_COORDINATES: Record<string, [number, number]> = {
   '전라남도': [34.8679, 126.991],
   '경상북도': [36.4919, 128.888],
   '경상남도': [35.4606, 128.2132],
-  '제주특별자치도': [33.4890, 126.4983],
+  '제주도': [33.4890, 126.4983], // DB 지역명과 일치
 };
 
 // 특보 수준에 따른 색상
