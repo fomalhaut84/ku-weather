@@ -38,13 +38,8 @@ export function useChoroplethData(alerts: WeatherAlert[]): Map<string, RegionAle
     alerts.forEach((alert) => {
       if (!alert.upperRegion) return;
 
-      // DB와 프론트엔드 간 지역명 차이 정규화 (역방향)
-      let normalizedUpperRegion = alert.upperRegion;
-      if (normalizedUpperRegion === '강원도') normalizedUpperRegion = '강원특별자치도';
-      if (normalizedUpperRegion === '전라북도') normalizedUpperRegion = '전북특별자치도';
-      if (normalizedUpperRegion === '제주도') normalizedUpperRegion = '제주특별자치도';
-
-      const regionData = regionDataMap.get(normalizedUpperRegion);
+      // REGION_NAME_MAP의 값이 DB 지역명과 일치하므로 직접 조회
+      const regionData = regionDataMap.get(alert.upperRegion);
       if (!regionData) return;
 
       // 육상/해상 구분

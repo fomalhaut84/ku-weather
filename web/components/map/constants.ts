@@ -13,7 +13,8 @@ export const LAND_ALERT_COLORS: Record<number, string> = {
 // 해상 특보 종류 (warningType 코드)
 export const MARINE_WARNING_TYPES = ['O', 'N', 'V']; // 해일, 지진해일, 풍랑
 
-// 지역명 매핑 (GeoJSON name → upperRegion)
+// 지역명 매핑 (GeoJSON name → DB upperRegion)
+// DB와 일관성을 위해 value는 DB에 저장된 지역명 사용
 export const REGION_NAME_MAP: Record<string, string> = {
   '서울특별시': '서울특별시',
   '부산광역시': '부산광역시',
@@ -31,7 +32,7 @@ export const REGION_NAME_MAP: Record<string, string> = {
   '전라남도': '전라남도',
   '경상북도': '경상북도',
   '경상남도': '경상남도',
-  '제주특별자치도': '제주특별자치도',
+  '제주특별자치도': '제주도', // GeoJSON과 DB의 명칭 차이 고려
 };
 
 // 역매핑: upperRegion → GeoJSON name
