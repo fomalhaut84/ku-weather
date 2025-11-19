@@ -22,10 +22,16 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
   const regionDataMap = useChoroplethData(alerts);
   const marineStats = useMarineAlertStats(alerts);
 
-  // GeoJSON 데이터 로드 (static import)
+  // GeoJSON 데이터 로드 및 ID 설정
   const geoJsonData = useMemo<FeatureCollection>(() => {
     try {
-      return require('@/public/data/skorea-provinces-geo.json');
+      const data = require('@/public/data/skorea-provinces-geo.json');
+      // 각 feature에 명시적인 id 추가 (Nivo가 key로 사용)
+      const featuresWithId = data.features.map((feature: any) => ({
+        ...feature,
+        id: feature.properties?.code || feature.properties?.name,
+      }));
+      return { ...data, features: featuresWithId };
     } catch (error) {
       console.error('GeoJSON 로드 실패:', error);
       return { type: 'FeatureCollection', features: [] };
