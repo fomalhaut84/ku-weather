@@ -276,7 +276,22 @@ export default function DashboardContent() {
   // 지도에서 지역 클릭 핸들러
   const handleRegionClick = useCallback((upperRegion: string) => {
     // upperRegion은 지역 이름이므로 code로 변환
-    const regionObj = availableRegions.find((r) => r.name === upperRegion);
+    // REGION_NAME_MAP 매핑을 고려하여 양방향 검색
+    const regionObj = availableRegions.find((r) => {
+      // 정확한 이름 매칭
+      if (r.name === upperRegion) return true;
+
+      // "강원도" → "강원특별자치도", "전라북도" → "전북특별자치도" 매칭
+      if (upperRegion === '강원도' && r.name === '강원특별자치도') return true;
+      if (upperRegion === '전라북도' && r.name === '전북특별자치도') return true;
+
+      // 반대 방향: "강원특별자치도" → "강원도", "전북특별자치도" → "전라북도"
+      if (upperRegion === '강원특별자치도' && r.name === '강원도') return true;
+      if (upperRegion === '전북특별자치도' && r.name === '전라북도') return true;
+
+      return false;
+    });
+
     if (regionObj) {
       setSelectedRegion(regionObj.code);
     }
