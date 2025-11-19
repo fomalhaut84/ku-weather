@@ -82,8 +82,13 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
           data={choroplethData}
           features={geoJsonData.features}
           margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-          colors={(datum) => LAND_ALERT_COLORS[Number(datum.value) || 0]}
-          domain={[0, 3]}
+          colors={[
+            LAND_ALERT_COLORS[0],
+            LAND_ALERT_COLORS[1],
+            LAND_ALERT_COLORS[2],
+            LAND_ALERT_COLORS[3],
+          ]}
+          domain={[0, 1, 2, 3]}
           unknownColor="#f1f5f9"
           label="properties.name"
           valueFormat={(value) => `경보 단계: ${value}`}
