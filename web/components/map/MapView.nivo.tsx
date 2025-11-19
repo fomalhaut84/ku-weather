@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useMemo, useState, useEffect } from 'react';
+import { memo, useMemo, useState, useEffect, useRef } from 'react';
 import { Choropleth } from '@nivo/geo';
 import type { FeatureCollection } from 'geojson';
 import type { WeatherAlert } from '@/types/alert';
@@ -23,9 +23,33 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
   });
   const [isLoadingGeoJson, setIsLoadingGeoJson] = useState(true);
 
+  // 반응형 지도 크기
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [mapSize, setMapSize] = useState({ width: 1100, height: 560 });
+
   // 특보 데이터 전처리
   const regionDataMap = useChoroplethData(alerts);
   const marineStats = useMarineAlertStats(alerts);
+
+  // 컨테이너 크기 감지 (반응형)
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width } = entry.contentRect;
+        // 비율 유지: 1100:560 ≈ 2:1
+        const height = Math.floor(width * (560 / 1100));
+        setMapSize({ width: Math.floor(width), height });
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   // GeoJSON 데이터를 비동기로 로드 (번들 크기 최적화)
   useEffect(() => {
@@ -92,7 +116,7 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
   return (
     <div className="relative w-full flex flex-col">
       {/* 지도 영역 */}
-      <div className="relative w-full h-[600px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center">
+      <div ref={containerRef} className="relative w-full h-[600px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center">
         {/* 줌 컨트롤 */}
         <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
           <button
@@ -178,8 +202,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
           </div>
         ) : (
           <Choropleth
-            width={1100}
-            height={560}
+            width={mapSize.width}
+            height={mapSize.height}
             data={choroplethData}
             features={geoJsonData.features}
             match="id"
