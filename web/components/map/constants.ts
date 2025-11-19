@@ -5,9 +5,9 @@
 // 육상 특보 수준별 색상 (Choropleth용)
 export const LAND_ALERT_COLORS: Record<number, string> = {
   0: '#e2e8f0', // 정상 - 회색
-  1: '#fef3c7', // 예비특보 - 노란색
-  2: '#fed7aa', // 주의보 - 주황색
-  3: '#fecaca', // 경보 - 빨간색
+  1: '#bfdbfe', // 예비특보 - 파란색
+  2: '#fde047', // 주의보 - 노란색
+  3: '#dc2626', // 경보 - 진한 빨간색
 };
 
 // 해상 특보 종류 (warningType 코드)
