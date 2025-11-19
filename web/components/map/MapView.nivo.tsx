@@ -15,7 +15,7 @@ interface MapViewProps {
 }
 
 function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
-  const [zoom, setZoom] = useState(2200);
+  const [zoom, setZoom] = useState(5500);
   const [showMarineAlerts, setShowMarineAlerts] = useState(true);
   const [geoJsonData, setGeoJsonData] = useState<FeatureCollection>({
     type: 'FeatureCollection',
@@ -82,6 +82,12 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
       };
     });
     console.log('[MapView.nivo] choroplethData 생성:', data.length, 'items');
+    console.log('[MapView.nivo] ID 매칭 확인:');
+    data.slice(0, 3).forEach((d, i) => {
+      const feature = geoJsonData.features[i];
+      console.log(`  [${i}] data.id="${d.id}", feature.id="${feature.id}", match=${d.id === feature.id}, value=${d.value}`);
+    });
+    console.log('[MapView.nivo] Value 분포:', data.map(d => d.value).join(', '));
     return data;
   }, [geoJsonData, regionDataMap]);
 
@@ -99,6 +105,8 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
   }
 
   console.log('[MapView.nivo] 렌더링 시작 - features:', geoJsonData.features.length, 'choroplethData:', choroplethData.length);
+  console.log('[MapView.nivo] 첫 번째 feature 샘플:', geoJsonData.features[0]);
+  console.log('[MapView.nivo] 첫 번째 choropleth 데이터:', choroplethData[0]);
 
   return (
     <div className="relative w-full flex flex-col">
@@ -108,21 +116,21 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
         <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
           <button
             className="bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition-colors"
-            onClick={() => setZoom((z) => Math.min(z + 300, 3500))}
+            onClick={() => setZoom((z) => Math.min(z + 500, 8000))}
             aria-label="확대"
           >
             +
           </button>
           <button
             className="bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold shadow-sm transition-colors"
-            onClick={() => setZoom((z) => Math.max(z - 300, 1500))}
+            onClick={() => setZoom((z) => Math.max(z - 500, 3000))}
             aria-label="축소"
           >
             −
           </button>
           <button
             className="bg-white hover:bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium shadow-sm transition-colors"
-            onClick={() => setZoom(2200)}
+            onClick={() => setZoom(5500)}
             aria-label="초기화"
           >
             초기화
@@ -139,23 +147,25 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
             data={choroplethData}
             features={geoJsonData.features}
             margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
-          colors={[
-            LAND_ALERT_COLORS[0],
-            LAND_ALERT_COLORS[1],
-            LAND_ALERT_COLORS[2],
-            LAND_ALERT_COLORS[3],
-          ]}
-          domain={[0, 1, 2, 3]}
-          unknownColor="#f1f5f9"
-          label="properties.name"
-          valueFormat={(value) => `경보 단계: ${value}`}
-          projectionType="mercator"
-          projectionScale={zoom}
-          projectionTranslation={[0.58, 0.9]}
-          projectionRotation={[0, 0, 0]}
-          enableGraticule={false}
-          borderWidth={1.2}
-          borderColor="#ffffff"
+            colors={[
+              LAND_ALERT_COLORS[0],
+              LAND_ALERT_COLORS[1],
+              LAND_ALERT_COLORS[2],
+              LAND_ALERT_COLORS[3],
+            ]}
+            domain={[0, 1, 2, 3]}
+            unknownColor="#f1f5f9"
+            label="properties.name"
+            valueFormat={(value) => `경보 단계: ${value}`}
+            projectionType="mercator"
+            projectionScale={zoom}
+            projectionTranslation={[0.52, 0.48]}
+            projectionRotation={[-128, 0, 0]}
+            enableGraticule={true}
+            graticuleLineColor="#e0e0e0"
+            borderWidth={1.5}
+            borderColor="#ffffff"
+            isInteractive={true}
           onClick={(feature) => {
             const geoJsonName = feature.label || '';
             const upperRegion = REGION_NAME_MAP[geoJsonName] || geoJsonName;
