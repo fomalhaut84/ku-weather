@@ -1367,11 +1367,73 @@ export class WeatherService {
   }
 
   /**
+   * 타임아웃과 재시도를 지원하는 fetch
+   * @param url 요청 URL
+   * @param options fetch 옵션
+   * @param maxRetries 최대 재시도 횟수
+   * @param timeout 타임아웃 (ms)
+   * @returns Response
+   */
+  private async fetchWithRetry(
+    url: string,
+    options: RequestInit = {},
+    maxRetries: number = 3,
+    timeout: number = 10000
+  ): Promise<Response> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // AbortController로 타임아웃 구현
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        // 성공 또는 4xx 에러는 재시도 없이 반환
+        if (response.ok || (response.status >= 400 && response.status < 500)) {
+          return response;
+        }
+
+        // 5xx 에러는 재시도
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        logger.warn(`API 호출 실패 (시도 ${attempt + 1}/${maxRetries}): ${lastError.message}`);
+
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          lastError = new Error(`요청 타임아웃 (${timeout}ms)`);
+        } else {
+          lastError = error instanceof Error ? error : new Error(String(error));
+        }
+
+        logger.warn(`API 호출 실패 (시도 ${attempt + 1}/${maxRetries}): ${lastError.message}`);
+      }
+
+      // 마지막 시도가 아니면 대기 후 재시도 (exponential backoff)
+      if (attempt < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000); // 최대 5초
+        logger.debug(`${delay}ms 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    // 모든 재시도 실패
+    throw lastError || new Error('알 수 없는 오류');
+  }
+
+  /**
    * 초단기예보 데이터 조회
    * @param regionId 지역 코드 (특보구역 코드)
    * @returns 날씨 예보 데이터
    */
   async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
+    const startTime = Date.now();
+
     try {
       // 1. 격자 좌표 조회 (CSV 우선, 하드코딩 fallback)
       const gridInfo = this.getGridCoordinates(regionId);
@@ -1401,9 +1463,9 @@ export class WeatherService {
       });
 
       const url = `${this.forecastUrl}?${params.toString()}`;
-      logger.debug(`초단기예보 API 호출: ${url}`);
+      logger.debug(`초단기예보 API 호출: ${url.replace(this.authKey, '***')}`); // authKey 마스킹
 
-      const response = await fetch(url);
+      const response = await this.fetchWithRetry(url);
       if (!response.ok) {
         throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
       }
@@ -1431,11 +1493,16 @@ export class WeatherService {
         return null;
       }
 
-      logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공`);
+      const elapsedTime = Date.now() - startTime;
+      logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공 (${elapsedTime}ms)`);
       return forecast;
     } catch (error) {
+      const elapsedTime = Date.now() - startTime;
       // 날씨 예보는 필수 기능이 아니므로 warn 레벨로 로깅
-      logger.warn(`날씨 예보 조회 실패 (지역: ${regionId}):`, error instanceof Error ? error.message : String(error));
+      logger.warn(
+        `날씨 예보 조회 실패 (지역: ${regionId}, 소요시간: ${elapsedTime}ms):`,
+        error instanceof Error ? error.message : String(error)
+      );
       return null;
     }
   }
