@@ -1388,15 +1388,15 @@ export class WeatherService {
       const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
       const baseDate = this.formatDate(baseDateTime); // YYYYMMDD
 
-      // 3. Typ02 Open API 호출 (파라미터: serviceKey, base_date, base_time, nx, ny, dataType, numOfRows, pageNo)
+      // 3. Typ02 Open API 호출 (파라미터: authKey, base_date, base_time, nx, ny, dataType, numOfRows, pageNo)
       const params = new URLSearchParams({
-        serviceKey: this.authKey,
+        authKey: this.authKey,
         base_date: baseDate,
         base_time: baseTime,
         nx: gridInfo.nx.toString(),
         ny: gridInfo.ny.toString(),
         dataType: 'JSON',
-        numOfRows: '100',
+        numOfRows: '1000',
         pageNo: '1'
       });
 
