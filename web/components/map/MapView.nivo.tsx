@@ -269,20 +269,30 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
                 <div className="font-bold text-base mb-2 border-b border-slate-700 pb-2">{feature.label}</div>
                 {Object.keys(landAlertGroups).length > 0 ? (
                   <div className="space-y-2 text-sm">
-                    {Object.values(landAlertGroups).map((group: any, idx: number) => (
-                      <div key={idx}>
-                        <div className="flex items-center gap-2 font-semibold text-yellow-400">
-                          <span>●</span>
-                          <span>
-                            {WARNING_TYPE_NAMES[group.type] || group.type}{' '}
-                            {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
-                          </span>
+                    {Object.values(landAlertGroups).map((group: any, idx: number) => {
+                      // 특보 수준별 색상 매핑
+                      const levelColors: Record<string, string> = {
+                        '1': 'text-blue-400',   // 예비특보
+                        '2': 'text-yellow-400', // 주의보
+                        '3': 'text-red-400',    // 경보
+                      };
+                      const textColor = levelColors[group.level] || 'text-yellow-400';
+
+                      return (
+                        <div key={idx}>
+                          <div className={`flex items-center gap-2 font-semibold ${textColor}`}>
+                            <span>●</span>
+                            <span>
+                              {WARNING_TYPE_NAMES[group.type] || group.type}{' '}
+                              {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
+                            </span>
+                          </div>
+                          <div className="ml-5 text-xs text-slate-300 mt-1">
+                            {group.regions.join(', ')}
+                          </div>
                         </div>
-                        <div className="ml-5 text-xs text-slate-300 mt-1">
-                          {group.regions.join(', ')}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-sm text-slate-400">육상 특보 없음</div>
@@ -293,20 +303,30 @@ function MapViewNivo({ alerts, onRegionClick }: MapViewProps) {
                       🌊 해상 특보 {regionData.marineAlerts.length}건
                     </div>
                     <div className="space-y-2 text-sm">
-                      {Object.values(marineAlertGroups).map((group: any, idx: number) => (
-                        <div key={idx}>
-                          <div className="flex items-center gap-2 font-semibold text-blue-400">
-                            <span>●</span>
-                            <span>
-                              {WARNING_TYPE_NAMES[group.type]} {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
-                            </span>
+                      {Object.values(marineAlertGroups).map((group: any, idx: number) => {
+                        // 특보 수준별 색상 매핑 (육상 특보와 동일)
+                        const levelColors: Record<string, string> = {
+                          '1': 'text-blue-400',   // 예비특보
+                          '2': 'text-yellow-400', // 주의보
+                          '3': 'text-red-400',    // 경보
+                        };
+                        const textColor = levelColors[group.level] || 'text-blue-400';
+
+                        return (
+                          <div key={idx}>
+                            <div className={`flex items-center gap-2 font-semibold ${textColor}`}>
+                              <span>●</span>
+                              <span>
+                                {WARNING_TYPE_NAMES[group.type]} {WARNING_LEVEL_NAMES[group.level]} ({group.regions.length})
+                              </span>
+                            </div>
+                            <div className="ml-5 text-xs text-slate-300 mt-1">
+                              {group.regions.slice(0, 5).join(', ')}
+                              {group.regions.length > 5 && ` 외 ${group.regions.length - 5}곳`}
+                            </div>
                           </div>
-                          <div className="ml-5 text-xs text-slate-300 mt-1">
-                            {group.regions.slice(0, 5).join(', ')}
-                            {group.regions.length > 5 && ` 외 ${group.regions.length - 5}곳`}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
