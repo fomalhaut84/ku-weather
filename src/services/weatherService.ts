@@ -1503,8 +1503,11 @@ export class WeatherService {
       const baseDate = firstItem.baseDate;
       const baseTime = firstItem.baseTime;
 
+      logger.debug(`API 응답 첫 번째 항목:`, JSON.stringify(firstItem, null, 2));
+      logger.debug(`추출된 baseDate: ${baseDate}, baseTime: ${baseTime}`);
+
       if (!baseDate || !baseTime) {
-        logger.warn('API 응답에 baseDate 또는 baseTime이 없습니다');
+        logger.warn(`API 응답에 baseDate 또는 baseTime이 없습니다. firstItem:`, firstItem);
         return null;
       }
 
