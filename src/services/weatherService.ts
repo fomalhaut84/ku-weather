@@ -7,7 +7,7 @@ import * as path from 'path';
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
-  private readonly forecastUrl = 'https://apihub.kma.go.kr/api/typ01/url/fct_afs_dl.php';
+  private readonly forecastUrl = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getUltraSrtFcst';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
   private alertCache: AlertCache = new AlertCache();
@@ -15,6 +15,9 @@ export class WeatherService {
   private isInitialized: boolean = false;
   private lastLogTime: Date | null = null;
   private lastApiCalls: string[] = [];
+
+  // CSV 기반 격자 좌표 캐시 (행정구역코드 → 격자 좌표)
+  private gridCoordinatesFromCsv: Map<string, { nx: number; ny: number; name: string }> = new Map();
 
   // 기상청 특보구역 코드 -> 격자 좌표 매핑
   private readonly gridCoordinates: Map<string, { nx: number; ny: number; name: string }> = new Map([
@@ -67,9 +70,12 @@ export class WeatherService {
     if (!this.authKey) {
       throw new Error('WEATHER_API_KEY가 제공되지 않았습니다');
     }
-    
+
     // status.log 파일 초기화
     this.initializeStatusLog();
+
+    // CSV 기반 격자 좌표 로드
+    this.loadGridCoordinatesFromCsv();
   }
 
   /**
@@ -1253,40 +1259,145 @@ export class WeatherService {
   }
 
   /**
+   * CSV 파일에서 격자 좌표 데이터 로드
+   * 파일: 단기예보지점좌표(위경도)_202504.csv
+   * 형식: 구분,행정구역코드,1단계,2단계,3단계,격자 X,격자 Y,경도(시),경도(분),경도(초),위도(시),위도(분),위도(초),경도(초/100),위도(초/100),위치업데이트
+   */
+  private loadGridCoordinatesFromCsv(): void {
+    try {
+      const csvPath = path.join(__dirname, '../../단기예보지점좌표(위경도)_202504.csv');
+
+      if (!fs.existsSync(csvPath)) {
+        logger.warn(`격자 좌표 CSV 파일을 찾을 수 없습니다: ${csvPath}`);
+        logger.warn('하드코딩된 광역시도 좌표만 사용됩니다.');
+        return;
+      }
+
+      const csvContent = fs.readFileSync(csvPath, 'utf-8');
+      const lines = csvContent.split('\n');
+      let loadedCount = 0;
+
+      // 첫 번째 라인은 헤더이므로 스킵
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const fields = line.split(',');
+        if (fields.length < 7) continue;
+
+        const adminCode = fields[1].trim(); // 행정구역코드 (10자리 숫자)
+        const region1 = fields[2].trim();   // 1단계 (시/도)
+        const region2 = fields[3].trim();   // 2단계 (시/군/구)
+        const region3 = fields[4].trim();   // 3단계 (읍/면/동)
+        const nx = parseInt(fields[5].trim(), 10);
+        const ny = parseInt(fields[6].trim(), 10);
+
+        if (isNaN(nx) || isNaN(ny) || !adminCode) continue;
+
+        // 지역명 조합
+        let name = region1;
+        if (region2) name += ` ${region2}`;
+        if (region3) name += ` ${region3}`;
+
+        // 행정구역코드를 그대로 키로 사용
+        this.gridCoordinatesFromCsv.set(adminCode, { nx, ny, name });
+        loadedCount++;
+      }
+
+      logger.info(`CSV 파일에서 ${loadedCount}개 지역의 격자 좌표를 로드했습니다.`);
+    } catch (error) {
+      logger.error('CSV 파일 로드 중 오류:', error);
+      logger.warn('하드코딩된 광역시도 좌표만 사용됩니다.');
+    }
+  }
+
+  /**
+   * REG_ID를 행정구역코드로 변환
+   * @param regionId 특보구역 코드 (예: L1100000, L1100510)
+   * @returns 행정구역코드 (10자리, 예: 1100000000)
+   */
+  private convertRegIdToAdminCode(regionId: string): string | null {
+    // L로 시작하는 8자리 코드
+    if (!regionId.startsWith('L') || regionId.length < 8) {
+      logger.warn(`잘못된 지역 코드 형식: ${regionId}`);
+      return null;
+    }
+
+    // L 제거 (L1100000 → 1100000)
+    const numericPart = regionId.substring(1);
+
+    // 7자리 숫자 뒤에 000 추가 (1100000 → 1100000000)
+    const adminCode = numericPart + '000';
+
+    return adminCode;
+  }
+
+  /**
+   * 격자 좌표 조회 (CSV 우선, 하드코딩 fallback)
+   * @param regionId 특보구역 코드 (예: L1100000)
+   * @returns 격자 좌표 정보
+   */
+  private getGridCoordinates(regionId: string): { nx: number; ny: number; name: string } | null {
+    // 1. 행정구역코드로 변환
+    const adminCode = this.convertRegIdToAdminCode(regionId);
+
+    // 2. CSV에서 조회 (우선)
+    if (adminCode && this.gridCoordinatesFromCsv.has(adminCode)) {
+      const gridInfo = this.gridCoordinatesFromCsv.get(adminCode)!;
+      logger.debug(`CSV에서 격자 좌표 조회 성공: ${regionId} → ${adminCode} → (${gridInfo.nx}, ${gridInfo.ny})`);
+      return gridInfo;
+    }
+
+    // 3. 하드코딩된 광역시도 좌표에서 조회 (fallback)
+    if (this.gridCoordinates.has(regionId)) {
+      const gridInfo = this.gridCoordinates.get(regionId)!;
+      logger.debug(`하드코딩 좌표 조회 성공: ${regionId} → (${gridInfo.nx}, ${gridInfo.ny})`);
+      return gridInfo;
+    }
+
+    // 4. 상위 지역 코드로 재시도
+    const upperRegionId = this.getUpperRegionCode(regionId);
+    if (upperRegionId !== regionId) {
+      logger.debug(`상위 지역 코드로 재시도: ${regionId} → ${upperRegionId}`);
+      return this.getGridCoordinates(upperRegionId);
+    }
+
+    logger.warn(`지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`);
+    return null;
+  }
+
+  /**
    * 초단기예보 데이터 조회
    * @param regionId 지역 코드 (특보구역 코드)
    * @returns 날씨 예보 데이터
    */
   async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
     try {
-      // 1. 지역 코드를 광역시도 코드로 변환 (필요한 경우)
-      const mappedRegionId = this.getUpperRegionCode(regionId);
-
-      // 2. 격자 좌표로 변환
-      const gridInfo = this.gridCoordinates.get(mappedRegionId);
+      // 1. 격자 좌표 조회 (CSV 우선, 하드코딩 fallback)
+      const gridInfo = this.getGridCoordinates(regionId);
       if (!gridInfo) {
-        logger.warn(`지역 코드 ${regionId} (매핑: ${mappedRegionId})에 대한 격자 좌표를 찾을 수 없습니다`);
+        logger.warn(`지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`);
         return null;
       }
 
-      // 3. KST 기준 현재 시각으로 API 파라미터 생성
+      // 2. KST 기준 현재 시각으로 API 파라미터 생성
       const now = this.getKSTNow();
-      const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (정시 기준, 30분 이후는 다음 시간)
+      const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (30분 단위)
 
       // 자정 이전 시간대(00:00~00:30)에서 23:30으로 롤백되면 전날 날짜 사용
       const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
       const baseDate = this.formatDate(baseDateTime); // YYYYMMDD
 
-      // 3. API 호출
+      // 3. Typ02 Open API 호출 (파라미터: serviceKey, base_date, base_time, nx, ny, dataType, numOfRows, pageNo)
       const params = new URLSearchParams({
-        authKey: this.authKey,
+        serviceKey: this.authKey,
         base_date: baseDate,
         base_time: baseTime,
         nx: gridInfo.nx.toString(),
         ny: gridInfo.ny.toString(),
+        dataType: 'JSON',
         numOfRows: '100',
-        pageNo: '1',
-        dataType: 'JSON'
+        pageNo: '1'
       });
 
       const url = `${this.forecastUrl}?${params.toString()}`;
@@ -1431,6 +1542,19 @@ export class WeatherService {
 
       const forecastDateTime = selectedTime;
 
+      // 강수량 파싱 (RN1: "강수없음", "1mm 미만", "0.1", "1.5" 등)
+      let precipitation: number | undefined;
+      if (dataMap['RN1']) {
+        const rn1 = dataMap['RN1'];
+        if (rn1 === '강수없음' || rn1.includes('강수없음')) {
+          precipitation = 0;
+        } else if (rn1.includes('1mm 미만')) {
+          precipitation = 0.1;
+        } else {
+          precipitation = this.parseNumber(rn1);
+        }
+      }
+
       // WeatherForecast 객체 생성
       const forecast: WeatherForecast = {
         regionId,
@@ -1440,9 +1564,13 @@ export class WeatherService {
         humidity: this.parseNumber(dataMap['REH']),
         skyCondition: this.parseNumber(dataMap['SKY']),
         precipitationType: this.parseNumber(dataMap['PTY']),
-        precipitation: this.parseNumber(dataMap['RN1']),
+        precipitation,
         windSpeed: this.parseNumber(dataMap['WSD']),
         windDirection: this.parseNumber(dataMap['VEC']),
+        // 초단기예보에는 없는 필드 (단기예보에만 있음)
+        precipitationProbability: undefined, // POP (단기예보 전용)
+        minTemperature: undefined,           // TMN (단기예보 전용)
+        maxTemperature: undefined,           // TMX (단기예보 전용)
       };
 
       // 체감온도 계산
