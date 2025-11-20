@@ -106,6 +106,12 @@ describe('WeatherService', () => {
       expect((weatherService as any).getUpperRegionName('L1031800')).toBe('세종특별자치시'); // 특별 케이스
     });
 
+    it('should return correct upper region for Ulleungdo and Dokdo', () => {
+      // 울릉도.독도는 행정구역상 경상북도 울릉군에 속함
+      expect((weatherService as any).getUpperRegionName('L1072100')).toBe('경상북도'); // 경상북도 하위 코드
+      expect((weatherService as any).getUpperRegionName('L1600000')).toBe('경상북도'); // 특수 코드 (명시적 매핑)
+    });
+
     it('should return correct upper region for sea areas', () => {
       expect((weatherService as any).getUpperRegionName('S1200000')).toBe('서해전해상'); // 서해전해상 직접
       expect((weatherService as any).getUpperRegionName('S1150000')).toBe('동해중부전해상'); // 동해중부전해상 직접  

@@ -665,6 +665,11 @@ export class WeatherService {
     // Codex P1 피드백 반영: 먼저 현재 지역이 이미 광역시/도 단위인지 확인
     const currentName = this.getRegionName(regId);
 
+    // 특수 코드 처리: 울릉도.독도는 경상북도로 매핑
+    if (currentName === '울릉도.독도') {
+      return '경상북도';
+    }
+
     // 현재 지역이 실제 매핑이고 (fallback이 아니고)
     const isRealMapping = !currentName.startsWith('육상지역(') && !currentName.startsWith('해상지역(');
 
