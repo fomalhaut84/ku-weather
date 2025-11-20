@@ -69,9 +69,9 @@ export const WARNING_TYPE_EMOJI: Record<string, string> = {
   'F': '🌫️'
 };
 
-// 특보 수준별 색상 클래스
+// 특보 수준별 색상 클래스 (지도 색상과 통일)
 export const WARNING_LEVEL_COLORS: Record<string, string> = {
-  '1': 'bg-yellow-100 border-yellow-300 text-yellow-800',
-  '2': 'bg-orange-100 border-orange-300 text-orange-800',
-  '3': 'bg-red-100 border-red-300 text-red-800'
+  '1': 'bg-[#bfdbfe] border-blue-500 text-blue-900',   // 예비특보 - 지도와 동일
+  '2': 'bg-[#fde047] border-yellow-600 text-yellow-900', // 주의보 - 지도와 동일
+  '3': 'bg-[#dc2626] border-red-700 text-white'          // 경보 - 지도와 동일
 };

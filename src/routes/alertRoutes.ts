@@ -46,7 +46,14 @@ router.get('/current', async (req: Request, res: Response) => {
     if (regionId) filters.regionId = regionId as string;
     if (warningType) filters.warningType = warningType as string;
     if (warningLevel) filters.warningLevel = warningLevel as string;
-    if (upperRegion) filters.upperRegion = upperRegion as string;
+    if (upperRegion) {
+      // DB와 프론트엔드 간 지역명 차이 정규화
+      let normalizedRegion = upperRegion as string;
+      if (normalizedRegion === '강원특별자치도') normalizedRegion = '강원도';
+      if (normalizedRegion === '전북특별자치도') normalizedRegion = '전라북도';
+      if (normalizedRegion === '제주특별자치도') normalizedRegion = '제주도';
+      filters.upperRegion = normalizedRegion;
+    }
 
     const alerts = await databaseService.getCurrentAlerts(filters);
 

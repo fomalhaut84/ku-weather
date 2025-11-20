@@ -276,7 +276,24 @@ export default function DashboardContent() {
   // 지도에서 지역 클릭 핸들러
   const handleRegionClick = useCallback((upperRegion: string) => {
     // upperRegion은 지역 이름이므로 code로 변환
-    const regionObj = availableRegions.find((r) => r.name === upperRegion);
+    // REGION_NAME_MAP 매핑을 고려하여 양방향 검색
+    const regionObj = availableRegions.find((r) => {
+      // 정확한 이름 매칭
+      if (r.name === upperRegion) return true;
+
+      // 특별자치도 → 일반명 매칭
+      if (upperRegion === '강원도' && r.name === '강원특별자치도') return true;
+      if (upperRegion === '전라북도' && r.name === '전북특별자치도') return true;
+      if (upperRegion === '제주도' && r.name === '제주특별자치도') return true;
+
+      // 일반명 → 특별자치도 매칭 (반대 방향)
+      if (upperRegion === '강원특별자치도' && r.name === '강원도') return true;
+      if (upperRegion === '전북특별자치도' && r.name === '전라북도') return true;
+      if (upperRegion === '제주특별자치도' && r.name === '제주도') return true;
+
+      return false;
+    });
+
     if (regionObj) {
       setSelectedRegion(regionObj.code);
     }
@@ -300,7 +317,7 @@ export default function DashboardContent() {
         {/* 헤더 */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold">📊 기상특보 현황</h1>
+            <h1 className="text-3xl font-bold text-slate-800">📊 기상특보 현황</h1>
             <button
               onClick={() => loadAlerts()}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -605,7 +622,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       statsPeriod === '7d'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 7일
@@ -615,7 +632,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       statsPeriod === '30d'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 30일
@@ -628,7 +645,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '6m'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 6개월
@@ -638,7 +655,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '1y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 1년
@@ -648,7 +665,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       advancedPeriod === '2y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 2년
@@ -661,7 +678,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '6m'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 6개월
@@ -671,7 +688,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '1y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 1년
@@ -681,7 +698,7 @@ export default function DashboardContent() {
                     className={`px-3 py-1 rounded text-sm ${
                       heatmapPeriod === '2y'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
                     }`}
                   >
                     최근 2년

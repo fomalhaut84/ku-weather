@@ -11,7 +11,7 @@
 
 ### PR 생성 워크플로우
 1. 피처 브랜치 생성 및 작업 완료
-2. **로컬에서 Codex 리뷰 실행**: `codex review`
+2. **로컬에서 Codex 리뷰 실행**: Claude Code에서 `@codex-cli 현재 브랜치의 모든 변경사항을 리뷰해줘` 요청
 3. 리뷰 피드백 반영 및 수정
 4. `dev` 브랜치를 base로 PR 생성 및 푸시
 5. **GitHub에서 Codex 리뷰 자동 실행** (PR 생성 시)
@@ -42,7 +42,7 @@ git checkout -b feature/new-feature
 # ... 코딩 작업 ...
 
 # 2. 로컬 Codex 리뷰
-codex review
+# Claude Code에서 "@codex-cli 현재 브랜치의 모든 변경사항을 리뷰해줘" 요청
 
 # 3. 피드백 반영 후 PR 생성
 gh pr create --base dev --title "..." --body "..."
