@@ -142,7 +142,9 @@ export interface WeatherForecast {
   regionId: string;
   /** 지역명 */
   regionName: string;
-  /** 예보 시각 */
+  /** 발표 시각 (baseDate, baseTime) */
+  baseTime: Date;
+  /** 예보 시각 (fcstDate, fcstTime) */
   forecastTime: Date;
   /** 기온 (°C) */
   temperature?: number;

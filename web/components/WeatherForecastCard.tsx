@@ -92,12 +92,16 @@ export default function WeatherForecastCard({ regionId }: WeatherForecastCardPro
         <h3 className="text-lg font-semibold text-gray-800">
           {forecast.regionName} 현재 날씨
         </h3>
-        <span className="text-xs text-gray-500">
-          {new Date(forecast.forecastTime).toLocaleTimeString('ko-KR', {
+        <div className="text-xs text-gray-500 text-right">
+          <div>발표시간: {new Date(forecast.baseTime).toLocaleTimeString('ko-KR', {
             hour: '2-digit',
             minute: '2-digit',
-          })} 기준
-        </span>
+          })}</div>
+          <div>{new Date(forecast.forecastTime).toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })} 기준</div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

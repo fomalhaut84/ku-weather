@@ -1563,11 +1563,12 @@ export class WeatherService {
         }
       }
 
-      // WeatherForecast 객체 생성 (기준 시간은 API 발표 시각 사용)
+      // WeatherForecast 객체 생성
       const forecast: WeatherForecast = {
         regionId,
         regionName,
-        forecastTime: this.parseForecastTime(baseDate + baseTime), // API 발표 시각 사용
+        baseTime: this.parseForecastTime(baseDate + baseTime),     // API 발표 시각
+        forecastTime: this.parseForecastTime(selectedTime),        // 예보 시각
         temperature: this.parseNumber(dataMap['T1H']),
         humidity: this.parseNumber(dataMap['REH']),
         skyCondition: this.parseNumber(dataMap['SKY']),

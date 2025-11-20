@@ -277,7 +277,8 @@ export async function getAlertHistory(params: {
 export interface WeatherForecast {
   regionId: string;
   regionName: string;
-  forecastTime: string;
+  baseTime: string;        // 발표 시각 (baseDate, baseTime)
+  forecastTime: string;    // 예보 시각 (fcstDate, fcstTime)
   temperature?: number;
   feelsLike?: number;
   minTemperature?: number;
