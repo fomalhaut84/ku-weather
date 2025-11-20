@@ -1498,6 +1498,16 @@ export class WeatherService {
         return null;
       }
 
+      // API 응답의 baseDate, baseTime 추출 (발표 시각)
+      const firstItem = items[0];
+      const baseDate = firstItem.baseDate;
+      const baseTime = firstItem.baseTime;
+
+      if (!baseDate || !baseTime) {
+        logger.warn('API 응답에 baseDate 또는 baseTime이 없습니다');
+        return null;
+      }
+
       // 1단계: 시간대별로 그룹화
       const timeSlices = new Map<string, any[]>();
       for (const item of items) {
@@ -1528,7 +1538,7 @@ export class WeatherService {
         }
       }
 
-      logger.debug(`선택된 예보 시간대: ${selectedTime} (총 ${timeSlices.size}개 시간대 중)`);
+      logger.debug(`발표 시각: ${baseDate} ${baseTime}, 선택된 예보 시간대: ${selectedTime} (총 ${timeSlices.size}개 시간대 중)`);
 
       // 3단계: 선택된 시간대의 데이터만 사용
       const selectedItems = timeSlices.get(selectedTime) || [];
@@ -1539,8 +1549,6 @@ export class WeatherService {
           dataMap[item.category] = item.fcstValue;
         }
       }
-
-      const forecastDateTime = selectedTime;
 
       // 강수량 파싱 (RN1: "강수없음", "1mm 미만", "0.1", "1.5" 등)
       let precipitation: number | undefined;
@@ -1555,11 +1563,11 @@ export class WeatherService {
         }
       }
 
-      // WeatherForecast 객체 생성
+      // WeatherForecast 객체 생성 (기준 시간은 API 발표 시각 사용)
       const forecast: WeatherForecast = {
         regionId,
         regionName,
-        forecastTime: this.parseForecastTime(forecastDateTime),
+        forecastTime: this.parseForecastTime(baseDate + baseTime), // API 발표 시각 사용
         temperature: this.parseNumber(dataMap['T1H']),
         humidity: this.parseNumber(dataMap['REH']),
         skyCondition: this.parseNumber(dataMap['SKY']),
