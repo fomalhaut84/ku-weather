@@ -26,5 +26,10 @@
   "dependencies": {
     "dotenv": "^17.2.1",
     "iconv-lite": "^0.6.3"
+  },
+  "overrides": {
+    "glob": "^10.5.0",
+    "js-yaml": "^4.1.1",
+    "test-exclude": "^7.0.1"
   }
 }
