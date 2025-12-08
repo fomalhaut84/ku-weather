@@ -40,5 +40,13 @@
     "iconv-lite": "^0.6.3",
     "node-telegram-bot-api": "^0.66.0",
     "socket.io": "^4.8.1"
+  },
+  "overrides": {
+    "body-parser": "^2.2.1",
+    "glob": "^10.5.0",
+    "js-yaml": "^4.1.1",
+    "form-data": "^4.0.1",
+    "tough-cookie": "^5.0.0",
+    "test-exclude": "^7.0.1"
   }
 }
