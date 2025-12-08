@@ -43,9 +43,10 @@
   },
   "overrides": {
     "body-parser": "^2.2.1",
-    "glob": "^11.0.0",
+    "glob": "^10.5.0",
     "js-yaml": "^4.1.1",
     "form-data": "^4.0.1",
-    "tough-cookie": "^5.0.0"
+    "tough-cookie": "^5.0.0",
+    "test-exclude": "^7.0.1"
   }
 }
