@@ -1,0 +1,75 @@
+# CodeQL 코드 보안 분석
+name: "CodeQL"
+
+on:
+  # 매주 수요일에 자동 실행
+  schedule:
+    - cron: '0 0 * * 3'  # UTC 00:00 수요일 = KST 09:00 수요일
+
+  # PR에서 소스 코드 변경 시 자동 실행
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+  # 수동 실행 가능
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    name: CodeQL 분석
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript']
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: CodeQL 초기화
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # 보안 및 품질 쿼리 모두 실행
+          queries: +security-and-quality
+
+      - name: 자동 빌드
+        uses: github/codeql-action/autobuild@v3
+
+      - name: CodeQL 분석 실행
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+      - name: Slack 알림 (실패 시)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -X POST "$SLACK_WEBHOOK" \
+              -H 'Content-Type: application/json' \
+              -d "{
+                \"text\": \"⚠️ CodeQL 분석 실패\",
+                \"blocks\": [
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*⚠️ CodeQL 보안 분석 실패*\n\n*언어*: \`${{ matrix.language }}\`\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|상세 보기>\"
+                    }
+                  }
+                ]
+              }"
+          fi

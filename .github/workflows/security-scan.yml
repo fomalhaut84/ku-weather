@@ -1,0 +1,126 @@
+# 주간 보안 스캔 및 PR 보안 체크
+name: Security Scan
+
+on:
+  # 매주 월요일 오전 9시에 자동 실행
+  schedule:
+    - cron: '0 0 * * 1'  # UTC 00:00 월요일 = KST 09:00 월요일
+
+  # PR 생성/업데이트 시 자동 실행
+  pull_request:
+    branches: [main]
+
+  # 수동 실행 가능
+  workflow_dispatch:
+
+jobs:
+  npm-audit:
+    name: npm audit 보안 스캔
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        # main 브랜치는 백엔드만 있음 (web 디렉토리 없음)
+        directory: ['.']
+      fail-fast: false
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ matrix.directory }}/package-lock.json'
+
+      - name: 의존성 설치
+        working-directory: ${{ matrix.directory }}
+        run: npm ci
+
+      - name: npm audit 실행
+        working-directory: ${{ matrix.directory }}
+        id: audit
+        run: |
+          echo "### 🔍 npm audit 결과 (${{ matrix.directory }})" >> $GITHUB_STEP_SUMMARY
+
+          # npm audit 실행 (에러 무시)
+          npm audit --audit-level=moderate || true
+          npm audit --json > audit-report.json || true
+
+          # 취약점 개수 추출
+          CRITICAL=$(cat audit-report.json | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH=$(cat audit-report.json | jq '.metadata.vulnerabilities.high // 0')
+          MODERATE=$(cat audit-report.json | jq '.metadata.vulnerabilities.moderate // 0')
+          LOW=$(cat audit-report.json | jq '.metadata.vulnerabilities.low // 0')
+
+          echo "critical=$CRITICAL" >> $GITHUB_OUTPUT
+          echo "high=$HIGH" >> $GITHUB_OUTPUT
+          echo "moderate=$MODERATE" >> $GITHUB_OUTPUT
+          echo "low=$LOW" >> $GITHUB_OUTPUT
+
+          # 요약 출력
+          echo "| 심각도 | 개수 |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $CRITICAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $HIGH |" >> $GITHUB_STEP_SUMMARY
+          echo "| Moderate | $MODERATE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low | $LOW |" >> $GITHUB_STEP_SUMMARY
+
+          # Critical 또는 High 취약점이 있으면 실패
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "❌ **Critical 또는 High 취약점 발견!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            npm audit >> $GITHUB_STEP_SUMMARY || true
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ **Critical/High 취약점 없음**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: audit 리포트 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report-${{ matrix.directory == '.' && 'backend' || 'web' }}
+          path: ${{ matrix.directory }}/audit-report.json
+          retention-days: 30
+
+      - name: Slack 알림 (실패 시)
+        if: failure() && github.event_name == 'schedule'
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK" ]; then
+            curl -X POST "$SLACK_WEBHOOK" \
+              -H 'Content-Type: application/json' \
+              -d "{
+                \"text\": \"⚠️ 보안 스캔 실패\",
+                \"blocks\": [
+                  {
+                    \"type\": \"section\",
+                    \"text\": {
+                      \"type\": \"mrkdwn\",
+                      \"text\": \"*⚠️ 보안 취약점 발견*\n\n*디렉토리*: \`${{ matrix.directory }}\`\n*Critical*: ${{ steps.audit.outputs.critical }}\n*High*: ${{ steps.audit.outputs.high }}\n\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|상세 보기>\"
+                    }
+                  }
+                ]
+              }"
+          fi
+
+  snyk-scan:
+    name: Snyk 보안 스캔 (선택)
+    runs-on: ubuntu-latest
+    if: false  # Snyk 토큰이 설정되면 true로 변경
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Snyk 스캔 실행
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
