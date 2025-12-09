@@ -1,0 +1,37 @@
+# Dependabot 설정
+# GitHub이 자동으로 의존성 보안 취약점을 감지하고 PR을 생성합니다
+
+version: 2
+updates:
+  # 백엔드 npm 패키지
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"  # 매주 월요일 체크
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "fomalhaut84"
+    labels:
+      - "dependencies"
+      - "security"
+    # 보안 업데이트는 즉시 PR 생성
+    allow:
+      - dependency-type: "all"
+    # 버전 업데이트 전략
+    versioning-strategy: "increase"
+    # 커밋 메시지 설정
+    commit-message:
+      prefix: "build"
+      include: "scope"
+
+  # GitHub Actions 워크플로우
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "github-actions"
