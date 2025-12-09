@@ -1,0 +1,131 @@
+name: Security Scan
+
+# 정기 보안 스캔 + PR 체크
+on:
+  # 매주 월요일 오전 9시 (KST) 정기 스캔
+  schedule:
+    - cron: '0 0 * * 1'  # UTC 00:00 월요일 = KST 09:00
+
+  # PR 생성/업데이트 시 보안 체크
+  pull_request:
+    branches: [main, dev]
+
+  # 수동 실행 가능
+  workflow_dispatch:
+
+jobs:
+  npm-audit:
+    name: npm 보안 스캔
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: ['.', './web']
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: 의존성 설치 (${{ matrix.directory }})
+        working-directory: ${{ matrix.directory }}
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+      - name: npm audit 실행
+        working-directory: ${{ matrix.directory }}
+        run: |
+          if [ -f package.json ]; then
+            echo "🔍 ${{ matrix.directory }} 보안 스캔 중..."
+            npm audit --audit-level=moderate || true
+
+            # 상세 리포트 생성
+            npm audit --json > audit-report.json || true
+
+            # Critical/High 취약점이 있으면 실패
+            CRITICAL=$(cat audit-report.json | jq '.metadata.vulnerabilities.critical // 0')
+            HIGH=$(cat audit-report.json | jq '.metadata.vulnerabilities.high // 0')
+
+            echo "Critical: $CRITICAL"
+            echo "High: $HIGH"
+
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "❌ Critical 또는 High 취약점 발견!"
+              npm audit
+              exit 1
+            else
+              echo "✅ Critical/High 취약점 없음"
+            fi
+          fi
+
+      - name: 보안 리포트 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-${{ matrix.directory == '.' && 'backend' || 'web' }}
+          path: ${{ matrix.directory }}/audit-report.json
+          retention-days: 30
+
+  snyk-scan:
+    name: Snyk 보안 스캔
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Snyk 스캔 실행
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Snyk 리포트 업로드
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+  notify:
+    name: 보안 스캔 알림
+    runs-on: ubuntu-latest
+    needs: [npm-audit]
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+
+    steps:
+      - name: Slack 알림 전송
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": "🚨 보안 스캔 실패",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*🚨 ku-weather 보안 스캔 실패*\n\nCritical 또는 High 취약점이 발견되었습니다."
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Actions에서 확인>"
+                  }
+                }
+              ]
+            }' \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
