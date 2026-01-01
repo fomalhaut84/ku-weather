@@ -38,17 +38,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: CodeQL 초기화
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           # 보안 및 품질 쿼리 모두 실행
           queries: +security-and-quality
 
       - name: 자동 빌드
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: CodeQL 분석 실행
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
 
