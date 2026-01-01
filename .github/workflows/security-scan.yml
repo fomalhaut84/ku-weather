@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: 코드 체크아웃
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Node.js 설정
         uses: actions/setup-node@v4
@@ -118,7 +118,7 @@ jobs:
     if: false  # Snyk 토큰이 설정되면 true로 변경
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Snyk 스캔 실행
         uses: snyk/actions/node@master
