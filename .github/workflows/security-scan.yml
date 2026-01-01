@@ -84,7 +84,7 @@ jobs:
 
       - name: audit 리포트 업로드
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: npm-audit-report-${{ matrix.directory == '.' && 'backend' || 'web' }}
           path: ${{ matrix.directory }}/audit-report.json
