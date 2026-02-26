@@ -1,7 +1,7 @@
 import { WeatherAlert, AlertChange, AlertChangeType } from '../types/weather';
 import { logger } from '../utils/logger';
 import { config } from '../config';
-import { SlackAttachment, SlackAttachmentField } from '../types/api';
+import { SlackAttachment } from '../types/api';
 import {
   formatDateTime,
   getWarningTypeName,
