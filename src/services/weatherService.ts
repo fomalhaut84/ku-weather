@@ -1650,8 +1650,11 @@ export class WeatherService {
         }
       }
 
-      // POP, T3H 등은 가장 가까운 시간대에서 추출
-      const { items: selectedVilageItems, timeKey } = this.selectNearestTimeSlice(vilageItems, nowUtc);
+      // POP, T3H 등은 초단기 선택 시간대에 가장 가까운 시간대에서 추출
+      // (초단기 시간대가 있으면 그에 맞춰 정렬, 없으면 현재 시각 기준)
+      const { items: selectedVilageItems, timeKey } = forecastTimeKey
+        ? this.selectNearestTimeSlice(vilageItems, nowUtc, forecastTimeKey)
+        : this.selectNearestTimeSlice(vilageItems, nowUtc);
       if (!forecastTimeKey && timeKey) forecastTimeKey = timeKey;
       for (const item of selectedVilageItems) {
         if (item.category && item.fcstValue !== undefined) {
@@ -1720,12 +1723,17 @@ export class WeatherService {
   }
 
   /**
-   * 예보 아이템에서 가장 가까운 미래 시간대 데이터를 선택
+   * 예보 아이템에서 가장 가까운 시간대 데이터를 선택
    * @param items 예보 아이템 배열
-   * @param nowUtc 비교 기준 시각 (실제 UTC Date - getKSTNow()가 아닌 new Date() 사용)
+   * @param referenceUtc 비교 기준 시각 (실제 UTC Date)
+   * @param referenceTimeKey 참조 시간 키 (다른 API에서 선택된 시간대에 맞추기 위해 사용, KST YYYYMMDDHHmm)
    * @returns 선택된 시간대의 아이템과 해당 시간 키
    */
-  private selectNearestTimeSlice(items: ForecastItem[], nowUtc: Date): { items: ForecastItem[]; timeKey: string | null } {
+  private selectNearestTimeSlice(
+    items: ForecastItem[],
+    referenceUtc: Date,
+    referenceTimeKey?: string
+  ): { items: ForecastItem[]; timeKey: string | null } {
     const timeSlices = new Map<string, ForecastItem[]>();
 
     for (const item of items) {
@@ -1741,13 +1749,33 @@ export class WeatherService {
     if (timeSlices.size === 0) return { items: [], timeKey: null };
 
     const sortedTimes = Array.from(timeSlices.keys()).sort();
+
+    // referenceTimeKey가 주어진 경우: 해당 시각에 가장 가까운 시간대 선택
+    // (초단기에서 선택된 시간대에 맞춰 단기예보 시간대를 정렬)
+    if (referenceTimeKey) {
+      const refUtc = this.parseForecastTime(referenceTimeKey);
+      let bestTime = sortedTimes[0];
+      let bestDiff = Infinity;
+
+      for (const timeKey of sortedTimes) {
+        const diff = Math.abs(this.parseForecastTime(timeKey).getTime() - refUtc.getTime());
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestTime = timeKey;
+        }
+      }
+
+      return { items: timeSlices.get(bestTime) || [], timeKey: bestTime };
+    }
+
+    // 기본: 가장 가까운 미래 시간대 선택
     // 기본값: 가장 최근(마지막) 시간대 (모든 시간이 과거일 때)
     let selectedTime = sortedTimes[sortedTimes.length - 1];
 
-    // parseForecastTime은 KST→UTC 변환하므로, nowUtc (실제 UTC)와 일관된 비교 가능
+    // parseForecastTime은 KST→UTC 변환하므로, referenceUtc (실제 UTC)와 일관된 비교 가능
     for (const timeKey of sortedTimes) {
       const forecastTime = this.parseForecastTime(timeKey);
-      if (forecastTime >= nowUtc) {
+      if (forecastTime >= referenceUtc) {
         selectedTime = timeKey;
         break;
       }
