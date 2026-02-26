@@ -386,24 +386,25 @@ export class DatabaseService {
     startDate: Date;
     endDate: Date;
     groupBy: 'region' | 'warningType' | 'level';
-  }): Promise<any[]> {
+  }): Promise<Record<string, unknown>[]> {
     try {
-      let groupByField: any;
+      type AlertHistoryGroupByField = 'upperRegion' | 'warningType' | 'warningLevel';
+      let groupByKey: AlertHistoryGroupByField;
 
       switch (filters.groupBy) {
         case 'region':
-          groupByField = { upperRegion: true };
+          groupByKey = 'upperRegion';
           break;
         case 'warningType':
-          groupByField = { warningType: true };
+          groupByKey = 'warningType';
           break;
         case 'level':
-          groupByField = { warningLevel: true };
+          groupByKey = 'warningLevel';
           break;
       }
 
       const stats = await this.prisma.alertHistory.groupBy({
-        by: Object.keys(groupByField) as any,
+        by: [groupByKey],
         where: {
           timestamp: {
             gte: filters.startDate,

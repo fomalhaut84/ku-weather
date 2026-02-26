@@ -1,5 +1,5 @@
 class Logger {
-  private formatMessage(level: string, message: string, ...args: any[]): string {
+  private formatMessage(level: string, message: string, ...args: unknown[]): string {
     const timestamp = new Date().toISOString();
     const formattedArgs = args.length > 0 ? ' ' + args.map(arg => {
       if (arg instanceof Error) {
@@ -11,19 +11,19 @@ class Logger {
     return `[${timestamp}] ${level.toUpperCase()}: ${message}${formattedArgs}`;
   }
 
-  info(message: string, ...args: any[]): void {
+  info(message: string, ...args: unknown[]): void {
     console.log(this.formatMessage('info', message, ...args));
   }
 
-  error(message: string, ...args: any[]): void {
+  error(message: string, ...args: unknown[]): void {
     console.error(this.formatMessage('error', message, ...args));
   }
 
-  warn(message: string, ...args: any[]): void {
+  warn(message: string, ...args: unknown[]): void {
     console.warn(this.formatMessage('warn', message, ...args));
   }
 
-  debug(message: string, ...args: any[]): void {
+  debug(message: string, ...args: unknown[]): void {
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
       console.debug(this.formatMessage('debug', message, ...args));
     }

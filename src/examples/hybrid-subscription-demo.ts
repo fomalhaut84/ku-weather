@@ -164,7 +164,7 @@ export class HybridSubscriptionDemo {
       logger.info(`웹 구독 현황: ${subscriptions.length}개 구독`);
       
       // 5. 구독 통계 조회
-      const stats = await webInterface.getSubscriptionStats(telegramToken.token);
+      const stats = await webInterface.getSubscriptionStats(telegramToken.token) as Record<string, Record<string, unknown>> | null;
       logger.info(`웹 구독 통계:`, {
         전체구독자: stats?.overall?.totalSubscriptions,
         사용자구독: stats?.user?.hasSubscription

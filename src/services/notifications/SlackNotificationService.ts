@@ -2,6 +2,7 @@ import { WeatherAlert, AlertChange, AlertChangeType, WeatherForecast } from '../
 import { logger } from '../../utils/logger';
 import { NotificationService, NotificationResult, SlackConfig } from './interfaces';
 import { WeatherService } from '../weatherService';
+import { SlackAttachment, SlackAttachmentField, SlackPayload, ChangeTypeConfig } from '../../types/api';
 
 /**
  * Slack 알림 서비스
@@ -150,7 +151,7 @@ export class SlackNotificationService implements NotificationService {
     const startTime = Date.now();
 
     try {
-      const attachments: any[] = [];
+      const attachments: SlackAttachment[] = [];
       let addedWeatherInfo = false;
 
       for (let i = 0; i < changes.length; i++) {
@@ -209,7 +210,7 @@ export class SlackNotificationService implements NotificationService {
   /**
    * 날씨 예보 정보를 Slack 필드로 포맷팅
    */
-  private formatWeatherField(forecast: WeatherForecast): any | null {
+  private formatWeatherField(forecast: WeatherForecast): SlackAttachmentField | null {
     const parts: string[] = [];
 
     if (forecast.temperature !== undefined) {
@@ -261,7 +262,7 @@ export class SlackNotificationService implements NotificationService {
   /**
    * Slack API로 페이로드 전송
    */
-  private async sendToSlack(payload: any): Promise<Response> {
+  private async sendToSlack(payload: SlackPayload): Promise<Response> {
     return await fetch(this.webhookUrl, {
       method: 'POST',
       headers: {
@@ -366,10 +367,10 @@ export class SlackNotificationService implements NotificationService {
   /**
    * 변동 알림용 Attachment 생성
    */
-  private createChangeAttachment(change: AlertChange, config: any) {
+  private createChangeAttachment(change: AlertChange, config: ChangeTypeConfig): SlackAttachment {
     const alert = change.current || change.previous!;
-    
-    const attachment: any = {
+
+    const attachment: SlackAttachment = {
       color: config.color,
       title: `${config.emoji} ${change.description}`,
       fields: [
@@ -415,10 +416,10 @@ export class SlackNotificationService implements NotificationService {
   /**
    * 배치 전송용 Attachment 생성
    */
-  private createBatchChangeAttachment(change: AlertChange, config: any, isLast: boolean) {
+  private createBatchChangeAttachment(change: AlertChange, config: ChangeTypeConfig, isLast: boolean): SlackAttachment {
     const alert = change.current || change.previous!;
-    
-    const attachment: any = {
+
+    const attachment: SlackAttachment = {
       color: config.color,
       title: `${config.emoji} ${change.description}`,
       fields: [

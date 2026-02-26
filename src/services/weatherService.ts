@@ -1,4 +1,5 @@
 import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, WeatherForecast } from '../types/weather';
+import { WeatherApiResponse } from '../types/api';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
 import * as fs from 'fs';
@@ -1542,7 +1543,7 @@ export class WeatherService {
   /**
    * JSON 응답 데이터를 WeatherForecast 객체로 파싱
    */
-  private parseForecastData(jsonData: any, regionId: string, regionName: string): WeatherForecast | null {
+  private parseForecastData(jsonData: WeatherApiResponse, regionId: string, regionName: string): WeatherForecast | null {
     try {
       // API 응답 검증
       if (!jsonData || !jsonData.response) {

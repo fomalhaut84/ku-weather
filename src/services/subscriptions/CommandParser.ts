@@ -12,6 +12,7 @@ import {
   RegionMapping,
   WarningTypeMapping
 } from './interfaces';
+import { UserSubscription } from '../notifications/SubscriptionManager';
 
 /**
  * 지역 코드 매핑 (사용자 친화적 이름)
@@ -206,12 +207,12 @@ export class CommonCommandParser implements BotCommandParser {
   /**
    * 구독 설정 요약 메시지 생성
    */
-  formatSubscriptionSummary(subscription: any): string {
+  formatSubscriptionSummary(subscription: UserSubscription): string {
     const regions = subscription.targetRegions?.length > 0 
       ? subscription.targetRegions.map((code: string) => this.getRegionName(code)).join(', ')
       : '전국';
     
-    const warnings = subscription.warningTypes?.length > 0
+    const warnings = (subscription.warningTypes && subscription.warningTypes.length > 0)
       ? subscription.warningTypes.map((code: string) => this.getWarningTypeName(code)).join(', ')
       : '전체';
     

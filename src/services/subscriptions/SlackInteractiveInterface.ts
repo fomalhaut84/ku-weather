@@ -20,7 +20,7 @@ import { WebSubscriptionInterface } from './WebSubscriptionInterface';
 /**
  * Slack 버튼 액션 페이로드
  */
-interface SlackButtonPayload {
+interface SlackButtonPayload extends Record<string, unknown> {
   type: string;
   user: { id: string; name?: string };
   channel: { id: string; name?: string };
@@ -31,7 +31,7 @@ interface SlackButtonPayload {
   }>;
   callback_id: string;
   team: { id: string; domain: string };
-  original_message: any;
+  original_message: Record<string, unknown>;
   response_url: string;
   trigger_id: string;
 }
@@ -42,8 +42,8 @@ interface SlackButtonPayload {
 interface SlackMessageBlock {
   type: string;
   text?: { type: string; text: string };
-  accessory?: any;
-  elements?: any[];
+  accessory?: Record<string, unknown>;
+  elements?: Record<string, unknown>[];
 }
 
 /**
@@ -119,7 +119,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   /**
    * 구독 설정용 인터랙티브 메시지 생성
    */
-  async createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): Promise<any> {
+  async createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): Promise<Record<string, unknown>> {
     try {
       const webToken = await this.generateWebToken(userId);
       const hasSubscription = !!currentSettings;
@@ -274,7 +274,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   /**
    * 설정 변경 확인 메시지 생성
    */
-  createConfirmationMessage(result: SubscriptionCommandResult): any {
+  createConfirmationMessage(result: SubscriptionCommandResult): Record<string, unknown> {
     const emoji = result.success ? '✅' : '❌';
     const color = result.success ? 'good' : 'danger';
 
@@ -298,7 +298,7 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
   /**
    * 특보 알림과 함께 구독 설정 버튼 추가
    */
-  enhanceAlertMessageWithSubscription(alertMessage: any, userId?: string): any {
+  enhanceAlertMessageWithSubscription(alertMessage: Record<string, unknown>, userId?: string): Record<string, unknown> {
     if (!userId) return alertMessage;
 
     const subscriptionBlock = {
@@ -314,12 +314,12 @@ export class SlackInteractiveInterface implements PlatformSubscriptionInterface,
     };
 
     // 기존 메시지에 구독 설정 버튼 추가
-    if (alertMessage.blocks) {
-      alertMessage.blocks.push({ type: 'divider' });
-      alertMessage.blocks.push(subscriptionBlock);
-    } else if (alertMessage.attachments) {
+    if (alertMessage.blocks && Array.isArray(alertMessage.blocks)) {
+      (alertMessage.blocks as unknown[]).push({ type: 'divider' });
+      (alertMessage.blocks as unknown[]).push(subscriptionBlock);
+    } else if (alertMessage.attachments && Array.isArray(alertMessage.attachments)) {
       // Legacy attachment 방식
-      alertMessage.attachments.push({
+      (alertMessage.attachments as unknown[]).push({
         color: 'good',
         blocks: [subscriptionBlock]
       });

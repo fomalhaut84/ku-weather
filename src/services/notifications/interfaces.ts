@@ -81,7 +81,7 @@ export interface NotificationService {
    * @param message 전송할 메시지 내용
    * @param options 추가 옵션 (플랫폼별)
    */
-  sendDirectMessage?(userId: string, message: string, options?: any): Promise<NotificationResult>;
+  sendDirectMessage?(userId: string, message: string, options?: Record<string, unknown>): Promise<NotificationResult>;
 }
 
 /**
@@ -90,7 +90,7 @@ export interface NotificationService {
 export interface PlatformConfig {
   enabled: boolean;
   targetRegions?: string[]; // 플랫폼별 모니터링 대상 지역 (없으면 전역 설정 사용)
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**

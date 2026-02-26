@@ -3,6 +3,7 @@ import { logger } from '../../utils/logger';
 import { NotificationService, NotificationResult } from './interfaces';
 import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
 import { HybridSubscriptionManager } from '../subscriptions/HybridSubscriptionManager';
+import { SubscriptionCommand } from '../subscriptions/interfaces';
 
 /**
  * 다중 플랫폼 알림 관리 서비스
@@ -570,7 +571,7 @@ export class MultiplatformNotificationService {
 
     try {
       const result = await this.hybridManager.processCommand({
-        command: command as any,
+        command: command as SubscriptionCommand,
         platform,
         userId,
         args,
