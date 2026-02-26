@@ -1,6 +1,6 @@
 import { HybridSubscriptionManager } from '../../../services/subscriptions/HybridSubscriptionManager';
 import { SubscriptionManager } from '../../../services/notifications/SubscriptionManager';
-import { PlatformSubscriptionInterface, SubscriptionCommandParams, UserAuthToken } from '../../../services/subscriptions/interfaces';
+import { PlatformSubscriptionInterface, SubscriptionCommandParams } from '../../../services/subscriptions/interfaces';
 
 jest.mock('../../../utils/logger', () => ({
   logger: {
