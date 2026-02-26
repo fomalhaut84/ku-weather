@@ -284,12 +284,17 @@ describe('TelegramNotificationService', () => {
 
   describe('sendAlert - no subscribers', () => {
     it('should return success with no subscribers', async () => {
-      // Override mock to return no subscriptions
+      // 생성자 mock이 빈 구독자를 반환하도록 사전 설정
       const { SubscriptionManager } = require('../../../services/notifications/SubscriptionManager');
-      const mockInstance = SubscriptionManager.mock.results[SubscriptionManager.mock.results.length - 1]?.value;
-      if (mockInstance) {
-        mockInstance.getRelevantSubscriptions.mockReturnValue([]);
-      }
+      SubscriptionManager.mockImplementationOnce(() => ({
+        addSubscription: jest.fn(),
+        removeSubscription: jest.fn(),
+        getSubscriptions: jest.fn().mockReturnValue([]),
+        getRelevantSubscriptions: jest.fn().mockReturnValue([]),
+        getRelevantSubscriptionsForChange: jest.fn().mockReturnValue([]),
+        getUserSubscription: jest.fn(),
+        getSubscriptionsByPlatform: jest.fn().mockReturnValue([]),
+      }));
 
       const noSubService = new TelegramNotificationService({
         enabled: true,
@@ -313,10 +318,15 @@ describe('TelegramNotificationService', () => {
   describe('sendAlertChange - no subscribers', () => {
     it('should return success with no subscribers', async () => {
       const { SubscriptionManager } = require('../../../services/notifications/SubscriptionManager');
-      const mockInstance = SubscriptionManager.mock.results[SubscriptionManager.mock.results.length - 1]?.value;
-      if (mockInstance) {
-        mockInstance.getRelevantSubscriptionsForChange.mockReturnValue([]);
-      }
+      SubscriptionManager.mockImplementationOnce(() => ({
+        addSubscription: jest.fn(),
+        removeSubscription: jest.fn(),
+        getSubscriptions: jest.fn().mockReturnValue([]),
+        getRelevantSubscriptions: jest.fn().mockReturnValue([]),
+        getRelevantSubscriptionsForChange: jest.fn().mockReturnValue([]),
+        getUserSubscription: jest.fn(),
+        getSubscriptionsByPlatform: jest.fn().mockReturnValue([]),
+      }));
 
       const noSubService = new TelegramNotificationService({
         enabled: true,
