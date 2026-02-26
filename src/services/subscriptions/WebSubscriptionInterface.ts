@@ -218,7 +218,7 @@ export class WebSubscriptionInterface implements IWebSubscriptionInterface {
   /**
    * 구독 통계 조회 (웹 대시보드용)
    */
-  async getSubscriptionStats(token: string): Promise<any> {
+  async getSubscriptionStats(token: string): Promise<Record<string, unknown> | null> {
     try {
       const tokenInfo = await this.tokenService.validateToken(token);
       if (!tokenInfo) {

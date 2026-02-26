@@ -159,7 +159,7 @@ export class HttpServer {
         }
 
         // 업데이트 처리 (비동기, 응답은 즉시 반환)
-        (telegramService as any).processWebhookUpdate(update)
+        (telegramService as unknown as { processWebhookUpdate(update: unknown): Promise<void> }).processWebhookUpdate(update)
           .catch((error: Error) => {
             logger.error('Error in background webhook processing:', error);
           });

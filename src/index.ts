@@ -96,21 +96,25 @@ async function main() {
     const webInterface = new WebSubscriptionInterface(subscriptionManager, tokenService);
 
     // 모든 플랫폼 서비스에 WebInterface 주입
+    interface WebInterfaceAware {
+      setWebInterface(webInterface: WebSubscriptionInterface): void;
+    }
+
     const telegramService = notificationService.getService('telegram');
     if (telegramService && 'setWebInterface' in telegramService) {
-      (telegramService as any).setWebInterface(webInterface);
+      (telegramService as unknown as WebInterfaceAware).setWebInterface(webInterface);
       logger.info('Telegram 서비스에 WebInterface 주입 완료');
     }
 
     const slackService = notificationService.getService('slack');
     if (slackService && 'setWebInterface' in slackService) {
-      (slackService as any).setWebInterface(webInterface);
+      (slackService as unknown as WebInterfaceAware).setWebInterface(webInterface);
       logger.info('Slack 서비스에 WebInterface 주입 완료');
     }
 
     const emailService = notificationService.getService('email');
     if (emailService && 'setWebInterface' in emailService) {
-      (emailService as any).setWebInterface(webInterface);
+      (emailService as unknown as WebInterfaceAware).setWebInterface(webInterface);
       logger.info('Email 서비스에 WebInterface 주입 완료');
     }
 

@@ -35,7 +35,7 @@ export interface SubscriptionCommandParams {
 export interface SubscriptionCommandResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   error?: string;
 }
 
@@ -99,7 +99,7 @@ export interface WebSubscriptionInterface {
   /**
    * 구독 통계 조회
    */
-  getSubscriptionStats(token: string): Promise<any>;
+  getSubscriptionStats(token: string): Promise<Record<string, unknown> | null>;
 }
 
 /**
@@ -129,17 +129,17 @@ export interface InteractiveMessageInterface {
   /**
    * 구독 설정용 인터랙티브 메시지 생성
    */
-  createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): any;
-  
+  createSubscriptionMessage(userId: string, currentSettings?: UserSubscription): Promise<Record<string, unknown>> | Record<string, unknown>;
+
   /**
    * 버튼 클릭 이벤트 처리
    */
-  handleButtonAction(payload: any): Promise<SubscriptionCommandResult>;
-  
+  handleButtonAction(payload: Record<string, unknown>): Promise<SubscriptionCommandResult>;
+
   /**
    * 설정 변경 확인 메시지
    */
-  createConfirmationMessage(result: SubscriptionCommandResult): any;
+  createConfirmationMessage(result: SubscriptionCommandResult): Record<string, unknown>;
 }
 
 /**
@@ -204,7 +204,7 @@ export interface HybridSubscriptionManager {
   /**
    * 플랫폼별 구독 통계
    */
-  getPlatformStats(): Promise<Record<string, any>>;
+  getPlatformStats(): Promise<Record<string, unknown>>;
 }
 
 /**

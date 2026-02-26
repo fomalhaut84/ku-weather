@@ -33,13 +33,13 @@ export class EmailCommandProcessor implements PlatformSubscriptionInterface, IEm
 
   private subscriptionManager: SubscriptionManager;
   private commandParser: CommonCommandParser;
-  private smtpConfig?: any;
+  private smtpConfig?: Record<string, unknown>;
   private webInterface?: WebSubscriptionInterface;
   private webDashboardUrl: string;
 
   constructor(
     subscriptionManager: SubscriptionManager,
-    smtpConfig?: any,
+    smtpConfig?: Record<string, unknown>,
     webInterface?: WebSubscriptionInterface,
     webDashboardUrl: string = 'https://weather.starryjeju.net'
   ) {

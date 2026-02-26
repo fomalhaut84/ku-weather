@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { databaseService } from '../services/DatabaseService';
 import { logger } from '../utils/logger';
+import { AlertFilters } from '../types/api';
+import { AlertChangeType } from '../types/weather';
 
 const router = Router();
 
@@ -42,7 +44,7 @@ router.get('/current', async (req: Request, res: Response) => {
       });
     }
 
-    const filters: any = {};
+    const filters: AlertFilters = {};
     if (regionId) filters.regionId = regionId as string;
     if (warningType) filters.warningType = warningType as string;
     if (warningLevel) filters.warningLevel = warningLevel as string;
@@ -132,13 +134,19 @@ router.get('/history', async (req: Request, res: Response) => {
       });
     }
 
-    const filters: any = {
+    const filters: {
+      startDate: Date;
+      endDate: Date;
+      regionId?: string;
+      warningType?: string;
+      changeType?: AlertChangeType;
+    } = {
       startDate: start,
       endDate: end
     };
     if (regionId) filters.regionId = regionId as string;
     if (warningType) filters.warningType = warningType as string;
-    if (changeType) filters.changeType = changeType as string;
+    if (changeType) filters.changeType = changeType as AlertChangeType;
 
     const histories = await databaseService.getAlertHistory(filters);
 

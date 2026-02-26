@@ -1,6 +1,7 @@
 import { WeatherAlert, AlertChange, AlertChangeType } from '../types/weather';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import { SlackAttachment } from '../types/api';
 import {
   formatDateTime,
   getWarningTypeName,
@@ -199,7 +200,7 @@ export class SlackService {
     try {
       // 그루핑 로직 적용
       const groupedAlerts = groupAlertChanges(changes);
-      const attachments: any[] = [];
+      const attachments: SlackAttachment[] = [];
 
       // 수준별로 섹션 헤더 추가
       let currentLevel = '';
@@ -217,7 +218,8 @@ export class SlackService {
           attachments.push({
             color: group.level === '3' ? '#ff0000' : group.level === '2' ? '#ff9900' : '#ffcc00',
             text: `${levelEmoji} *${levelName}*`,
-            mrkdwn_in: ['text']
+            mrkdwn_in: ['text'],
+            fields: []
           });
         }
 
@@ -232,10 +234,11 @@ export class SlackService {
         const levelName = getLevelName(group.level);
 
         // 그룹 정보를 하나의 attachment로 표시
-        const attachment: any = {
+        const attachment: SlackAttachment = {
           color: changeConfig.color,
           text: `${changeConfig.emoji} *${warningEmoji} ${warningName}${levelName} ${this.getChangeTypeText(group.changeType)}*\n${regionTexts.join(', ')}`,
           mrkdwn_in: ['text'],
+          fields: [],
           footer: i === groupedAlerts.length - 1 ? '한국 기상청' : '',
           ts: i === groupedAlerts.length - 1 ? Math.floor(Date.now() / 1000) : undefined
         };
@@ -320,7 +323,7 @@ export class SlackService {
   /**
    * 배치 메시지용 간소화된 필드를 설정합니다.
    */
-  private addBatchedChangeFields(attachment: any, change: AlertChange): void {
+  private addBatchedChangeFields(attachment: SlackAttachment, change: AlertChange): void {
     // 배치 메시지에서는 핵심 정보만 표시
     switch (change.type) {
       case 'NEW':
@@ -379,7 +382,7 @@ export class SlackService {
   /**
    * 변동 유형에 따른 추가 필드를 설정합니다. (개별 메시지용)
    */
-  private addChangeSpecificFields(attachment: any, change: AlertChange): void {
+  private addChangeSpecificFields(attachment: SlackAttachment, change: AlertChange): void {
     const alert = change.current || change.previous!;
     
     // 공통 필드들

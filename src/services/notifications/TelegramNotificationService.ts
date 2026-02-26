@@ -12,7 +12,7 @@ import {
 } from '../../utils/messageFormatter';
 import { groupAlertChanges, getLevelName, getLevelEmoji, formatRegionList } from '../../utils/messageGrouper';
 import { TelegramSubscriptionInterface } from '../subscriptions/TelegramSubscriptionInterface';
-import { SubscriptionCommandParams } from '../subscriptions/interfaces';
+import { SubscriptionCommandParams, SubscriptionCommand } from '../subscriptions/interfaces';
 import { SubscriptionManager } from './SubscriptionManager';
 import { WeatherService } from '../weatherService';
 
@@ -157,7 +157,7 @@ export class TelegramNotificationService implements NotificationService {
     const params: SubscriptionCommandParams = {
       platform: 'telegram',
       userId: chatId, // Use chatId for group chat support
-      command: command as any,
+      command: command as SubscriptionCommand,
       args,
       rawMessage: msg.text
     };
@@ -188,7 +188,7 @@ export class TelegramNotificationService implements NotificationService {
       const commandParams: SubscriptionCommandParams = {
         platform: 'telegram',
         userId: chatId, // Use chatId for group chat support
-        command: action as any,
+        command: action as SubscriptionCommand,
         args: params,
         rawMessage: query.data
       };
@@ -725,7 +725,7 @@ _한국 기상청_`;
   /**
    * WebSubscriptionInterface 설정 (나중에 주입)
    */
-  setWebInterface(webInterface: any): void {
+  setWebInterface(webInterface: import('../subscriptions/WebSubscriptionInterface').WebSubscriptionInterface): void {
     this.subscriptionInterface.setWebInterface(webInterface);
     logger.info('TelegramNotificationService에 WebInterface 연결 완료');
   }
