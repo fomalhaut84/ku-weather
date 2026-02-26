@@ -1612,10 +1612,12 @@ export class WeatherService {
     regionId: string,
     regionName: string
   ): WeatherForecast | null {
-    const now = this.getKSTNow();
+    // 실제 UTC 시각으로 비교 (parseForecastTime이 UTC Date를 반환하므로 일관성 유지)
+    const nowUtc = new Date();
     const dataMap: Record<string, string> = {};
     let baseDate = '';
     let baseTimeStr = '';
+    let forecastTimeKey: string | null = null;
 
     // 초단기예보 데이터 처리 (현재 기온, 풍속, 습도 등)
     if (ultraSrtItems && ultraSrtItems.length > 0) {
@@ -1623,7 +1625,8 @@ export class WeatherService {
       baseTimeStr = ultraSrtItems[0].baseTime;
 
       // 가장 가까운 미래 시간대 선택
-      const selectedItems = this.selectNearestTimeSlice(ultraSrtItems, now);
+      const { items: selectedItems, timeKey } = this.selectNearestTimeSlice(ultraSrtItems, nowUtc);
+      if (timeKey) forecastTimeKey = timeKey;
       for (const item of selectedItems) {
         if (item.category && item.fcstValue !== undefined) {
           dataMap[item.category] = item.fcstValue;
@@ -1648,7 +1651,8 @@ export class WeatherService {
       }
 
       // POP, T3H 등은 가장 가까운 시간대에서 추출
-      const selectedVilageItems = this.selectNearestTimeSlice(vilageItems, now);
+      const { items: selectedVilageItems, timeKey } = this.selectNearestTimeSlice(vilageItems, nowUtc);
+      if (!forecastTimeKey && timeKey) forecastTimeKey = timeKey;
       for (const item of selectedVilageItems) {
         if (item.category && item.fcstValue !== undefined) {
           // 초단기예보 데이터가 없는 카테고리만 추가
@@ -1679,11 +1683,16 @@ export class WeatherService {
     // 기온: 초단기(T1H) 우선, 없으면 단기(T3H) 사용
     const temperature = this.parseNumber(dataMap['T1H']) ?? this.parseNumber(dataMap['T3H']);
 
+    // forecastTime: 선택된 예보 시간대의 유효 시각 (조회 시각이 아님)
+    const forecastTime = forecastTimeKey
+      ? this.parseForecastTime(forecastTimeKey)
+      : this.parseForecastTime(baseDate + baseTimeStr);
+
     const forecast: WeatherForecast = {
       regionId,
       regionName,
       baseTime: this.parseForecastTime(baseDate + baseTimeStr),
-      forecastTime: now,
+      forecastTime,
       temperature,
       humidity: this.parseNumber(dataMap['REH']),
       skyCondition: this.parseNumber(dataMap['SKY']),
@@ -1712,8 +1721,11 @@ export class WeatherService {
 
   /**
    * 예보 아이템에서 가장 가까운 미래 시간대 데이터를 선택
+   * @param items 예보 아이템 배열
+   * @param nowUtc 비교 기준 시각 (실제 UTC Date - getKSTNow()가 아닌 new Date() 사용)
+   * @returns 선택된 시간대의 아이템과 해당 시간 키
    */
-  private selectNearestTimeSlice(items: ForecastItem[], now: Date): ForecastItem[] {
+  private selectNearestTimeSlice(items: ForecastItem[], nowUtc: Date): { items: ForecastItem[]; timeKey: string | null } {
     const timeSlices = new Map<string, ForecastItem[]>();
 
     for (const item of items) {
@@ -1726,21 +1738,22 @@ export class WeatherService {
       }
     }
 
-    if (timeSlices.size === 0) return [];
+    if (timeSlices.size === 0) return { items: [], timeKey: null };
 
     const sortedTimes = Array.from(timeSlices.keys()).sort();
     // 기본값: 가장 최근(마지막) 시간대 (모든 시간이 과거일 때)
     let selectedTime = sortedTimes[sortedTimes.length - 1];
 
+    // parseForecastTime은 KST→UTC 변환하므로, nowUtc (실제 UTC)와 일관된 비교 가능
     for (const timeKey of sortedTimes) {
       const forecastTime = this.parseForecastTime(timeKey);
-      if (forecastTime >= now) {
+      if (forecastTime >= nowUtc) {
         selectedTime = timeKey;
         break;
       }
     }
 
-    return timeSlices.get(selectedTime) || [];
+    return { items: timeSlices.get(selectedTime) || [], timeKey: selectedTime };
   }
 
   /**
