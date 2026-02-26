@@ -631,4 +631,161 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
   });
 
+  describe('단기예보 기준시각 계산 (getVilageFcstBaseTime)', () => {
+    it('02:15 이후에는 02:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 2, 20); // 02:20
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('0200');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('02:15 이전에는 전날 23:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 2, 10); // 02:10
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('2300');
+      expect(result.needsPreviousDay).toBe(true);
+    });
+
+    it('05:15 이후에는 05:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 5, 30); // 05:30
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('0500');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('23:15 이후에는 23:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 23, 30); // 23:30
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('2300');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('14:15 이후 17:15 이전에는 14:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 16, 0); // 16:00
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('1400');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('0:00에는 전날 23:00을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 0, 0); // 00:00
+      const result = (weatherService as any).getVilageFcstBaseTime(date);
+      expect(result.baseTime).toBe('2300');
+      expect(result.needsPreviousDay).toBe(true);
+    });
+  });
+
+  describe('초단기예보 기준시각 계산 (getUltraSrtBaseTime)', () => {
+    it('30분 이후에는 현재 시각 30분을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 14, 45); // 14:45
+      const result = (weatherService as any).getUltraSrtBaseTime(date);
+      expect(result.baseTime).toBe('1430');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('30분 이전에는 이전 시각 30분을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 14, 15); // 14:15
+      const result = (weatherService as any).getUltraSrtBaseTime(date);
+      expect(result.baseTime).toBe('1330');
+      expect(result.needsPreviousDay).toBe(false);
+    });
+
+    it('0:15에는 전날 23:30을 반환한다', () => {
+      const date = new Date(2025, 0, 1, 0, 15); // 00:15
+      const result = (weatherService as any).getUltraSrtBaseTime(date);
+      expect(result.baseTime).toBe('2330');
+      expect(result.needsPreviousDay).toBe(true);
+    });
+  });
+
+  describe('예보 데이터 합성 (mergeForecastData)', () => {
+    const mockUltraSrtItems = [
+      { baseDate: '20250101', baseTime: '1430', category: 'T1H', fcstDate: '20250101', fcstTime: '1500', fcstValue: '5.2', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'REH', fcstDate: '20250101', fcstTime: '1500', fcstValue: '45', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'SKY', fcstDate: '20250101', fcstTime: '1500', fcstValue: '1', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'PTY', fcstDate: '20250101', fcstTime: '1500', fcstValue: '0', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'WSD', fcstDate: '20250101', fcstTime: '1500', fcstValue: '3.5', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'RN1', fcstDate: '20250101', fcstTime: '1500', fcstValue: '강수없음', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1430', category: 'VEC', fcstDate: '20250101', fcstTime: '1500', fcstValue: '270', nx: 60, ny: 127 },
+    ];
+
+    const mockVilageItems = [
+      { baseDate: '20250101', baseTime: '1100', category: 'POP', fcstDate: '20250101', fcstTime: '1500', fcstValue: '30', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1100', category: 'TMN', fcstDate: '20250101', fcstTime: '0600', fcstValue: '-2.5', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1100', category: 'TMX', fcstDate: '20250101', fcstTime: '1500', fcstValue: '7.8', nx: 60, ny: 127 },
+      { baseDate: '20250101', baseTime: '1100', category: 'T3H', fcstDate: '20250101', fcstTime: '1500', fcstValue: '5.0', nx: 60, ny: 127 },
+    ];
+
+    it('초단기+단기 데이터를 합성하여 POP, TMN, TMX를 포함한다', () => {
+      const result = (weatherService as any).mergeForecastData(
+        mockUltraSrtItems, mockVilageItems, 'L1100000', '서울특별시'
+      );
+
+      expect(result).not.toBeNull();
+      expect(result.temperature).toBe(5.2);       // T1H (초단기)
+      expect(result.humidity).toBe(45);            // REH (초단기)
+      expect(result.precipitationProbability).toBe(30); // POP (단기)
+      expect(result.minTemperature).toBe(-2.5);    // TMN (단기)
+      expect(result.maxTemperature).toBe(7.8);     // TMX (단기)
+      expect(result.precipitation).toBe(0);        // RN1 강수없음
+      expect(result.windSpeed).toBe(3.5);          // WSD (초단기)
+    });
+
+    it('초단기 데이터가 없으면 단기 T3H를 기온으로 사용한다', () => {
+      const result = (weatherService as any).mergeForecastData(
+        null, mockVilageItems, 'L1100000', '서울특별시'
+      );
+
+      expect(result).not.toBeNull();
+      expect(result.temperature).toBe(5.0);        // T3H (단기 fallback)
+      expect(result.precipitationProbability).toBe(30); // POP (단기)
+    });
+
+    it('단기 데이터가 없으면 초단기 데이터만 사용한다', () => {
+      const result = (weatherService as any).mergeForecastData(
+        mockUltraSrtItems, null, 'L1100000', '서울특별시'
+      );
+
+      expect(result).not.toBeNull();
+      expect(result.temperature).toBe(5.2);        // T1H (초단기)
+      expect(result.precipitationProbability).toBeUndefined(); // POP 없음
+      expect(result.minTemperature).toBeUndefined();
+      expect(result.maxTemperature).toBeUndefined();
+    });
+
+    it('두 데이터 모두 없으면 null을 반환한다', () => {
+      const result = (weatherService as any).mergeForecastData(
+        null, null, 'L1100000', '서울특별시'
+      );
+      expect(result).toBeNull();
+    });
+
+    it('강수량 "1mm 미만"을 0.1로 파싱한다', () => {
+      const items = [
+        { baseDate: '20250101', baseTime: '1430', category: 'RN1', fcstDate: '20250101', fcstTime: '1500', fcstValue: '1mm 미만', nx: 60, ny: 127 },
+      ];
+      const result = (weatherService as any).mergeForecastData(
+        items, null, 'L1100000', '서울특별시'
+      );
+      expect(result).not.toBeNull();
+      expect(result.precipitation).toBe(0.1);
+    });
+  });
+
+  describe('getWeatherForecastWithResult', () => {
+    it('격자 좌표를 찾을 수 없으면 실패 결과를 반환한다', async () => {
+      const result = await weatherService.getWeatherForecastWithResult('UNKNOWN_ID');
+      expect(result.success).toBe(false);
+      expect(result.data).toBeNull();
+      expect(result.error).toContain('격자 좌표를 찾을 수 없습니다');
+    });
+
+    it('API 호출 실패 시 source를 포함한 실패 결과를 반환한다', async () => {
+      mockFetch.mockRejectedValue(new Error('Network error'));
+      const result = await weatherService.getWeatherForecastWithResult('L1100000');
+      expect(result.success).toBe(false);
+      expect(result.data).toBeNull();
+    });
+  });
+
 });

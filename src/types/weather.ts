@@ -173,6 +173,16 @@ export interface WeatherForecast {
 }
 
 /**
+ * 예보 조회 결과 (성공/실패 정보 포함)
+ */
+export interface ForecastResult {
+  success: boolean;
+  data: WeatherForecast | null;
+  error?: string;
+  source?: 'ultra-short' | 'village' | 'merged';
+}
+
+/**
  * 하늘상태 코드
  */
 export enum SkyCondition {

@@ -1,5 +1,5 @@
-import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, WeatherForecast } from '../types/weather';
-import { WeatherApiResponse } from '../types/api';
+import { WeatherAlert, WeatherApiParams, WeatherWarningType, WeatherRegion, AlertChange, WeatherForecast, ForecastResult } from '../types/weather';
+import { WeatherApiResponse, ForecastItem } from '../types/api';
 import { logger } from '../utils/logger';
 import { AlertCache } from './AlertCache';
 import * as fs from 'fs';
@@ -8,7 +8,8 @@ import * as path from 'path';
 export class WeatherService {
   private readonly baseUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_met_data.php';
   private readonly regionUrl = 'https://apihub.kma.go.kr/api/typ01/url/wrn_reg.php';
-  private readonly forecastUrl = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getUltraSrtFcst';
+  private readonly ultraSrtFcstUrl = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getUltraSrtFcst';
+  private readonly vilageFcstUrl = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst';
   private readonly authKey: string;
   private regionCache: Map<string, string> = new Map();
   private alertCache: AlertCache = new AlertCache();
@@ -1433,79 +1434,354 @@ export class WeatherService {
    * @returns 날씨 예보 데이터
    */
   async getWeatherForecast(regionId: string): Promise<WeatherForecast | null> {
+    const result = await this.getWeatherForecastWithResult(regionId);
+    return result.data;
+  }
+
+  /**
+   * 상세 결과 포함 날씨 예보 조회
+   * 초단기예보(getUltraSrtFcst) + 단기예보(getVilageFcst) 데이터를 합성
+   */
+  async getWeatherForecastWithResult(regionId: string): Promise<ForecastResult> {
     const startTime = Date.now();
 
     try {
       // 1. 격자 좌표 조회 (CSV 우선, 하드코딩 fallback)
       const gridInfo = this.getGridCoordinates(regionId);
       if (!gridInfo) {
-        logger.warn(`지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`);
+        return {
+          success: false,
+          data: null,
+          error: `지역 코드 ${regionId}에 대한 격자 좌표를 찾을 수 없습니다`
+        };
+      }
+
+      const now = this.getKSTNow();
+
+      // 2. 초단기예보 + 단기예보 병렬 호출
+      const [ultraSrtResult, vilageResult] = await Promise.allSettled([
+        this.fetchUltraSrtFcst(gridInfo, now),
+        this.fetchVilageFcst(gridInfo, now)
+      ]);
+
+      const ultraSrtData = ultraSrtResult.status === 'fulfilled' ? ultraSrtResult.value : null;
+      const vilageData = vilageResult.status === 'fulfilled' ? vilageResult.value : null;
+
+      if (!ultraSrtData && !vilageData) {
+        return {
+          success: false,
+          data: null,
+          error: '초단기예보와 단기예보 모두 조회 실패'
+        };
+      }
+
+      // 3. 데이터 합성
+      const forecast = this.mergeForecastData(ultraSrtData, vilageData, regionId, gridInfo.name);
+
+      if (!forecast) {
+        return {
+          success: false,
+          data: null,
+          error: '예보 데이터 파싱 실패'
+        };
+      }
+
+      const source = ultraSrtData && vilageData ? 'merged' as const
+        : ultraSrtData ? 'ultra-short' as const
+        : 'village' as const;
+
+      const elapsedTime = Date.now() - startTime;
+      logger.info(`지역 ${gridInfo.name}(${regionId}) 날씨 예보 조회 성공 (${source}, ${elapsedTime}ms)`);
+
+      return { success: true, data: forecast, source };
+    } catch (error) {
+      const elapsedTime = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.warn(`날씨 예보 조회 실패 (지역: ${regionId}, ${elapsedTime}ms): ${errorMsg}`);
+      return { success: false, data: null, error: errorMsg };
+    }
+  }
+
+  /**
+   * 초단기예보 API 호출 (getUltraSrtFcst)
+   * 1시간 단위, 매 시간 30분 발표
+   */
+  private async fetchUltraSrtFcst(
+    gridInfo: { nx: number; ny: number; name: string },
+    now: Date
+  ): Promise<ForecastItem[] | null> {
+    const { baseTime, needsPreviousDay } = this.getUltraSrtBaseTime(now);
+    const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
+    const baseDate = this.formatDate(baseDateTime);
+
+    const params = new URLSearchParams({
+      authKey: this.authKey,
+      base_date: baseDate,
+      base_time: baseTime,
+      nx: gridInfo.nx.toString(),
+      ny: gridInfo.ny.toString(),
+      dataType: 'JSON',
+      numOfRows: '1000',
+      pageNo: '1'
+    });
+
+    const url = `${this.ultraSrtFcstUrl}?${params.toString()}`;
+    logger.debug(`초단기예보 API 호출: base_date=${baseDate}, base_time=${baseTime}, nx=${gridInfo.nx}, ny=${gridInfo.ny}`);
+
+    return this.fetchForecastApi(url, '초단기예보');
+  }
+
+  /**
+   * 단기예보 API 호출 (getVilageFcst)
+   * 3시간 단위, 02/05/08/11/14/17/20/23시 발표
+   */
+  private async fetchVilageFcst(
+    gridInfo: { nx: number; ny: number; name: string },
+    now: Date
+  ): Promise<ForecastItem[] | null> {
+    const { baseTime, needsPreviousDay } = this.getVilageFcstBaseTime(now);
+    const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
+    const baseDate = this.formatDate(baseDateTime);
+
+    const params = new URLSearchParams({
+      authKey: this.authKey,
+      base_date: baseDate,
+      base_time: baseTime,
+      nx: gridInfo.nx.toString(),
+      ny: gridInfo.ny.toString(),
+      dataType: 'JSON',
+      numOfRows: '1000',
+      pageNo: '1'
+    });
+
+    const url = `${this.vilageFcstUrl}?${params.toString()}`;
+    logger.debug(`단기예보 API 호출: base_date=${baseDate}, base_time=${baseTime}, nx=${gridInfo.nx}, ny=${gridInfo.ny}`);
+
+    return this.fetchForecastApi(url, '단기예보');
+  }
+
+  /**
+   * 예보 API 공통 호출 로직
+   */
+  private async fetchForecastApi(url: string, apiName: string): Promise<ForecastItem[] | null> {
+    try {
+      const response = await this.fetchWithRetry(url);
+      if (!response.ok) {
+        logger.warn(`${apiName} API 호출 실패: ${response.status} ${response.statusText}`);
         return null;
       }
 
-      // 2. KST 기준 현재 시각으로 API 파라미터 생성
-      const now = this.getKSTNow();
-      const { baseTime, needsPreviousDay } = this.getBaseTime(now); // HHmm (30분 단위)
-
-      // 자정 이전 시간대(00:00~00:30)에서 23:30으로 롤백되면 전날 날짜 사용
-      const baseDateTime = needsPreviousDay ? new Date(now.getTime() - 24 * 60 * 60 * 1000) : now;
-      const baseDate = this.formatDate(baseDateTime); // YYYYMMDD
-
-      // 3. Typ02 Open API 호출 (파라미터: authKey, base_date, base_time, nx, ny, dataType, numOfRows, pageNo)
-      const params = new URLSearchParams({
-        authKey: this.authKey,
-        base_date: baseDate,
-        base_time: baseTime,
-        nx: gridInfo.nx.toString(),
-        ny: gridInfo.ny.toString(),
-        dataType: 'JSON',
-        numOfRows: '1000',
-        pageNo: '1'
-      });
-
-      const url = `${this.forecastUrl}?${params.toString()}`;
-      logger.debug(`초단기예보 API 호출: ${url.replace(this.authKey, '***')}`); // authKey 마스킹
-
-      const response = await this.fetchWithRetry(url);
-      if (!response.ok) {
-        throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
-      }
-
-      // JSON 파싱 에러 처리 개선 (HTML 응답 감지)
       const responseText = await response.text();
-      let jsonData;
+      let jsonData: WeatherApiResponse;
 
       try {
         jsonData = JSON.parse(responseText);
-      } catch (parseError) {
-        // HTML 에러 응답인 경우 (예: #START7777...)
+      } catch {
         if (responseText.includes('#START')) {
-          logger.warn(`날씨 예보 API가 HTML 에러 응답을 반환했습니다 (지역: ${regionId})`);
-          return null;
+          logger.warn(`${apiName} API가 텍스트 형식 응답을 반환했습니다`);
         }
-        throw new Error(`JSON 파싱 실패: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-      }
-
-      // 4. JSON 파싱 및 데이터 집계
-      const forecast = this.parseForecastData(jsonData, regionId, gridInfo.name);
-
-      if (!forecast) {
-        logger.warn(`지역 ${gridInfo.name}(${regionId})의 예보 데이터를 파싱할 수 없습니다`);
         return null;
       }
 
-      const elapsedTime = Date.now() - startTime;
-      logger.info(`지역 ${gridInfo.name}(${regionId})의 날씨 예보 조회 성공 (${elapsedTime}ms)`);
-      return forecast;
+      if (!jsonData?.response?.header || jsonData.response.header.resultCode !== '00') {
+        logger.warn(`${apiName} API 오류: ${jsonData?.response?.header?.resultMsg || 'Unknown'}`);
+        return null;
+      }
+
+      const items = jsonData.response.body?.items?.item;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        logger.warn(`${apiName} 데이터가 비어있습니다`);
+        return null;
+      }
+
+      return items;
     } catch (error) {
-      const elapsedTime = Date.now() - startTime;
-      // 날씨 예보는 필수 기능이 아니므로 warn 레벨로 로깅
-      logger.warn(
-        `날씨 예보 조회 실패 (지역: ${regionId}, 소요시간: ${elapsedTime}ms):`,
-        error instanceof Error ? error.message : String(error)
-      );
+      logger.warn(`${apiName} 호출 중 오류:`, error instanceof Error ? error.message : String(error));
       return null;
     }
+  }
+
+  /**
+   * 초단기예보 + 단기예보 데이터를 합성
+   * 초단기예보: T1H, RN1, SKY, PTY, WSD, REH, VEC, LGT (현재 기온, 강수량 등)
+   * 단기예보: POP, TMN, TMX, T3H (강수확률, 최저/최고기온)
+   */
+  private mergeForecastData(
+    ultraSrtItems: ForecastItem[] | null,
+    vilageItems: ForecastItem[] | null,
+    regionId: string,
+    regionName: string
+  ): WeatherForecast | null {
+    // 실제 UTC 시각으로 비교 (parseForecastTime이 UTC Date를 반환하므로 일관성 유지)
+    const nowUtc = new Date();
+    const dataMap: Record<string, string> = {};
+    let baseDate = '';
+    let baseTimeStr = '';
+    let forecastTimeKey: string | null = null;
+
+    // 초단기예보 데이터 처리 (현재 기온, 풍속, 습도 등)
+    if (ultraSrtItems && ultraSrtItems.length > 0) {
+      baseDate = ultraSrtItems[0].baseDate;
+      baseTimeStr = ultraSrtItems[0].baseTime;
+
+      // 가장 가까운 미래 시간대 선택
+      const { items: selectedItems, timeKey } = this.selectNearestTimeSlice(ultraSrtItems, nowUtc);
+      if (timeKey) forecastTimeKey = timeKey;
+      for (const item of selectedItems) {
+        if (item.category && item.fcstValue !== undefined) {
+          dataMap[item.category] = item.fcstValue;
+        }
+      }
+    }
+
+    // 단기예보 데이터 처리 (POP, TMN, TMX 등 - 초단기에 없는 데이터)
+    if (vilageItems && vilageItems.length > 0) {
+      if (!baseDate) {
+        baseDate = vilageItems[0].baseDate;
+        baseTimeStr = vilageItems[0].baseTime;
+      }
+
+      // TMN/TMX는 특정 시간에만 발표되므로 전체 아이템에서 검색
+      for (const item of vilageItems) {
+        if (item.category === 'TMN' || item.category === 'TMX') {
+          if (!dataMap[item.category]) {
+            dataMap[item.category] = item.fcstValue;
+          }
+        }
+      }
+
+      // POP, T3H 등은 초단기 선택 시간대에 가장 가까운 시간대에서 추출
+      // (초단기 시간대가 있으면 그에 맞춰 정렬, 없으면 현재 시각 기준)
+      const { items: selectedVilageItems, timeKey } = forecastTimeKey
+        ? this.selectNearestTimeSlice(vilageItems, nowUtc, forecastTimeKey)
+        : this.selectNearestTimeSlice(vilageItems, nowUtc);
+      if (!forecastTimeKey && timeKey) forecastTimeKey = timeKey;
+      for (const item of selectedVilageItems) {
+        if (item.category && item.fcstValue !== undefined) {
+          // 초단기예보 데이터가 없는 카테고리만 추가
+          if (!dataMap[item.category]) {
+            dataMap[item.category] = item.fcstValue;
+          }
+        }
+      }
+    }
+
+    if (Object.keys(dataMap).length === 0) {
+      return null;
+    }
+
+    // 강수량 파싱
+    let precipitation: number | undefined;
+    if (dataMap['RN1']) {
+      const rn1 = dataMap['RN1'];
+      if (rn1 === '강수없음' || rn1.includes('강수없음')) {
+        precipitation = 0;
+      } else if (rn1.includes('1mm 미만')) {
+        precipitation = 0.1;
+      } else {
+        precipitation = this.parseNumber(rn1);
+      }
+    }
+
+    // 기온: 초단기(T1H) 우선, 없으면 단기(T3H) 사용
+    const temperature = this.parseNumber(dataMap['T1H']) ?? this.parseNumber(dataMap['T3H']);
+
+    // forecastTime: 선택된 예보 시간대의 유효 시각 (조회 시각이 아님)
+    const forecastTime = forecastTimeKey
+      ? this.parseForecastTime(forecastTimeKey)
+      : this.parseForecastTime(baseDate + baseTimeStr);
+
+    const forecast: WeatherForecast = {
+      regionId,
+      regionName,
+      baseTime: this.parseForecastTime(baseDate + baseTimeStr),
+      forecastTime,
+      temperature,
+      humidity: this.parseNumber(dataMap['REH']),
+      skyCondition: this.parseNumber(dataMap['SKY']),
+      precipitationType: this.parseNumber(dataMap['PTY']),
+      precipitation,
+      windSpeed: this.parseNumber(dataMap['WSD']),
+      windDirection: this.parseNumber(dataMap['VEC']),
+      lightningProbability: this.parseNumber(dataMap['LGT']),
+      // 단기예보 전용 데이터
+      precipitationProbability: this.parseNumber(dataMap['POP']),
+      minTemperature: this.parseNumber(dataMap['TMN']),
+      maxTemperature: this.parseNumber(dataMap['TMX']),
+    };
+
+    // 체감온도 계산
+    if (forecast.temperature !== undefined && forecast.windSpeed !== undefined) {
+      forecast.feelsLike = this.calculateFeelsLike(
+        forecast.temperature,
+        forecast.windSpeed,
+        forecast.humidity
+      );
+    }
+
+    return forecast;
+  }
+
+  /**
+   * 예보 아이템에서 가장 가까운 시간대 데이터를 선택
+   * @param items 예보 아이템 배열
+   * @param referenceUtc 비교 기준 시각 (실제 UTC Date)
+   * @param referenceTimeKey 참조 시간 키 (다른 API에서 선택된 시간대에 맞추기 위해 사용, KST YYYYMMDDHHmm)
+   * @returns 선택된 시간대의 아이템과 해당 시간 키
+   */
+  private selectNearestTimeSlice(
+    items: ForecastItem[],
+    referenceUtc: Date,
+    referenceTimeKey?: string
+  ): { items: ForecastItem[]; timeKey: string | null } {
+    const timeSlices = new Map<string, ForecastItem[]>();
+
+    for (const item of items) {
+      if (item.fcstDate && item.fcstTime) {
+        const timeKey = item.fcstDate + item.fcstTime;
+        if (!timeSlices.has(timeKey)) {
+          timeSlices.set(timeKey, []);
+        }
+        timeSlices.get(timeKey)!.push(item);
+      }
+    }
+
+    if (timeSlices.size === 0) return { items: [], timeKey: null };
+
+    const sortedTimes = Array.from(timeSlices.keys()).sort();
+
+    // referenceTimeKey가 주어진 경우: 해당 시각에 가장 가까운 시간대 선택
+    // (초단기에서 선택된 시간대에 맞춰 단기예보 시간대를 정렬)
+    if (referenceTimeKey) {
+      const refUtc = this.parseForecastTime(referenceTimeKey);
+      let bestTime = sortedTimes[0];
+      let bestDiff = Infinity;
+
+      for (const timeKey of sortedTimes) {
+        const diff = Math.abs(this.parseForecastTime(timeKey).getTime() - refUtc.getTime());
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestTime = timeKey;
+        }
+      }
+
+      return { items: timeSlices.get(bestTime) || [], timeKey: bestTime };
+    }
+
+    // 기본: 가장 가까운 미래 시간대 선택
+    // 기본값: 가장 최근(마지막) 시간대 (모든 시간이 과거일 때)
+    let selectedTime = sortedTimes[sortedTimes.length - 1];
+
+    // parseForecastTime은 KST→UTC 변환하므로, referenceUtc (실제 UTC)와 일관된 비교 가능
+    for (const timeKey of sortedTimes) {
+      const forecastTime = this.parseForecastTime(timeKey);
+      if (forecastTime >= referenceUtc) {
+        selectedTime = timeKey;
+        break;
+      }
+    }
+
+    return { items: timeSlices.get(selectedTime) || [], timeKey: selectedTime };
   }
 
   /**
@@ -1523,7 +1799,7 @@ export class WeatherService {
    * 매 시간 30분에 발표되므로, 30분 이전이면 이전 시각, 30분 이후면 현재 시각
    * @returns baseTime: 시각(HHmm), needsPreviousDay: 전날 날짜가 필요한지 여부
    */
-  private getBaseTime(date: Date): { baseTime: string; needsPreviousDay: boolean } {
+  private getUltraSrtBaseTime(date: Date): { baseTime: string; needsPreviousDay: boolean } {
     const hour = date.getHours();
     const minute = date.getMinutes();
 
@@ -1541,133 +1817,46 @@ export class WeatherService {
   }
 
   /**
-   * JSON 응답 데이터를 WeatherForecast 객체로 파싱
+   * 단기예보 기준시각 계산
+   * 02:00, 05:00, 08:00, 11:00, 14:00, 17:00, 20:00, 23:00 에 발표
+   * 각 발표 시각 + ~10분 후 API에서 제공 (여유를 두어 +15분 기준)
    */
-  private parseForecastData(jsonData: WeatherApiResponse, regionId: string, regionName: string): WeatherForecast | null {
-    try {
-      // API 응답 검증
-      if (!jsonData || !jsonData.response) {
-        logger.warn('API 응답이 비어있습니다');
-        return null;
+  getVilageFcstBaseTime(date: Date): { baseTime: string; needsPreviousDay: boolean } {
+    const hour = date.getHours();
+    const minute = date.getMinutes();
+    const currentMinutes = hour * 60 + minute;
+
+    // 발표 시각 목록 (분 단위) + API 제공 지연 15분
+    const publishTimes = [
+      { hour: 2, available: 2 * 60 + 15 },
+      { hour: 5, available: 5 * 60 + 15 },
+      { hour: 8, available: 8 * 60 + 15 },
+      { hour: 11, available: 11 * 60 + 15 },
+      { hour: 14, available: 14 * 60 + 15 },
+      { hour: 17, available: 17 * 60 + 15 },
+      { hour: 20, available: 20 * 60 + 15 },
+      { hour: 23, available: 23 * 60 + 15 },
+    ];
+
+    // 현재 시각 기준으로 가장 최근 발표 시각 찾기
+    let selectedHour = 23; // 기본값: 전날 23시
+    let needsPreviousDay = true;
+
+    for (let i = publishTimes.length - 1; i >= 0; i--) {
+      if (currentMinutes >= publishTimes[i].available) {
+        selectedHour = publishTimes[i].hour;
+        needsPreviousDay = false;
+        break;
       }
-
-      const response = jsonData.response;
-
-      // 헤더 검증
-      if (response.header?.resultCode !== '00') {
-        logger.warn(`API 오류: ${response.header?.resultMsg || 'Unknown error'}`);
-        return null;
-      }
-
-      // 데이터 추출
-      const items = response.body?.items?.item;
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        logger.warn('예보 데이터가 비어있습니다');
-        return null;
-      }
-
-      // API 응답의 baseDate, baseTime 추출 (발표 시각)
-      const firstItem = items[0];
-      const baseDate = firstItem.baseDate;
-      const baseTime = firstItem.baseTime;
-
-      logger.debug(`API 응답 첫 번째 항목:`, JSON.stringify(firstItem, null, 2));
-      logger.debug(`추출된 baseDate: ${baseDate}, baseTime: ${baseTime}`);
-
-      if (!baseDate || !baseTime) {
-        logger.warn(`API 응답에 baseDate 또는 baseTime이 없습니다. firstItem:`, firstItem);
-        return null;
-      }
-
-      // 1단계: 시간대별로 그룹화
-      const timeSlices = new Map<string, any[]>();
-      for (const item of items) {
-        if (item.fcstDate && item.fcstTime) {
-          const timeKey = item.fcstDate + item.fcstTime;
-          if (!timeSlices.has(timeKey)) {
-            timeSlices.set(timeKey, []);
-          }
-          timeSlices.get(timeKey)!.push(item);
-        }
-      }
-
-      if (timeSlices.size === 0) {
-        logger.warn('유효한 예보 시간대가 없습니다');
-        return null;
-      }
-
-      // 2단계: 가장 가까운 미래 시간대 선택
-      const now = new Date();
-      const sortedTimes = Array.from(timeSlices.keys()).sort();
-      let selectedTime = sortedTimes[0]; // 기본값: 첫 번째 시간대
-
-      for (const timeKey of sortedTimes) {
-        const forecastTime = this.parseForecastTime(timeKey);
-        if (forecastTime >= now) {
-          selectedTime = timeKey;
-          break;
-        }
-      }
-
-      logger.debug(`발표 시각: ${baseDate} ${baseTime}, 선택된 예보 시간대: ${selectedTime} (총 ${timeSlices.size}개 시간대 중)`);
-
-      // 3단계: 선택된 시간대의 데이터만 사용
-      const selectedItems = timeSlices.get(selectedTime) || [];
-      const dataMap: Record<string, string> = {};
-
-      for (const item of selectedItems) {
-        if (item.category && item.fcstValue !== undefined) {
-          dataMap[item.category] = item.fcstValue;
-        }
-      }
-
-      // 강수량 파싱 (RN1: "강수없음", "1mm 미만", "0.1", "1.5" 등)
-      let precipitation: number | undefined;
-      if (dataMap['RN1']) {
-        const rn1 = dataMap['RN1'];
-        if (rn1 === '강수없음' || rn1.includes('강수없음')) {
-          precipitation = 0;
-        } else if (rn1.includes('1mm 미만')) {
-          precipitation = 0.1;
-        } else {
-          precipitation = this.parseNumber(rn1);
-        }
-      }
-
-      // WeatherForecast 객체 생성
-      const forecast: WeatherForecast = {
-        regionId,
-        regionName,
-        baseTime: this.parseForecastTime(baseDate + baseTime),     // API 발표 시각
-        forecastTime: this.parseForecastTime(selectedTime),        // 예보 시각
-        temperature: this.parseNumber(dataMap['T1H']),
-        humidity: this.parseNumber(dataMap['REH']),
-        skyCondition: this.parseNumber(dataMap['SKY']),
-        precipitationType: this.parseNumber(dataMap['PTY']),
-        precipitation,
-        windSpeed: this.parseNumber(dataMap['WSD']),
-        windDirection: this.parseNumber(dataMap['VEC']),
-        // 초단기예보에는 없는 필드 (단기예보에만 있음)
-        precipitationProbability: undefined, // POP (단기예보 전용)
-        minTemperature: undefined,           // TMN (단기예보 전용)
-        maxTemperature: undefined,           // TMX (단기예보 전용)
-      };
-
-      // 체감온도 계산
-      if (forecast.temperature !== undefined && forecast.windSpeed !== undefined) {
-        forecast.feelsLike = this.calculateFeelsLike(
-          forecast.temperature,
-          forecast.windSpeed,
-          forecast.humidity
-        );
-      }
-
-      return forecast;
-    } catch (error) {
-      logger.error('JSON 데이터 파싱 중 오류:', error);
-      return null;
     }
+
+    return {
+      baseTime: `${String(selectedHour).padStart(2, '0')}00`,
+      needsPreviousDay
+    };
   }
+
+  // parseForecastData 제거됨 - mergeForecastData + selectNearestTimeSlice 로 대체
 
   /**
    * 예보 시각 문자열을 Date 객체로 변환 (KST 기준)
