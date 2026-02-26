@@ -18,6 +18,9 @@ module.exports = {
     'src/**/*.ts',
     '!src/**/*.d.ts',
     '!src/index.ts', // 메인 진입점 제외
+    '!src/server.ts', // Express 서버 부트스트랩 (통합 테스트 대상)
+    '!src/examples/**', // 데모 스크립트
+    '!src/**/index.ts', // Barrel export 파일
   ],
   
   // 모듈 해석

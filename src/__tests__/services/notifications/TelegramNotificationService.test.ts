@@ -68,7 +68,8 @@ jest.mock('../../../services/subscriptions/TelegramSubscriptionInterface', () =>
     handleCommand: jest.fn().mockResolvedValue({
       success: true,
       message: 'Command executed successfully'
-    })
+    }),
+    setWebInterface: jest.fn()
   }))
 }));
 
@@ -281,6 +282,158 @@ describe('TelegramNotificationService', () => {
     });
   });
 
+  describe('sendAlert - no subscribers', () => {
+    it('should return success with no subscribers', async () => {
+      // Override mock to return no subscriptions
+      const { SubscriptionManager } = require('../../../services/notifications/SubscriptionManager');
+      const mockInstance = SubscriptionManager.mock.results[SubscriptionManager.mock.results.length - 1]?.value;
+      if (mockInstance) {
+        mockInstance.getRelevantSubscriptions.mockReturnValue([]);
+      }
+
+      const noSubService = new TelegramNotificationService({
+        enabled: true,
+        botToken: 'test-token'
+      });
+
+      const result = await noSubService.sendAlert({
+        REG_ID: '11B00000', REG_UP: '11000000', REG_KO: '서울',
+        REG_UP_KO: '서울특별시', REG_NAME: '서울특별시',
+        TM_FC: '202501281200', TM_EF: '202501281300',
+        TM_IN: '202501281200', STN: '108', WRN: 'H', LVL: '2',
+        CMD: '1', GRD: '', CNT: '1', RPT: '1',
+        TM_ST: '202501281300', TM_ED: '202501291200',
+        REG_SP: '', STN_ID: '108', TM_SEQ: '1', MAN_FC: '', MAN_IN: ''
+      });
+      expect(result.success).toBe(true);
+      expect(result.platform).toBe('telegram');
+    });
+  });
+
+  describe('sendAlertChange - no subscribers', () => {
+    it('should return success with no subscribers', async () => {
+      const { SubscriptionManager } = require('../../../services/notifications/SubscriptionManager');
+      const mockInstance = SubscriptionManager.mock.results[SubscriptionManager.mock.results.length - 1]?.value;
+      if (mockInstance) {
+        mockInstance.getRelevantSubscriptionsForChange.mockReturnValue([]);
+      }
+
+      const noSubService = new TelegramNotificationService({
+        enabled: true,
+        botToken: 'test-token'
+      });
+
+      const result = await noSubService.sendAlertChange({
+        type: 'NEW',
+        current: {
+          key: 'test', regionId: '11B00000', regionName: '서울',
+          warningType: 'H', level: '2', command: '1',
+          announcedAt: '202501281200', effectiveAt: '202501281300',
+          lastUpdated: '202501281200'
+        },
+        description: '테스트'
+      });
+      expect(result.success).toBe(true);
+      expect(result.platform).toBe('telegram');
+    });
+  });
+
+  describe('processWebhookUpdate', () => {
+    it('should process message update', async () => {
+      const update = {
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: Date.now() / 1000,
+          chat: { id: 123, type: 'private' as const },
+          text: '/help'
+        }
+      };
+      await expect(service.processWebhookUpdate(update)).resolves.not.toThrow();
+    });
+
+    it('should process callback query update', async () => {
+      const update = {
+        update_id: 2,
+        callback_query: {
+          id: 'cb1',
+          from: { id: 123, is_bot: false, first_name: 'Test' },
+          chat_instance: 'test',
+          data: 'subscribe:seoul',
+          message: {
+            message_id: 1,
+            date: Date.now() / 1000,
+            chat: { id: 123, type: 'private' as const }
+          }
+        }
+      };
+      await expect(service.processWebhookUpdate(update)).resolves.not.toThrow();
+    });
+
+    it('should ignore non-command message', async () => {
+      const update = {
+        update_id: 3,
+        message: {
+          message_id: 1,
+          date: Date.now() / 1000,
+          chat: { id: 123, type: 'private' as const },
+          text: 'Hello world'
+        }
+      };
+      await expect(service.processWebhookUpdate(update)).resolves.not.toThrow();
+    });
+  });
+
+  describe('stop', () => {
+    it('should stop bot without error', async () => {
+      await expect(service.stop()).resolves.not.toThrow();
+    });
+  });
+
+  describe('setWebInterface', () => {
+    it('should set web interface without error', () => {
+      const mockWebInterface = {} as any;
+      expect(() => service.setWebInterface(mockWebInterface)).not.toThrow();
+    });
+  });
+
+  describe('getSubscriptionManager', () => {
+    it('should return subscription manager', () => {
+      expect(service.getSubscriptionManager()).toBeDefined();
+    });
+  });
+
+  describe('constructor options', () => {
+    it('should work without chatId (no legacy)', () => {
+      const s = new TelegramNotificationService({
+        enabled: true,
+        botToken: 'test-token'
+      });
+      expect(s.platformName).toBe('telegram');
+    });
+
+    it('should accept webhookUrl and webDashboardUrl', () => {
+      const s = new TelegramNotificationService({
+        enabled: true,
+        botToken: 'test-token',
+        webhookUrl: 'https://example.com/webhook',
+        webDashboardUrl: 'https://dashboard.example.com'
+      });
+      expect(s.platformName).toBe('telegram');
+    });
+
+    it('should accept external subscription manager', () => {
+      const { SubscriptionManager } = require('../../../services/notifications/SubscriptionManager');
+      const externalManager = new SubscriptionManager();
+      const s = new TelegramNotificationService(
+        { enabled: true, botToken: 'test-token' },
+        undefined,
+        externalManager
+      );
+      expect(s.platformName).toBe('telegram');
+    });
+  });
+
   describe('formatting methods', () => {
     it('should format weather alert with proper environment prefix', () => {
       const mockAlert: WeatherAlert = {
@@ -354,6 +507,82 @@ describe('TelegramNotificationService', () => {
       expect(formattedMessage).toContain('주의보 → 경보');
       expect(formattedMessage).toContain('서울특별시');
       expect(formattedMessage).toContain('폭염');
+    });
+
+    it('should format RESOLVED alert change', () => {
+      const change: AlertChange = {
+        type: 'RESOLVED',
+        previous: {
+          key: 'k1', regionId: '11B00000', regionName: '서울특별시',
+          warningType: 'H', level: '2', command: '3',
+          announcedAt: '202501281200', effectiveAt: '202501281300',
+          lastUpdated: '202501281200'
+        },
+        description: '해제'
+      };
+      const msg = (service as any).formatAlertChange(change);
+      expect(msg).toContain('✅');
+      expect(msg).toContain('특보 해제');
+      expect(msg).toContain('해제수준');
+    });
+
+    it('should format TIME_EXTENDED alert change', () => {
+      const change: AlertChange = {
+        type: 'TIME_EXTENDED',
+        current: {
+          key: 'k1', regionId: '11B00000', regionName: '서울특별시',
+          warningType: 'H', level: '2', command: '2',
+          announcedAt: '202501281200', effectiveAt: '202501291300',
+          lastUpdated: '202501281200'
+        },
+        description: '시간 연장'
+      };
+      const msg = (service as any).formatAlertChange(change);
+      expect(msg).toContain('⏰');
+      expect(msg).toContain('시간 연장');
+      expect(msg).toContain('발효시각');
+    });
+
+    it('should format MODIFIED alert change', () => {
+      const change: AlertChange = {
+        type: 'MODIFIED',
+        current: {
+          key: 'k1', regionId: '11B00000', regionName: '서울특별시',
+          warningType: 'R', level: '3', command: '2',
+          announcedAt: '202501281200', effectiveAt: '202501281300',
+          lastUpdated: '202501281200'
+        },
+        description: '내용 변경'
+      };
+      const msg = (service as any).formatAlertChange(change);
+      expect(msg).toContain('🔄');
+      expect(msg).toContain('내용 변경');
+    });
+
+    it('should format weather info with all fields', () => {
+      const forecast = {
+        temperature: 35,
+        feelsLike: 38,
+        precipitationProbability: 20,
+        humidity: 70
+      };
+      const msg = (service as any).formatWeatherInfo(forecast);
+      expect(msg).toContain('35°C');
+      expect(msg).toContain('체감 38°C');
+      expect(msg).toContain('20%');
+      expect(msg).toContain('70%');
+    });
+
+    it('should return empty string for empty forecast', () => {
+      const msg = (service as any).formatWeatherInfo({});
+      expect(msg).toBe('');
+    });
+
+    it('should not show feelsLike when same as temperature', () => {
+      const forecast = { temperature: 35, feelsLike: 35 };
+      const msg = (service as any).formatWeatherInfo(forecast);
+      expect(msg).toContain('35°C');
+      expect(msg).not.toContain('체감');
     });
   });
 });
