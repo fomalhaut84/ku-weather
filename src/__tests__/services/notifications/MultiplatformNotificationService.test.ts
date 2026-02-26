@@ -635,7 +635,8 @@ describe('MultiplatformNotificationService', () => {
       const alert = createMockAlert({ REG_ID: 'L1100000' });
       const results = await multiService.sendAlertToSubscriptions(alert);
       const discordResults = results.filter(r => r.platform === 'discord');
-      // discord 서비스가 없으므로 실패 결과
+      // discord 서비스가 없으므로 실패 결과 (빈 배열이 아닌지 먼저 확인)
+      expect(discordResults.length).toBeGreaterThan(0);
       for (const r of discordResults) {
         expect(r.success).toBe(false);
       }

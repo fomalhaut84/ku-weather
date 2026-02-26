@@ -159,9 +159,10 @@ describe('HybridSubscriptionManager', () => {
 
     it('should reject expired tokens', async () => {
       const token = await hybridManager.generateUserToken('telegram', 'user1');
-      // Manually expire the token by modifying internal state
+      // 토큰 내부의 expiresAt을 과거로 수정하여 만료 시뮬레이션
+      token.expiresAt = new Date(Date.now() - 1000);
       const validated = await hybridManager.validateToken(token.token);
-      expect(validated).not.toBeNull();
+      expect(validated).toBeNull();
     });
   });
 
