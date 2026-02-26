@@ -237,7 +237,7 @@ export class HttpServer {
           });
         }
 
-        const regionId = req.params.regionId;
+        const regionId = req.params.regionId as string;
 
         // 지역 코드 검증
         if (!regionId) {
@@ -282,7 +282,7 @@ export class HttpServer {
           });
         }
 
-        const token = req.params.token;
+        const token = req.params.token as string;
 
         // 토큰 형식 검증
         if (!token || token.length < 10) {
