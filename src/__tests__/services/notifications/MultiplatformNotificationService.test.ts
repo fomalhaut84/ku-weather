@@ -608,7 +608,8 @@ describe('MultiplatformNotificationService', () => {
       const svc = new MultiplatformNotificationService([failService]);
       const changes = [createMockChange('NEW'), createMockChange('RESOLVED')];
       const results = await svc.sendAlertChanges(changes);
-      expect(results.length).toBeGreaterThanOrEqual(1);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some(r => !r.success)).toBe(true);
     });
   });
 

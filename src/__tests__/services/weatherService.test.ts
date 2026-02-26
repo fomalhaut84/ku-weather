@@ -781,7 +781,7 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('API 호출 실패 시 source를 포함한 실패 결과를 반환한다', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
       const result = await weatherService.getWeatherForecastWithResult('L1100000');
       expect(result.success).toBe(false);
       expect(result.data).toBeNull();
@@ -822,7 +822,7 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('API 호출 실패 시 null을 반환한다', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
       const result = await weatherService.getWeatherForecast('L1100000');
       expect(result).toBeNull();
     });
@@ -995,7 +995,7 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
 
   describe('checkForAlertChanges 에러 처리', () => {
     it('API 실패 시 빈 배열을 반환한다', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
       const result = await weatherService.checkForAlertChanges();
       expect(Array.isArray(result)).toBe(true);
     });
