@@ -1,4 +1,4 @@
-import { TokenService, TokenInfo, TokenGenerationOptions } from '../../services/TokenService';
+import { TokenService } from '../../services/TokenService';
 
 // Mock Prisma
 const mockPrisma = {
