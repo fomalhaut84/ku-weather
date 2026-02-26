@@ -349,7 +349,7 @@ describe('MultiplatformNotificationService', () => {
       multiService.addSubscription('slack', 'user1', ['L1100000']);
       const alert = createMockAlert({ REG_ID: 'L1100000' });
       const results = await multiService.sendAlertToSubscriptions(alert);
-      expect(results.length).toBeGreaterThanOrEqual(0);
+      expect(results.length).toBeGreaterThan(0);
     });
 
     test('sendAlertChangeToSubscriptions: 구독자가 없으면 빈 배열 반환', async () => {
@@ -645,10 +645,11 @@ describe('MultiplatformNotificationService', () => {
 
   describe('sendAlertChangesToSubscriptions 상세', () => {
     test('여러 변동 처리', async () => {
-      multiService.addSubscription('slack', 'userX', ['L1100000']);
+      // createMockChange의 regionId(L1020110)와 일치하는 지역으로 구독
+      multiService.addSubscription('slack', 'userX', ['L1020110']);
       const changes = [createMockChange('NEW'), createMockChange('RESOLVED')];
       const results = await multiService.sendAlertChangesToSubscriptions(changes);
-      expect(results.length).toBeGreaterThanOrEqual(0);
+      expect(results.length).toBeGreaterThan(0);
     });
   });
 });
