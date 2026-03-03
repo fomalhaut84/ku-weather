@@ -9,6 +9,7 @@ import { WeatherService } from './services/weatherService';
 import { CachedAlert } from './types/weather';
 import alertRoutes from './routes/alertRoutes';
 import subscriptionRoutes, { initializeSubscriptionRoutes } from './routes/subscriptionRoutes';
+import notificationRoutes, { initializeNotificationRoutes } from './routes/notificationRoutes';
 import { TokenService } from './services/TokenService';
 import { databaseService } from './services/DatabaseService';
 import { AlertChange } from './types/weather';
@@ -91,7 +92,9 @@ export class HttpServer {
           alertsHistory: '/api/alerts/history?startDate={ISO8601}&endDate={ISO8601}',
           alertsStatistics: '/api/alerts/statistics?startDate={ISO8601}&endDate={ISO8601}&groupBy={region|warningType|level}',
           alertsFiltered: '/api/alerts?region={regionId}&type={warningType}',
-          subscriptions: '/api/subscriptions/{token}'
+          subscriptions: '/api/subscriptions/{token}',
+          notificationStats: '/api/notifications/stats',
+          notificationHealth: '/api/notifications/health'
         }
       });
     });
@@ -101,6 +104,9 @@ export class HttpServer {
 
     // Subscription management routes
     this.app.use('/api/subscriptions', subscriptionRoutes);
+
+    // Notification monitoring routes
+    this.app.use('/api/notifications', notificationRoutes);
 
     // Telegram Webhook 엔드포인트
     this.app.post('/telegram/webhook', async (req: Request, res: Response) => {
@@ -393,6 +399,7 @@ export class HttpServer {
     })();
 
     initializeSubscriptionRoutes(subscriptionManager, finalTokenService);
+    initializeNotificationRoutes(notificationService);
 
     logger.info('Services injected into HTTP server');
   }

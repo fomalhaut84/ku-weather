@@ -9,7 +9,7 @@ export default function Home() {
           실시간 기상특보 현황을 확인하고 개인별 알림 설정을 관리하세요
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           <a
             href="/dashboard"
             className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
@@ -37,6 +37,21 @@ export default function Home() {
             </h2>
             <p className="m-0 max-w-[30ch] text-sm opacity-50">
               개인별 알림 설정을 관리하고 맞춤 알림을 받으세요
+            </p>
+          </a>
+
+          <a
+            href="/monitoring"
+            className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          >
+            <h2 className="mb-3 text-2xl font-semibold">
+              🔔 알림 모니터링{" "}
+              <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+                →
+              </span>
+            </h2>
+            <p className="m-0 max-w-[30ch] text-sm opacity-50">
+              알림 플랫폼 상태와 전송 통계를 모니터링하세요
             </p>
           </a>
         </div>
