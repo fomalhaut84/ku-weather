@@ -4,20 +4,37 @@ import { NotificationService, NotificationResult } from './interfaces';
 import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
 import { HybridSubscriptionManager } from '../subscriptions/HybridSubscriptionManager';
 import { SubscriptionCommand } from '../subscriptions/interfaces';
+import { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from './CircuitBreaker';
+
+export interface RetryOptions {
+  readonly maxRetries: number;
+  readonly backoffMs: number;
+}
+
+const DEFAULT_RETRY_OPTIONS: RetryOptions = {
+  maxRetries: 3,
+  backoffMs: 1000,
+};
 
 /**
  * 다중 플랫폼 알림 관리 서비스
- * 
+ *
  * 여러 알림 플랫폼에 동시 전송하고 결과를 취합하여 반환
  */
 export class MultiplatformNotificationService {
   private services: NotificationService[] = [];
   private subscriptionManager: SubscriptionManager;
   private hybridManager?: HybridSubscriptionManager;
+  private readonly circuitBreakers: Map<string, CircuitBreaker> = new Map();
 
   constructor(services: NotificationService[] = [], subscriptionManager?: SubscriptionManager) {
     this.services = [...services];
     this.subscriptionManager = subscriptionManager || new SubscriptionManager();
+
+    for (const service of this.services) {
+      this.ensureCircuitBreaker(service.platformName);
+    }
+
     logger.info(`MultiplatformNotificationService 초기화: ${this.services.length}개 플랫폼, 구독 시스템 ${subscriptionManager ? '외부' : '내장'}`);
   }
 
@@ -26,6 +43,7 @@ export class MultiplatformNotificationService {
    */
   addService(service: NotificationService): void {
     this.services.push(service);
+    this.ensureCircuitBreaker(service.platformName);
     logger.info(`알림 서비스 추가: ${service.platformName}`);
   }
 
@@ -69,23 +87,7 @@ export class MultiplatformNotificationService {
 
     logger.info(`모든 플랫폼에 특보 알림 전송: ${alert.REG_NAME} ${this.getWarningTypeName(alert.WRN)}`);
 
-    const results = await Promise.allSettled(
-      this.services.map(async service => {
-        try {
-          return await service.sendAlert(alert);
-        } catch (error) {
-          logger.error(`${service.platformName} 특보 알림 전송 실패:`, error);
-          return {
-            platform: service.platformName,
-            success: false,
-            error: error instanceof Error ? error.message : String(error),
-            responseTime: 0
-          } as NotificationResult;
-        }
-      })
-    );
-
-    return this.processResults(results);
+    return this.sendAlertToServices(alert, this.services);
   }
 
   /**
@@ -204,48 +206,148 @@ export class MultiplatformNotificationService {
 
   /**
    * 재시도 로직이 포함된 알림 전송
+   *
+   * 실패한 플랫폼만 선별적으로 재시도하며 CircuitBreaker를 통해
+   * 지속적으로 실패하는 플랫폼에 대한 요청을 자동으로 차단합니다.
    */
   async sendAlertWithRetry(
-    alert: WeatherAlert, 
-    maxRetries: number = 3, 
-    backoffMs: number = 1000
+    alert: WeatherAlert,
+    maxRetries: number = DEFAULT_RETRY_OPTIONS.maxRetries,
+    backoffMs: number = DEFAULT_RETRY_OPTIONS.backoffMs
   ): Promise<NotificationResult[]> {
-    let lastResults: NotificationResult[] = [];
-    
+    if (this.services.length === 0) {
+      logger.warn('등록된 알림 서비스가 없습니다');
+      return [];
+    }
+
+    const resultMap = new Map<string, NotificationResult>();
+    let pendingServices = [...this.services];
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      lastResults = await this.sendAlert(alert);
-      
-      const failedResults = lastResults.filter(result => !result.success);
-      
-      if (failedResults.length === 0) {
-        // 모든 플랫폼 성공
-        logger.info(`특보 알림 전송 성공 (시도 ${attempt}/${maxRetries})`);
-        return lastResults;
+      const attemptResults = await this.sendAlertToServices(alert, pendingServices);
+
+      for (const result of attemptResults) {
+        resultMap.set(result.platform, result);
       }
-      
+
+      const failedPlatformSet = new Set(
+        attemptResults.filter(r => !r.success).map(r => r.platform)
+      );
+
+      if (failedPlatformSet.size === 0) {
+        logger.info(`특보 알림 전송 성공 (시도 ${attempt}/${maxRetries})`);
+        break;
+      }
+
       if (attempt < maxRetries) {
-        const failedPlatforms = failedResults.map(r => r.platform).join(', ');
-        logger.warn(`특보 알림 전송 실패 플랫폼: ${failedPlatforms} (${attempt}/${maxRetries} 시도)`);
-        
-        // Exponential backoff
-        const delay = backoffMs * Math.pow(2, attempt - 1);
+        // 실패한 플랫폼 중 CircuitBreaker가 OPEN이 아닌 것만 재시도 대상
+        pendingServices = this.services.filter(s => {
+          if (!failedPlatformSet.has(s.platformName)) return false;
+          const cb = this.circuitBreakers.get(s.platformName);
+          return !cb || cb.getState() !== CircuitState.OPEN;
+        });
+
+        if (pendingServices.length === 0) {
+          logger.warn('모든 실패 플랫폼의 Circuit breaker가 OPEN 상태입니다. 재시도 중단.');
+          break;
+        }
+
+        const retryNames = pendingServices.map(s => s.platformName).join(', ');
+        logger.warn(`실패 플랫폼 재시도: ${retryNames} (${attempt}/${maxRetries} 시도)`);
+
+        // Exponential backoff with jitter
+        const baseDelay = backoffMs * Math.pow(2, attempt - 1);
+        const delay = baseDelay * (0.5 + Math.random() * 0.5);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        const failedPlatforms = failedResults.map(r => r.platform).join(', ');
-        logger.error(`특보 알림 전송 최종 실패: ${failedPlatforms} (${maxRetries}회 시도 완료)`);
+        const failedNames = [...failedPlatformSet].join(', ');
+        logger.error(`특보 알림 전송 최종 실패: ${failedNames} (${maxRetries}회 시도 완료)`);
       }
     }
-    
-    return lastResults;
+
+    // this.services 순서를 보장하여 반환
+    return this.services
+      .map(s => resultMap.get(s.platformName))
+      .filter((r): r is NotificationResult => r !== undefined);
   }
 
   /**
-   * 플랫폼별 전송 성공률 통계
+   * 플랫폼별 전송 성공률 통계 (CircuitBreaker 기반)
    */
   getStatistics(): { [platform: string]: { total: number; success: number; successRate: number } } {
-    // 실제 운영에서는 이 정보를 메모리나 데이터베이스에 저장해야 함
-    // 현재는 구조만 제공
-    return {};
+    const stats: { [platform: string]: { total: number; success: number; successRate: number } } = {};
+
+    for (const [platform, cb] of this.circuitBreakers) {
+      const cbStats = cb.getStats();
+      stats[platform] = {
+        total: cbStats.totalCalls,
+        success: cbStats.successCount,
+        successRate: cbStats.totalCalls > 0 ? cbStats.successCount / cbStats.totalCalls : 0,
+      };
+    }
+
+    return stats;
+  }
+
+  /**
+   * 특정 플랫폼의 CircuitBreaker 상태 조회
+   */
+  getCircuitBreakerState(platformName: string): CircuitState | undefined {
+    return this.circuitBreakers.get(platformName)?.getState();
+  }
+
+  /**
+   * 특정 플랫폼의 CircuitBreaker 수동 리셋
+   */
+  resetCircuitBreaker(platformName: string): boolean {
+    const cb = this.circuitBreakers.get(platformName);
+    if (!cb) return false;
+    cb.reset();
+    return true;
+  }
+
+  /**
+   * CircuitBreaker를 통해 지정된 서비스 목록에 알림 전송
+   */
+  private async sendAlertToServices(
+    alert: WeatherAlert,
+    services: NotificationService[]
+  ): Promise<NotificationResult[]> {
+    const results = await Promise.allSettled(
+      services.map(async service => {
+        const cb = this.circuitBreakers.get(service.platformName);
+        if (!cb) {
+          return service.sendAlert(alert);
+        }
+
+        try {
+          return await cb.execute(() => service.sendAlert(alert));
+        } catch (error) {
+          if (error instanceof CircuitBreakerOpenError || (error as Error)?.name === 'CircuitBreakerOpenError') {
+            logger.warn(`${service.platformName} Circuit breaker OPEN - 전송 건너뜀`);
+          } else {
+            logger.error(`${service.platformName} 특보 알림 전송 실패:`, error);
+          }
+          return {
+            platform: service.platformName,
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+            responseTime: 0,
+          } as NotificationResult;
+        }
+      })
+    );
+
+    return this.processResults(results);
+  }
+
+  private ensureCircuitBreaker(platformName: string): void {
+    if (!this.circuitBreakers.has(platformName)) {
+      this.circuitBreakers.set(
+        platformName,
+        new CircuitBreaker({ name: platformName })
+      );
+    }
   }
 
   /**

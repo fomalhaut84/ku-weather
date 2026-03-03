@@ -1,6 +1,7 @@
 import { MultiplatformNotificationService } from '../../../services/notifications/MultiplatformNotificationService';
 import { NotificationService, NotificationResult } from '../../../services/notifications/interfaces';
 import { WeatherAlert, AlertChange } from '../../../types/weather';
+import { CircuitState } from '../../../services/notifications/CircuitBreaker';
 
 // logger 모킹
 jest.mock('../../../utils/logger', () => ({
@@ -651,6 +652,99 @@ describe('MultiplatformNotificationService', () => {
       const changes = [createMockChange('NEW'), createMockChange('RESOLVED')];
       const results = await multiService.sendAlertChangesToSubscriptions(changes);
       expect(results.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('CircuitBreaker 통합', () => {
+    test('각 플랫폼에 CircuitBreaker가 생성됨', () => {
+      expect(multiService.getCircuitBreakerState('slack')).toBe(CircuitState.CLOSED);
+      expect(multiService.getCircuitBreakerState('telegram')).toBe(CircuitState.CLOSED);
+    });
+
+    test('addService 시 새 CircuitBreaker 생성', () => {
+      const discordService = new MockNotificationService('discord');
+      multiService.addService(discordService);
+      expect(multiService.getCircuitBreakerState('discord')).toBe(CircuitState.CLOSED);
+    });
+
+    test('존재하지 않는 플랫폼의 CircuitBreaker 상태 조회 시 undefined', () => {
+      expect(multiService.getCircuitBreakerState('nonexistent')).toBeUndefined();
+    });
+
+    test('CircuitBreaker 수동 리셋 성공', () => {
+      expect(multiService.resetCircuitBreaker('slack')).toBe(true);
+    });
+
+    test('존재하지 않는 플랫폼의 CircuitBreaker 리셋 실패', () => {
+      expect(multiService.resetCircuitBreaker('nonexistent')).toBe(false);
+    });
+
+    test('통계에 CircuitBreaker 데이터가 포함됨', async () => {
+      const alert = createMockAlert();
+      await multiService.sendAlert(alert);
+
+      const stats = multiService.getStatistics();
+      expect(stats).toHaveProperty('slack');
+      expect(stats).toHaveProperty('telegram');
+      expect(stats.slack.total).toBeGreaterThan(0);
+      expect(stats.slack.success).toBeGreaterThan(0);
+      expect(stats.slack.successRate).toBeGreaterThan(0);
+    });
+  });
+
+  describe('선별적 재시도', () => {
+    test('서비스가 없을 때 빈 배열 반환', async () => {
+      const emptyService = new MultiplatformNotificationService([]);
+      const results = await emptyService.sendAlertWithRetry(createMockAlert(), 2, 10);
+      expect(results).toEqual([]);
+    });
+
+    test('실패 플랫폼만 재시도하고 성공 결과는 보존', async () => {
+      let callCount = 0;
+      const intermittentService: NotificationService = {
+        platformName: 'intermittent',
+        validateConfig: () => true,
+        sendAlert: async () => {
+          callCount++;
+          if (callCount <= 1) {
+            throw new Error('temporary failure');
+          }
+          return { platform: 'intermittent', success: true, responseTime: 50 };
+        },
+        sendAlertChange: async () => ({ platform: 'intermittent', success: true }),
+        sendAlertChanges: async () => [{ platform: 'intermittent', success: true }],
+        healthCheck: async () => true,
+      };
+
+      const svc = new MultiplatformNotificationService([mockSlackService, intermittentService]);
+      const results = await svc.sendAlertWithRetry(createMockAlert(), 3, 10);
+
+      // slack은 첫 시도에 성공, intermittent는 두 번째 시도에 성공
+      expect(results).toHaveLength(2);
+      const slackResult = results.find(r => r.platform === 'slack');
+      const intermittentResult = results.find(r => r.platform === 'intermittent');
+      expect(slackResult?.success).toBe(true);
+      expect(intermittentResult?.success).toBe(true);
+    });
+
+    test('모든 재시도 소진 후 최종 실패 결과 반환', async () => {
+      const alwaysFailService: NotificationService = {
+        platformName: 'always-fail',
+        validateConfig: () => true,
+        sendAlert: async () => {
+          throw new Error('permanent failure');
+        },
+        sendAlertChange: async () => ({ platform: 'always-fail', success: false }),
+        sendAlertChanges: async () => [{ platform: 'always-fail', success: false }],
+        healthCheck: async () => false,
+      };
+
+      const svc = new MultiplatformNotificationService([alwaysFailService]);
+      const results = await svc.sendAlertWithRetry(createMockAlert(), 2, 10);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(false);
+      expect(results[0].platform).toBe('always-fail');
     });
   });
 });
