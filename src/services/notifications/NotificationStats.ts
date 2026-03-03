@@ -30,14 +30,18 @@ export class NotificationStats {
   private readonly platforms: Map<string, PlatformStatsAccumulator> = new Map();
 
   recordResult(entry: RecordEntry): void {
-    if (!entry.platform || entry.platform.trim().length === 0) return;
+    const platform = entry.platform?.trim();
+    if (!platform || platform.length === 0) return;
 
     const responseTimeMs = Number.isFinite(entry.responseTimeMs) && entry.responseTimeMs >= 0
       ? entry.responseTimeMs
       : 0;
 
-    const acc = this.ensurePlatform(entry.platform);
-    const ts = entry.timestamp ?? new Date();
+    const ts = entry.timestamp instanceof Date && Number.isFinite(entry.timestamp.getTime())
+      ? entry.timestamp
+      : new Date();
+
+    const acc = this.ensurePlatform(platform);
 
     acc.totalSent++;
     acc.totalResponseTimeMs += responseTimeMs;

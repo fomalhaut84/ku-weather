@@ -284,6 +284,28 @@ describe('NotificationStats', () => {
       stats.recordResult({ platform: 'slack', success: true, responseTimeMs: Infinity });
       expect(stats.getStats('slack')!.averageResponseTimeMs).toBe(0);
     });
+
+    it('플랫폼명 앞뒤 공백은 trim 처리', () => {
+      stats.recordResult({ platform: '  slack  ', success: true, responseTimeMs: 100 });
+      expect(stats.getStats('slack')).toBeDefined();
+      expect(stats.getStats('slack')!.totalSent).toBe(1);
+      expect(stats.getStats('  slack  ')).toBeUndefined();
+    });
+
+    it('Invalid Date 타임스탬프는 현재 시각으로 대체', () => {
+      const invalidDate = new Date('invalid');
+      stats.recordResult({ platform: 'slack', success: true, responseTimeMs: 100, timestamp: invalidDate });
+
+      const result = stats.getStats('slack')!;
+      expect(result.totalSent).toBe(1);
+      expect(result.lastSuccessAt).toBeInstanceOf(Date);
+      expect(Number.isFinite(result.lastSuccessAt!.getTime())).toBe(true);
+    });
+
+    it('-Infinity 응답시간은 0으로 정규화', () => {
+      stats.recordResult({ platform: 'slack', success: true, responseTimeMs: -Infinity });
+      expect(stats.getStats('slack')!.averageResponseTimeMs).toBe(0);
+    });
   });
 
   describe('getAllStats 정렬', () => {
