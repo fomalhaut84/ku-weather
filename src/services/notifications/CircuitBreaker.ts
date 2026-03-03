@@ -6,6 +6,15 @@ export enum CircuitState {
   HALF_OPEN = 'HALF_OPEN',
 }
 
+export class CircuitBreakerOpenError extends Error {
+  constructor(name: string, resetAt: Date) {
+    super(
+      `Circuit breaker [${name}] is OPEN. Requests are blocked until ${resetAt.toISOString()}`
+    );
+    this.name = 'CircuitBreakerOpenError';
+  }
+}
+
 export interface CircuitBreakerOptions {
   readonly failureThreshold: number;
   readonly resetTimeoutMs: number;
@@ -28,7 +37,16 @@ export class CircuitBreaker {
   private totalFailures: number = 0;
 
   constructor(options: Partial<CircuitBreakerOptions> = {}) {
-    this.options = { ...DEFAULT_OPTIONS, ...options };
+    const merged = { ...DEFAULT_OPTIONS, ...options };
+
+    if (merged.failureThreshold < 1) {
+      throw new Error(`failureThreshold must be >= 1, got ${merged.failureThreshold}`);
+    }
+    if (merged.resetTimeoutMs < 0) {
+      throw new Error(`resetTimeoutMs must be >= 0, got ${merged.resetTimeoutMs}`);
+    }
+
+    this.options = merged;
   }
 
   getState(): CircuitState {
@@ -42,11 +60,10 @@ export class CircuitBreaker {
     const currentState = this.getState();
 
     if (currentState === CircuitState.OPEN) {
-      const error = new Error(
-        `Circuit breaker [${this.options.name}] is OPEN. Requests are blocked until ${new Date(this.lastFailureTime + this.options.resetTimeoutMs).toISOString()}`
+      throw new CircuitBreakerOpenError(
+        this.options.name,
+        new Date(this.lastFailureTime + this.options.resetTimeoutMs)
       );
-      error.name = 'CircuitBreakerOpenError';
-      throw error;
     }
 
     this.totalCalls++;

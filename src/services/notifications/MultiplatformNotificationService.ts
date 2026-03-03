@@ -4,7 +4,7 @@ import { NotificationService, NotificationResult } from './interfaces';
 import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult } from './SubscriptionManager';
 import { HybridSubscriptionManager } from '../subscriptions/HybridSubscriptionManager';
 import { SubscriptionCommand } from '../subscriptions/interfaces';
-import { CircuitBreaker, CircuitState } from './CircuitBreaker';
+import { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from './CircuitBreaker';
 
 export interface RetryOptions {
   readonly maxRetries: number;
@@ -230,11 +230,11 @@ export class MultiplatformNotificationService {
         resultMap.set(result.platform, result);
       }
 
-      const failedPlatforms = attemptResults
-        .filter(r => !r.success)
-        .map(r => r.platform);
+      const failedPlatformSet = new Set(
+        attemptResults.filter(r => !r.success).map(r => r.platform)
+      );
 
-      if (failedPlatforms.length === 0) {
+      if (failedPlatformSet.size === 0) {
         logger.info(`특보 알림 전송 성공 (시도 ${attempt}/${maxRetries})`);
         break;
       }
@@ -242,7 +242,7 @@ export class MultiplatformNotificationService {
       if (attempt < maxRetries) {
         // 실패한 플랫폼 중 CircuitBreaker가 OPEN이 아닌 것만 재시도 대상
         pendingServices = this.services.filter(s => {
-          if (!failedPlatforms.includes(s.platformName)) return false;
+          if (!failedPlatformSet.has(s.platformName)) return false;
           const cb = this.circuitBreakers.get(s.platformName);
           return !cb || cb.getState() !== CircuitState.OPEN;
         });
@@ -255,15 +255,20 @@ export class MultiplatformNotificationService {
         const retryNames = pendingServices.map(s => s.platformName).join(', ');
         logger.warn(`실패 플랫폼 재시도: ${retryNames} (${attempt}/${maxRetries} 시도)`);
 
-        const delay = backoffMs * Math.pow(2, attempt - 1);
+        // Exponential backoff with jitter
+        const baseDelay = backoffMs * Math.pow(2, attempt - 1);
+        const delay = baseDelay * (0.5 + Math.random() * 0.5);
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        const failedNames = failedPlatforms.join(', ');
+        const failedNames = [...failedPlatformSet].join(', ');
         logger.error(`특보 알림 전송 최종 실패: ${failedNames} (${maxRetries}회 시도 완료)`);
       }
     }
 
-    return Array.from(resultMap.values());
+    // this.services 순서를 보장하여 반환
+    return this.services
+      .map(s => resultMap.get(s.platformName))
+      .filter((r): r is NotificationResult => r !== undefined);
   }
 
   /**
@@ -274,11 +279,10 @@ export class MultiplatformNotificationService {
 
     for (const [platform, cb] of this.circuitBreakers) {
       const cbStats = cb.getStats();
-      const successCount = cbStats.totalCalls - cbStats.totalFailures;
       stats[platform] = {
         total: cbStats.totalCalls,
-        success: successCount,
-        successRate: cbStats.totalCalls > 0 ? successCount / cbStats.totalCalls : 0,
+        success: cbStats.successCount,
+        successRate: cbStats.totalCalls > 0 ? cbStats.successCount / cbStats.totalCalls : 0,
       };
     }
 
@@ -319,7 +323,7 @@ export class MultiplatformNotificationService {
         try {
           return await cb.execute(() => service.sendAlert(alert));
         } catch (error) {
-          if ((error as Error).name === 'CircuitBreakerOpenError') {
+          if (error instanceof CircuitBreakerOpenError) {
             logger.warn(`${service.platformName} Circuit breaker OPEN - 전송 건너뜀`);
           } else {
             logger.error(`${service.platformName} 특보 알림 전송 실패:`, error);

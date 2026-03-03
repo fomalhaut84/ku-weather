@@ -17,7 +17,7 @@ export { SlackNotificationService } from './SlackNotificationService';
 export { MultiplatformNotificationService } from './MultiplatformNotificationService';
 
 // Circuit Breaker
-export { CircuitBreaker, CircuitState } from './CircuitBreaker';
+export { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from './CircuitBreaker';
 export type { CircuitBreakerOptions } from './CircuitBreaker';
 
 // 팩토리 클래스

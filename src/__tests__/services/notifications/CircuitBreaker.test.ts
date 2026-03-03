@@ -1,4 +1,4 @@
-import { CircuitBreaker, CircuitState } from '../../../services/notifications/CircuitBreaker';
+import { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from '../../../services/notifications/CircuitBreaker';
 
 jest.mock('../../../utils/logger', () => ({
   logger: {
@@ -256,6 +256,46 @@ describe('CircuitBreaker', () => {
     it('name 커스터마이징', () => {
       const cb = new CircuitBreaker({ name: 'telegram' });
       expect(cb.getStats().name).toBe('telegram');
+    });
+  });
+
+  describe('옵션 검증', () => {
+    it('failureThreshold가 0이면 에러', () => {
+      expect(() => new CircuitBreaker({ failureThreshold: 0 })).toThrow(
+        'failureThreshold must be >= 1'
+      );
+    });
+
+    it('failureThreshold가 음수이면 에러', () => {
+      expect(() => new CircuitBreaker({ failureThreshold: -1 })).toThrow(
+        'failureThreshold must be >= 1'
+      );
+    });
+
+    it('resetTimeoutMs가 음수이면 에러', () => {
+      expect(() => new CircuitBreaker({ resetTimeoutMs: -100 })).toThrow(
+        'resetTimeoutMs must be >= 0'
+      );
+    });
+
+    it('resetTimeoutMs가 0이면 허용', () => {
+      const cb = new CircuitBreaker({ resetTimeoutMs: 0 });
+      expect(cb.getStats()).toBeDefined();
+    });
+  });
+
+  describe('커스텀 에러 클래스', () => {
+    it('OPEN 상태에서 CircuitBreakerOpenError 인스턴스 throw', async () => {
+      const cb = new CircuitBreaker({ name: 'test', failureThreshold: 1 });
+      await expect(cb.execute(() => Promise.reject(new Error('fail')))).rejects.toThrow();
+
+      try {
+        await cb.execute(() => Promise.resolve('ok'));
+        fail('should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(CircuitBreakerOpenError);
+        expect((error as Error).name).toBe('CircuitBreakerOpenError');
+      }
     });
   });
 });
