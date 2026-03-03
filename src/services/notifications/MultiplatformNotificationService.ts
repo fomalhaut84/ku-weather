@@ -323,7 +323,7 @@ export class MultiplatformNotificationService {
         try {
           return await cb.execute(() => service.sendAlert(alert));
         } catch (error) {
-          if (error instanceof CircuitBreakerOpenError) {
+          if (error instanceof CircuitBreakerOpenError || (error as Error)?.name === 'CircuitBreakerOpenError') {
             logger.warn(`${service.platformName} Circuit breaker OPEN - 전송 건너뜀`);
           } else {
             logger.error(`${service.platformName} 특보 알림 전송 실패:`, error);

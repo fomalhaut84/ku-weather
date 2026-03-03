@@ -11,12 +11,13 @@
 
 ### PR 생성 워크플로우
 1. 피처 브랜치 생성 및 작업 완료
-2. **로컬에서 Codex 리뷰 실행**: Claude Code에서 `@codex-cli 현재 브랜치의 모든 변경사항을 리뷰해줘` 요청
-3. 리뷰 피드백 반영 및 수정
-4. `dev` 브랜치를 base로 PR 생성 및 푸시
-5. **GitHub에서 Codex 리뷰 자동 실행** (PR 생성 시)
-6. **Codex 피드백 반영**: 커밋 메시지에 `@codex` 멘션하여 자동 리뷰 트리거
-7. PR 승인 및 머지
+2. `npm run build` + `npm test` 통과 확인
+3. **로컬에서 Codex 리뷰 실행**: Claude Code에서 `codex-cli를 이용해서 작업내용 코드리뷰 진행해줘` 요청
+4. **P1/P2 피드백 반영 및 수정** → 수정 후 다시 Codex 리뷰 (P1 이슈가 없을 때까지 반복)
+5. `dev` 브랜치를 base로 PR 생성 및 푸시
+6. **GitHub에서 Codex 리뷰 자동 실행** (PR 생성 시)
+7. **Codex 피드백 반영**: 커밋 메시지에 `@codex` 멘션하여 자동 리뷰 트리거
+8. PR 승인 및 머지
 
 ### Codex CLI 사용법
 
@@ -41,15 +42,21 @@ codex review HEAD~3..HEAD
 git checkout -b feature/new-feature
 # ... 코딩 작업 ...
 
-# 2. 로컬 Codex 리뷰
-# Claude Code에서 "@codex-cli 현재 브랜치의 모든 변경사항을 리뷰해줘" 요청
+# 2. 빌드 및 테스트 확인
+npm run build && npm test
 
-# 3. 피드백 반영 후 PR 생성
+# 3. 로컬 Codex 리뷰 (PR 생성 전 필수)
+# Claude Code에서 "codex-cli를 이용해서 작업내용 코드리뷰 진행해줘" 요청
+
+# 4. P1/P2 피드백 반영 → 재리뷰 (P1 이슈 없을 때까지 반복)
+# Claude Code에서 "피드백 반영된 내용을 다시 codex 리뷰 받아줘" 요청
+
+# 5. 피드백 반영 완료 후 PR 생성
 gh pr create --base dev --title "..." --body "..."
 
-# 4. GitHub에서 Codex가 자동으로 PR 리뷰 시작
+# 6. GitHub에서 Codex가 자동으로 PR 리뷰 시작
 
-# 5. Codex 피드백 반영 시 커밋 메시지에 @codex 멘션
+# 7. Codex 피드백 반영 시 커밋 메시지에 @codex 멘션
 git commit -m "fix: [문제 설명]
 
 @codex 해당 피드백 반영 완료. 다시 리뷰 부탁드립니다.
@@ -58,7 +65,7 @@ git commit -m "fix: [문제 설명]
 "
 git push  # 자동으로 Codex 리뷰 트리거됨
 
-# 6. 머지
+# 8. 머지
 gh pr merge <PR_NUMBER>
 ```
 
