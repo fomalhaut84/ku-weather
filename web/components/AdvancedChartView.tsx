@@ -16,6 +16,10 @@ import {
 import { Line, Bar } from 'react-chartjs-2';
 import { getAlertHistory, type AlertHistory } from '@/lib/api';
 import { WARNING_TYPE_NAMES } from '@/types/alert';
+import { chartPalette } from '@/styles/tokens';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import Card from '@/components/common/Card';
 
 // Chart.js 등록
 ChartJS.register(
@@ -252,16 +256,7 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
   };
 
   // 특보 종류별 월별 추이 (Multi-line Chart)
-  const warningTypeColors = [
-    'rgba(239, 68, 68, 1)',    // 빨간색
-    'rgba(245, 158, 11, 1)',   // 주황색
-    'rgba(59, 130, 246, 1)',   // 파란색
-    'rgba(16, 185, 129, 1)',   // 초록색
-    'rgba(168, 85, 247, 1)',   // 보라색
-    'rgba(236, 72, 153, 1)',   // 분홍색
-    'rgba(14, 165, 233, 1)',   // 하늘색
-    'rgba(34, 197, 94, 1)',    // 연두색
-  ];
+  const warningTypeColors = chartPalette.borders;
 
   const allMonths = Array.from(new Set(monthlyData.map(d => d.month))).sort();
   const warningTypeMultiLineData = {
@@ -283,29 +278,17 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">고급 통계 로딩 중...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="고급 통계 로딩 중..." />;
   }
 
   if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-600">{error}</p>
-      </div>
-    );
+    return <ErrorAlert message={error} />;
   }
 
   return (
     <div className="space-y-6">
       {/* 월별 특보 발생 추이 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">📅 월별 특보 발생 추이</h3>
+      <Card title="📅 월별 특보 발생 추이">
         <div className="h-[350px]">
           <Line
             data={monthlyChartData}
@@ -332,13 +315,12 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
             }}
           />
         </div>
-      </div>
+      </Card>
 
       {/* 계절별 비교 & 연도별 비교 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* 계절별 비교 */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-4">🍂 계절별 특보 발생 비교</h3>
+        <Card title="🍂 계절별 특보 발생 비교">
           <div className="h-[300px]">
             <Bar
               data={seasonalChartData}
@@ -361,11 +343,10 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
               }}
             />
           </div>
-        </div>
+        </Card>
 
         {/* 연도별 비교 */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-4">📈 연도별 특보 발생 비교</h3>
+        <Card title="📈 연도별 특보 발생 비교">
           <div className="h-[300px]">
             <Line
               data={yearlyChartData}
@@ -388,12 +369,11 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
               }}
             />
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 특보 종류별 월별 추이 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">🌦️ 특보 종류별 월별 발생 추이</h3>
+      <Card title="🌦️ 특보 종류별 월별 발생 추이">
         <div className="h-[400px]">
           <Line
             data={warningTypeMultiLineData}
@@ -424,11 +404,10 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
             }}
           />
         </div>
-      </div>
+      </Card>
 
       {/* 통계 요약 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">📊 기간별 통계 요약</h3>
+      <Card title="📊 기간별 통계 요약">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="border-l-4 border-blue-500 pl-4">
             <p className="text-sm text-gray-600">총 특보 발생 건수</p>
@@ -453,7 +432,7 @@ export default function AdvancedChartView({ period = '1y' }: AdvancedChartViewPr
             </p>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
