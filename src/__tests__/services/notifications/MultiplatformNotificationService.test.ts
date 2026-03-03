@@ -319,10 +319,338 @@ describe('MultiplatformNotificationService', () => {
 
       const testService = new MultiplatformNotificationService([throwingService]);
       const healthStatus = await testService.healthCheck();
-      
+
       expect(healthStatus).toEqual({
         throwing: false
       });
+    });
+  });
+
+  describe('getService', () => {
+    test('should return service by platform name', () => {
+      const service = multiService.getService('slack');
+      expect(service).toBeDefined();
+      expect(service!.platformName).toBe('slack');
+    });
+
+    test('should return undefined for non-existent platform', () => {
+      expect(multiService.getService('nonexistent')).toBeUndefined();
+    });
+  });
+
+  describe('구독 기반 알림', () => {
+    test('sendAlertToSubscriptions: 구독자가 없으면 빈 배열 반환', async () => {
+      const alert = createMockAlert();
+      const results = await multiService.sendAlertToSubscriptions(alert);
+      expect(results).toEqual([]);
+    });
+
+    test('sendAlertToSubscriptions: 구독자에게 전송 (폴백)', async () => {
+      multiService.addSubscription('slack', 'user1', ['L1100000']);
+      const alert = createMockAlert({ REG_ID: 'L1100000' });
+      const results = await multiService.sendAlertToSubscriptions(alert);
+      expect(results.length).toBeGreaterThan(0);
+    });
+
+    test('sendAlertChangeToSubscriptions: 구독자가 없으면 빈 배열 반환', async () => {
+      const change: AlertChange = {
+        type: 'NEW',
+        current: {
+          key: 'test', regionId: 'L1100000', regionName: '서울',
+          warningType: 'H', level: '2', command: '1',
+          announcedAt: '202601011200', effectiveAt: '202601011300',
+          lastUpdated: new Date().toISOString()
+        },
+        description: '신규 특보'
+      };
+      const results = await multiService.sendAlertChangeToSubscriptions(change);
+      expect(results).toEqual([]);
+    });
+
+    test('sendAlertChangesToSubscriptions: 빈 배열 반환', async () => {
+      const results = await multiService.sendAlertChangesToSubscriptions([]);
+      expect(results).toEqual([]);
+    });
+
+    test('addSubscription: 구독 추가', () => {
+      const id = multiService.addSubscription('slack', 'userA', ['L1100000'], {
+        warningTypes: ['H'], displayName: 'Test User'
+      });
+      expect(id).toBeTruthy();
+    });
+
+    test('removeSubscription: 구독 제거', () => {
+      multiService.addSubscription('slack', 'userB', ['L1100000']);
+      expect(multiService.removeSubscription('slack', 'userB')).toBe(true);
+      expect(multiService.removeSubscription('slack', 'nonexistent')).toBe(false);
+    });
+
+    test('getSubscriptionStatistics: 통계 반환', () => {
+      multiService.addSubscription('slack', 'userC', ['L1100000']);
+      const stats = multiService.getSubscriptionStatistics();
+      expect(stats.totalSubscriptions).toBeGreaterThanOrEqual(1);
+    });
+
+    test('getSubscriptionManager: 매니저 인스턴스 반환', () => {
+      const manager = multiService.getSubscriptionManager();
+      expect(manager).toBeDefined();
+    });
+  });
+
+  describe('하이브리드 구독 시스템', () => {
+    test('isHybridSubscriptionAvailable: false by default', () => {
+      expect(multiService.isHybridSubscriptionAvailable()).toBe(false);
+    });
+
+    test('getHybridSubscriptionManager: undefined by default', () => {
+      expect(multiService.getHybridSubscriptionManager()).toBeUndefined();
+    });
+
+    test('setHybridSubscriptionManager: sets and retrieves', () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue(['telegram']),
+        getHelpMessage: jest.fn().mockResolvedValue('help'),
+        getPlatformStats: jest.fn().mockResolvedValue({ total: 1 })
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      expect(multiService.isHybridSubscriptionAvailable()).toBe(true);
+      expect(multiService.getHybridSubscriptionManager()).toBe(mockHybridManager);
+    });
+
+    test('processSubscriptionCommand: without hybrid manager', async () => {
+      const result = await multiService.processSubscriptionCommand('telegram', 'u1', 'help');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('HYBRID_SYSTEM_NOT_AVAILABLE');
+    });
+
+    test('processSubscriptionCommand: with hybrid manager', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn().mockResolvedValue({ success: true, message: 'OK' }),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const result = await multiService.processSubscriptionCommand('telegram', 'u1', 'help');
+      expect(result.success).toBe(true);
+    });
+
+    test('processSubscriptionCommand: handles errors', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn().mockRejectedValue(new Error('fail')),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const result = await multiService.processSubscriptionCommand('telegram', 'u1', 'help');
+      expect(result.success).toBe(false);
+    });
+
+    test('generateWebToken: without hybrid manager', async () => {
+      const token = await multiService.generateWebToken('telegram', 'u1');
+      expect(token).toBeNull();
+    });
+
+    test('generateWebToken: with hybrid manager', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn().mockResolvedValue({ token: 'abc123' }),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const token = await multiService.generateWebToken('telegram', 'u1');
+      expect(token).toBe('abc123');
+    });
+
+    test('getHybridSubscriptionStats: without hybrid manager', async () => {
+      const stats = await multiService.getHybridSubscriptionStats();
+      expect(stats).toBeNull();
+    });
+
+    test('getHybridSubscriptionStats: with hybrid manager', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn().mockResolvedValue({ total: 5 })
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const stats = await multiService.getHybridSubscriptionStats();
+      expect(stats).toEqual({ total: 5 });
+    });
+
+    test('getHybridPlatformNames: returns empty without manager', () => {
+      expect(multiService.getHybridPlatformNames()).toEqual([]);
+    });
+
+    test('getHybridPlatformNames: returns platforms with manager', () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue(['telegram', 'slack']),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      expect(multiService.getHybridPlatformNames()).toEqual(['telegram', 'slack']);
+    });
+
+    test('getHybridHelpMessage: without hybrid manager', async () => {
+      const help = await multiService.getHybridHelpMessage('telegram');
+      expect(help).toBeNull();
+    });
+
+    test('getHybridHelpMessage: with hybrid manager', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn().mockResolvedValue('telegram help'),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const help = await multiService.getHybridHelpMessage('telegram');
+      expect(help).toBe('telegram help');
+    });
+
+    test('generateWebToken: handles error gracefully', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn().mockRejectedValue(new Error('token error')),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const token = await multiService.generateWebToken('telegram', 'u1');
+      expect(token).toBeNull();
+    });
+
+    test('getHybridSubscriptionStats: handles error gracefully', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn(),
+        getPlatformStats: jest.fn().mockRejectedValue(new Error('stats error'))
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const stats = await multiService.getHybridSubscriptionStats();
+      expect(stats).toBeNull();
+    });
+
+    test('getHybridHelpMessage: handles error gracefully', async () => {
+      const mockHybridManager = {
+        processCommand: jest.fn(),
+        generateUserToken: jest.fn(),
+        getRegisteredPlatforms: jest.fn().mockReturnValue([]),
+        getHelpMessage: jest.fn().mockRejectedValue(new Error('help error')),
+        getPlatformStats: jest.fn()
+      } as any;
+
+      multiService.setHybridSubscriptionManager(mockHybridManager);
+      const help = await multiService.getHybridHelpMessage('telegram');
+      expect(help).toBeNull();
+    });
+  });
+
+  describe('서비스 없는 경우', () => {
+    let emptyService: MultiplatformNotificationService;
+
+    beforeEach(() => {
+      emptyService = new MultiplatformNotificationService([]);
+    });
+
+    test('sendAlertChange: 빈 배열 반환', async () => {
+      const change = createMockChange('NEW');
+      const results = await emptyService.sendAlertChange(change);
+      expect(results).toEqual([]);
+    });
+
+    test('sendAlertChanges: 빈 배열 반환', async () => {
+      const changes = [createMockChange('NEW')];
+      const results = await emptyService.sendAlertChanges(changes);
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe('sendAlertChange 에러 처리', () => {
+    test('서비스 에러 시 에러 결과 반환', async () => {
+      const failService = new MockNotificationService('fail', true);
+      const svc = new MultiplatformNotificationService([failService]);
+      const change = createMockChange('NEW');
+      const results = await svc.sendAlertChange(change);
+      expect(results.length).toBe(1);
+      expect(results[0].success).toBe(false);
+    });
+  });
+
+  describe('sendAlertChanges 에러 처리', () => {
+    test('서비스 에러 시 에러 결과 반환', async () => {
+      const failService = new MockNotificationService('fail', true);
+      const svc = new MultiplatformNotificationService([failService]);
+      const changes = [createMockChange('NEW'), createMockChange('RESOLVED')];
+      const results = await svc.sendAlertChanges(changes);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some(r => !r.success)).toBe(true);
+    });
+  });
+
+  describe('sendAlertWithRetry', () => {
+    test('성공 시 바로 반환', async () => {
+      const results = await multiService.sendAlertWithRetry(createMockAlert(), 2, 10);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every(r => r.success)).toBe(true);
+    });
+
+    test('실패 시 재시도 후 반환', async () => {
+      const failService = new MockNotificationService('fail', true);
+      const svc = new MultiplatformNotificationService([failService]);
+      const results = await svc.sendAlertWithRetry(createMockAlert(), 2, 10);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.some(r => !r.success)).toBe(true);
+    });
+  });
+
+  describe('sendAlertToSubscriptions 상세', () => {
+    test('구독자의 플랫폼 서비스가 없으면 실패 결과 반환', async () => {
+      // discord 플랫폼 구독자를 추가하지만 discord 서비스는 등록하지 않음
+      multiService.addSubscription('discord', 'user1', ['L1100000']);
+      const alert = createMockAlert({ REG_ID: 'L1100000' });
+      const results = await multiService.sendAlertToSubscriptions(alert);
+      const discordResults = results.filter(r => r.platform === 'discord');
+      // discord 서비스가 없으므로 실패 결과 (빈 배열이 아닌지 먼저 확인)
+      expect(discordResults.length).toBeGreaterThan(0);
+      for (const r of discordResults) {
+        expect(r.success).toBe(false);
+      }
+    });
+  });
+
+  describe('sendAlertChangesToSubscriptions 상세', () => {
+    test('여러 변동 처리', async () => {
+      // createMockChange의 regionId(L1020110)와 일치하는 지역으로 구독
+      multiService.addSubscription('slack', 'userX', ['L1020110']);
+      const changes = [createMockChange('NEW'), createMockChange('RESOLVED')];
+      const results = await multiService.sendAlertChangesToSubscriptions(changes);
+      expect(results.length).toBeGreaterThan(0);
     });
   });
 });

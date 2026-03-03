@@ -89,6 +89,218 @@ describe('NotificationFactory', () => {
     });
   });
 
+  describe('createServices - 추가 케이스', () => {
+    test('Telegram 비활성화 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['telegram'],
+        telegram: {
+          enabled: false,
+          botToken: 'test-token'
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Telegram 설정 누락 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['telegram']
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Discord enabled 서비스 (미구현 - null 반환)', () => {
+      const config: NotificationConfig = {
+        platforms: ['discord'],
+        discord: {
+          enabled: true,
+          webhookUrl: 'https://discord.com/api/webhooks/test'
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Discord 비활성화 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['discord'],
+        discord: {
+          enabled: false,
+          webhookUrl: 'https://discord.com/api/webhooks/test'
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Discord 설정 누락 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['discord']
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Email enabled 서비스 (미구현 - null 반환)', () => {
+      const config: NotificationConfig = {
+        platforms: ['email'],
+        email: {
+          enabled: true,
+          smtpHost: 'smtp.test.com',
+          smtpPort: 587,
+          auth: { user: 'test@test.com', pass: 'pass' },
+          recipients: ['r@test.com']
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Email 비활성화 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['email'],
+        email: {
+          enabled: false,
+          smtpHost: 'smtp.test.com',
+          smtpPort: 587,
+          auth: { user: 'test@test.com', pass: 'pass' },
+          recipients: ['r@test.com']
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Email 설정 누락 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['email']
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Slack 검증 실패 시 생성하지 않음', () => {
+      const config: NotificationConfig = {
+        platforms: ['slack'],
+        slack: {
+          enabled: true,
+          webhookUrl: '',  // empty webhook URL causes validateConfig to fail
+          batchMode: false
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+
+    test('Telegram botToken 빈 문자열 시 검증 실패', () => {
+      const config: NotificationConfig = {
+        platforms: ['telegram'],
+        telegram: {
+          enabled: true,
+          botToken: ''  // empty bot token
+        }
+      };
+      const services = NotificationFactory.createServices(config);
+      expect(services).toHaveLength(0);
+    });
+  });
+
+  describe('validateConfig - 추가 케이스', () => {
+    test('Slack 설정 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['slack']
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Slack 플랫폼이 선택되었지만 설정이 없습니다');
+    });
+
+    test('Telegram 설정 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['telegram']
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Telegram 플랫폼이 선택되었지만 설정이 없습니다');
+    });
+
+    test('Telegram webhookUrl 있지만 webhookSecret 없는 경우', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['telegram'],
+        telegram: {
+          enabled: true,
+          botToken: 'test-token',
+          webhookUrl: 'https://example.com/webhook'
+          // webhookSecret 누락
+        }
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Telegram webhookSecret이 설정되지 않았습니다');
+    });
+
+    test('Discord 설정 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['discord']
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Discord 플랫폼이 선택되었지만 설정이 없습니다');
+    });
+
+    test('Discord webhookUrl 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['discord'],
+        discord: { enabled: true, webhookUrl: '' }
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Discord webhookUrl이 설정되지 않았습니다');
+    });
+
+    test('Email 설정 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['email']
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Email 플랫폼이 선택되었지만 설정이 없습니다');
+    });
+
+    test('Email smtpPort 유효하지 않음', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['email'],
+        email: {
+          enabled: true,
+          smtpHost: 'smtp.test.com',
+          smtpPort: 0,
+          auth: { user: 'u', pass: 'p' },
+          recipients: ['r@t.com']
+        }
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('유효하지 않은 Email smtpPort입니다');
+    });
+
+    test('Email 인증 정보 누락', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['email'],
+        email: {
+          enabled: true,
+          smtpHost: 'smtp.test.com',
+          smtpPort: 587,
+          auth: { user: '', pass: '' },
+          recipients: ['r@t.com']
+        }
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('Email 인증 정보가 올바르게 설정되지 않았습니다');
+    });
+
+    test('알 수 없는 플랫폼', () => {
+      const validation = NotificationFactory.validateConfig({
+        platforms: ['foobar']
+      });
+      expect(validation.valid).toBe(false);
+      expect(validation.errors).toContain('지원하지 않는 알림 플랫폼: foobar');
+    });
+  });
+
   describe('createMultiplatformService', () => {
     test('MultiplatformNotificationService 생성', () => {
       const config: NotificationConfig = {

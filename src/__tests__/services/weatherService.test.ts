@@ -781,10 +781,223 @@ L1020110, 202101010000, 202312312359, A, L1020000, 서울강북, 서울특별시
     });
 
     it('API 호출 실패 시 source를 포함한 실패 결과를 반환한다', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
       const result = await weatherService.getWeatherForecastWithResult('L1100000');
       expect(result.success).toBe(false);
       expect(result.data).toBeNull();
+    });
+  });
+
+  describe('getCacheStatus', () => {
+    it('캐시 상태를 반환한다', () => {
+      const status = weatherService.getCacheStatus();
+      expect(status).toHaveProperty('count');
+      expect(status).toHaveProperty('lastUpdated');
+      expect(status).toHaveProperty('isInitialized');
+      expect(status).toHaveProperty('lastCheckTime');
+      expect(status.isInitialized).toBe(false);
+    });
+  });
+
+  describe('clearAlertCache', () => {
+    it('캐시를 초기화한다', () => {
+      weatherService.clearAlertCache();
+      const status = weatherService.getCacheStatus();
+      expect(status.count).toBe(0);
+      expect(status.isInitialized).toBe(false);
+    });
+  });
+
+  describe('getCachedAlerts', () => {
+    it('캐시된 특보를 반환한다', () => {
+      const alerts = weatherService.getCachedAlerts();
+      expect(Array.isArray(alerts)).toBe(true);
+    });
+  });
+
+  describe('getWeatherForecast', () => {
+    it('격자 좌표를 찾을 수 없으면 null을 반환한다', async () => {
+      const result = await weatherService.getWeatherForecast('UNKNOWN_ID');
+      expect(result).toBeNull();
+    });
+
+    it('API 호출 실패 시 null을 반환한다', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      const result = await weatherService.getWeatherForecast('L1100000');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('selectNearestTimeSlice (private)', () => {
+    it('가장 가까운 시간대를 선택한다', () => {
+      const items = [
+        { fcstDate: '20260101', fcstTime: '0900', category: 'T1H', fcstValue: '5' },
+        { fcstDate: '20260101', fcstTime: '1000', category: 'T1H', fcstValue: '7' },
+        { fcstDate: '20260101', fcstTime: '1100', category: 'T1H', fcstValue: '9' }
+      ];
+      const now = new Date('2026-01-01T01:30:00Z'); // KST 10:30
+      const result = (weatherService as any).selectNearestTimeSlice(items, now);
+      expect(result.items).toBeDefined();
+    });
+
+    it('referenceTimeKey로 가장 가까운 시간대를 선택한다', () => {
+      const items = [
+        { fcstDate: '20260101', fcstTime: '0900', category: 'T3H', fcstValue: '5' },
+        { fcstDate: '20260101', fcstTime: '1200', category: 'T3H', fcstValue: '10' },
+        { fcstDate: '20260101', fcstTime: '1500', category: 'T3H', fcstValue: '12' }
+      ];
+      const now = new Date('2026-01-01T01:00:00Z');
+      const result = (weatherService as any).selectNearestTimeSlice(items, now, '202601011000');
+      expect(result.items).toBeDefined();
+    });
+  });
+
+  describe('parseForecastTime (private)', () => {
+    it('유효한 시간 문자열을 Date로 변환한다', () => {
+      const result = (weatherService as any).parseForecastTime('202601011200');
+      expect(result).toBeInstanceOf(Date);
+      // KST 12:00 → UTC 03:00
+      expect(result.getUTCHours()).toBe(3);
+    });
+
+    it('짧은 문자열은 현재 시간을 반환한다', () => {
+      const before = Date.now();
+      const result = (weatherService as any).parseForecastTime('2026');
+      expect(result).toBeInstanceOf(Date);
+      // 현재 시간 근처여야 함
+      expect(result.getTime()).toBeGreaterThanOrEqual(before - 60000);
+    });
+
+    it('빈 문자열은 현재 시간을 반환한다', () => {
+      const result = (weatherService as any).parseForecastTime('');
+      expect(result).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('calculateFeelsLike (private)', () => {
+    it('10도 이하 + 풍속 있으면 Windchill 계산', () => {
+      const result = (weatherService as any).calculateFeelsLike(5, 5);
+      expect(result).toBeLessThan(5);
+    });
+
+    it('27도 이상 + 습도 40% 이상이면 Heat Index 계산', () => {
+      const result = (weatherService as any).calculateFeelsLike(35, 1, 70);
+      expect(result).toBeGreaterThan(35);
+    });
+
+    it('중간 온도에서는 실제 기온 반환', () => {
+      const result = (weatherService as any).calculateFeelsLike(20, 3);
+      expect(result).toBe(20);
+    });
+
+    it('27도 이상이지만 습도가 낮으면 실제 기온 반환', () => {
+      const result = (weatherService as any).calculateFeelsLike(30, 1, 30);
+      expect(result).toBe(30);
+    });
+
+    it('27도 이상 + 습도 없으면 실제 기온 반환', () => {
+      const result = (weatherService as any).calculateFeelsLike(30, 1);
+      expect(result).toBe(30);
+    });
+  });
+
+  describe('parseNumber (private)', () => {
+    it('유효한 숫자 문자열을 변환한다', () => {
+      expect((weatherService as any).parseNumber('123')).toBe(123);
+      expect((weatherService as any).parseNumber('12.5')).toBe(12.5);
+    });
+
+    it('빈 문자열은 undefined를 반환한다', () => {
+      expect((weatherService as any).parseNumber('')).toBeUndefined();
+    });
+
+    it('undefined는 undefined를 반환한다', () => {
+      expect((weatherService as any).parseNumber(undefined)).toBeUndefined();
+    });
+
+    it('유효하지 않은 문자열은 undefined를 반환한다', () => {
+      expect((weatherService as any).parseNumber('abc')).toBeUndefined();
+    });
+  });
+
+  describe('fetchWithRetry (private)', () => {
+    it('성공 시 바로 반환한다', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'ok' })
+      });
+
+      const result = await (weatherService as any).fetchWithRetry('https://api.example.com', {}, 1, 5000);
+      expect(result.ok).toBe(true);
+    });
+
+    it('5xx 에러 시 재시도 후 실패한다', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error'
+      });
+
+      await expect(
+        (weatherService as any).fetchWithRetry('https://api.example.com', {}, 2, 100)
+      ).rejects.toThrow();
+    }, 15000);
+
+    it('4xx 에러는 재시도 없이 반환한다', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found'
+      });
+
+      const result = await (weatherService as any).fetchWithRetry('https://api.example.com', {}, 3, 5000);
+      expect(result.status).toBe(404);
+      // fetch는 1번만 호출되어야 함
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('getUpperRegionName (private)', () => {
+    it('알려진 지역 코드의 이름을 반환한다', () => {
+      const result = (weatherService as any).getUpperRegionName('L1100000');
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('매핑되지 않은 지역 코드는 상위 지역을 재귀 탐색한다', () => {
+      const result = (weatherService as any).getUpperRegionName('L9999999');
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('매핑되지 않은 해상 지역 코드도 처리한다', () => {
+      const result = (weatherService as any).getUpperRegionName('S9999999');
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('최상위 레벨에 도달하면 기타를 반환한다', () => {
+      const result = (weatherService as any).getUpperRegionName('X0000000');
+      expect(result).toBe('기타');
+    });
+
+    it('빈 문자열이면 빈 문자열 반환', () => {
+      const result = (weatherService as any).getUpperRegionName('');
+      expect(result).toBe('');
+    });
+
+    it('8자리가 아니면 빈 문자열 반환', () => {
+      const result = (weatherService as any).getUpperRegionName('L123');
+      expect(result).toBe('');
+    });
+  });
+
+  describe('checkForAlertChanges 에러 처리', () => {
+    it('API 실패 시 빈 배열을 반환한다', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      const result = await weatherService.checkForAlertChanges();
+      expect(Array.isArray(result)).toBe(true);
     });
   });
 
