@@ -16,6 +16,10 @@ export { SlackNotificationService } from './SlackNotificationService';
 // 다중 플랫폼 매니저 (구독 시스템 통합)
 export { MultiplatformNotificationService } from './MultiplatformNotificationService';
 
+// Circuit Breaker
+export { CircuitBreaker, CircuitState } from './CircuitBreaker';
+export type { CircuitBreakerOptions } from './CircuitBreaker';
+
 // 팩토리 클래스
 export { NotificationFactory } from './NotificationFactory';
 
