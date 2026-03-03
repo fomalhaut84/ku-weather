@@ -20,6 +20,10 @@ export { MultiplatformNotificationService } from './MultiplatformNotificationSer
 export { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from './CircuitBreaker';
 export type { CircuitBreakerOptions } from './CircuitBreaker';
 
+// 알림 통계
+export { NotificationStats } from './NotificationStats';
+export type { PlatformStats, HourlyBucket, RecordEntry } from './NotificationStats';
+
 // 팩토리 클래스
 export { NotificationFactory } from './NotificationFactory';
 

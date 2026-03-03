@@ -5,6 +5,7 @@ import { SubscriptionManager, UserSubscription, SubscriptionNotificationResult }
 import { HybridSubscriptionManager } from '../subscriptions/HybridSubscriptionManager';
 import { SubscriptionCommand } from '../subscriptions/interfaces';
 import { CircuitBreaker, CircuitBreakerOpenError, CircuitState } from './CircuitBreaker';
+import { NotificationStats, PlatformStats } from './NotificationStats';
 
 export interface RetryOptions {
   readonly maxRetries: number;
@@ -26,6 +27,7 @@ export class MultiplatformNotificationService {
   private subscriptionManager: SubscriptionManager;
   private hybridManager?: HybridSubscriptionManager;
   private readonly circuitBreakers: Map<string, CircuitBreaker> = new Map();
+  private readonly notificationStats: NotificationStats = new NotificationStats();
 
   constructor(services: NotificationService[] = [], subscriptionManager?: SubscriptionManager) {
     this.services = [...services];
@@ -272,7 +274,7 @@ export class MultiplatformNotificationService {
   }
 
   /**
-   * 플랫폼별 전송 성공률 통계 (CircuitBreaker 기반)
+   * 플랫폼별 전송 성공률 통계 (간략)
    */
   getStatistics(): { [platform: string]: { total: number; success: number; successRate: number } } {
     const stats: { [platform: string]: { total: number; success: number; successRate: number } } = {};
@@ -287,6 +289,38 @@ export class MultiplatformNotificationService {
     }
 
     return stats;
+  }
+
+  /**
+   * 플랫폼별 상세 통계 (응답시간, 시간대별 분포, CircuitBreaker 상태 포함)
+   */
+  getDetailedStatistics(): PlatformStats[] {
+    const cbStates = new Map<string, CircuitState>();
+    for (const [platform, cb] of this.circuitBreakers) {
+      cbStates.set(platform, cb.getState());
+    }
+    return this.notificationStats.getAllStats(cbStates);
+  }
+
+  /**
+   * 특정 플랫폼의 상세 통계
+   */
+  getDetailedPlatformStats(platformName: string): PlatformStats | undefined {
+    const cbState = this.circuitBreakers.get(platformName)?.getState();
+    return this.notificationStats.getStats(platformName, cbState);
+  }
+
+  /**
+   * 통계 초기화
+   */
+  resetStatistics(platformName?: string): void {
+    if (platformName) {
+      this.notificationStats.resetPlatform(platformName);
+      logger.info(`${platformName} 통계 초기화`);
+    } else {
+      this.notificationStats.resetAll();
+      logger.info('전체 플랫폼 통계 초기화');
+    }
   }
 
   /**
@@ -316,23 +350,43 @@ export class MultiplatformNotificationService {
     const results = await Promise.allSettled(
       services.map(async service => {
         const cb = this.circuitBreakers.get(service.platformName);
-        if (!cb) {
-          return service.sendAlert(alert);
-        }
+        const startTime = Date.now();
 
         try {
-          return await cb.execute(() => service.sendAlert(alert));
+          const result = cb
+            ? await cb.execute(() => service.sendAlert(alert))
+            : await service.sendAlert(alert);
+
+          const responseTime = Date.now() - startTime;
+          const resultWithTime = { ...result, responseTime };
+
+          this.notificationStats.recordResult({
+            platform: service.platformName,
+            success: resultWithTime.success,
+            responseTimeMs: responseTime,
+          });
+
+          return resultWithTime;
         } catch (error) {
+          const responseTime = Date.now() - startTime;
+
           if (error instanceof CircuitBreakerOpenError || (error as Error)?.name === 'CircuitBreakerOpenError') {
             logger.warn(`${service.platformName} Circuit breaker OPEN - 전송 건너뜀`);
           } else {
             logger.error(`${service.platformName} 특보 알림 전송 실패:`, error);
           }
+
+          this.notificationStats.recordResult({
+            platform: service.platformName,
+            success: false,
+            responseTimeMs: responseTime,
+          });
+
           return {
             platform: service.platformName,
             success: false,
             error: error instanceof Error ? error.message : String(error),
-            responseTime: 0,
+            responseTime,
           } as NotificationResult;
         }
       })
