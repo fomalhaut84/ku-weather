@@ -747,4 +747,78 @@ describe('MultiplatformNotificationService', () => {
       expect(results[0].platform).toBe('always-fail');
     });
   });
+
+  describe('상세 통계 (NotificationStats 통합)', () => {
+    test('sendAlert 후 상세 통계에 기록됨', async () => {
+      const alert = createMockAlert();
+      await multiService.sendAlert(alert);
+
+      const detailed = multiService.getDetailedStatistics();
+      expect(detailed.length).toBeGreaterThanOrEqual(2);
+
+      const slackStats = detailed.find(s => s.platform === 'slack');
+      expect(slackStats).toBeDefined();
+      expect(slackStats!.totalSent).toBe(1);
+      expect(slackStats!.successCount).toBe(1);
+      expect(slackStats!.successRate).toBe(1.0);
+      expect(slackStats!.averageResponseTimeMs).toBeGreaterThanOrEqual(0);
+      expect(slackStats!.circuitBreakerState).toBe(CircuitState.CLOSED);
+      expect(slackStats!.hourlyStats).toHaveLength(24);
+    });
+
+    test('getDetailedPlatformStats로 개별 플랫폼 조회', async () => {
+      await multiService.sendAlert(createMockAlert());
+
+      const slackStats = multiService.getDetailedPlatformStats('slack');
+      expect(slackStats).toBeDefined();
+      expect(slackStats!.platform).toBe('slack');
+      expect(slackStats!.totalSent).toBe(1);
+    });
+
+    test('존재하지 않는 플랫폼은 undefined', () => {
+      expect(multiService.getDetailedPlatformStats('nonexistent')).toBeUndefined();
+    });
+
+    test('실패 서비스도 통계에 기록됨', async () => {
+      const failService = new MockNotificationService('fail-svc', true);
+      const svc = new MultiplatformNotificationService([failService]);
+      await svc.sendAlert(createMockAlert());
+
+      const stats = svc.getDetailedPlatformStats('fail-svc');
+      expect(stats).toBeDefined();
+      expect(stats!.totalSent).toBe(1);
+      expect(stats!.failureCount).toBe(1);
+      expect(stats!.successRate).toBe(0);
+    });
+
+    test('resetStatistics로 특정 플랫폼 초기화', async () => {
+      await multiService.sendAlert(createMockAlert());
+      multiService.resetStatistics('slack');
+
+      expect(multiService.getDetailedPlatformStats('slack')).toBeUndefined();
+      expect(multiService.getDetailedPlatformStats('telegram')).toBeDefined();
+    });
+
+    test('resetStatistics로 전체 초기화', async () => {
+      await multiService.sendAlert(createMockAlert());
+      multiService.resetStatistics();
+
+      expect(multiService.getDetailedStatistics()).toEqual([]);
+    });
+
+    test('lastSuccessAt이 성공 시 기록됨', async () => {
+      await multiService.sendAlert(createMockAlert());
+
+      const stats = multiService.getDetailedPlatformStats('slack');
+      expect(stats!.lastSuccessAt).toBeInstanceOf(Date);
+    });
+
+    test('응답 시간이 측정됨', async () => {
+      await multiService.sendAlert(createMockAlert());
+
+      const stats = multiService.getDetailedPlatformStats('slack');
+      expect(typeof stats!.averageResponseTimeMs).toBe('number');
+      expect(stats!.averageResponseTimeMs).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
