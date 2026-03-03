@@ -63,9 +63,11 @@ export class NotificationStats {
   }
 
   getStats(platform: string, circuitBreakerState?: CircuitState): PlatformStats | undefined {
-    const acc = this.platforms.get(platform);
+    const normalized = platform?.trim();
+    if (!normalized) return undefined;
+    const acc = this.platforms.get(normalized);
     if (!acc) return undefined;
-    return this.toSnapshot(platform, acc, circuitBreakerState ?? CircuitState.CLOSED);
+    return this.toSnapshot(normalized, acc, circuitBreakerState ?? CircuitState.CLOSED);
   }
 
   getAllStats(circuitBreakerStates?: Map<string, CircuitState>): PlatformStats[] {
@@ -78,7 +80,9 @@ export class NotificationStats {
   }
 
   resetPlatform(platform: string): boolean {
-    return this.platforms.delete(platform);
+    const normalized = platform?.trim();
+    if (!normalized) return false;
+    return this.platforms.delete(normalized);
   }
 
   resetAll(): void {

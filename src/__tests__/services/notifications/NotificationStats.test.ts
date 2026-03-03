@@ -289,7 +289,20 @@ describe('NotificationStats', () => {
       stats.recordResult({ platform: '  slack  ', success: true, responseTimeMs: 100 });
       expect(stats.getStats('slack')).toBeDefined();
       expect(stats.getStats('slack')!.totalSent).toBe(1);
-      expect(stats.getStats('  slack  ')).toBeUndefined();
+      // getStats도 trim 정규화 적용
+      expect(stats.getStats('  slack  ')).toBeDefined();
+      expect(stats.getStats('  slack  ')!.totalSent).toBe(1);
+    });
+
+    it('resetPlatform도 trim 정규화 적용', () => {
+      stats.recordResult({ platform: 'slack', success: true, responseTimeMs: 100 });
+      expect(stats.resetPlatform('  slack  ')).toBe(true);
+      expect(stats.getStats('slack')).toBeUndefined();
+    });
+
+    it('빈 플랫폼명으로 resetPlatform 시 false', () => {
+      expect(stats.resetPlatform('')).toBe(false);
+      expect(stats.resetPlatform('  ')).toBe(false);
     });
 
     it('Invalid Date 타임스탬프는 현재 시각으로 대체', () => {
