@@ -317,3 +317,68 @@ export async function getWeatherForecast(regionId: string): Promise<ApiResponse<
     };
   }
 }
+
+// ========== 알림 모니터링 API ==========
+
+export interface NotificationHourlyBucket {
+  hour: number;
+  sent: number;
+  success: number;
+}
+
+export interface NotificationPlatformStats {
+  platform: string;
+  totalSent: number;
+  successCount: number;
+  failureCount: number;
+  successRate: number;
+  averageResponseTimeMs: number;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  circuitBreakerState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  hourlyStats: NotificationHourlyBucket[];
+}
+
+export interface NotificationStatsResponse {
+  platforms: NotificationPlatformStats[];
+  summary: {
+    totalPlatforms: number;
+    totalSent: number;
+    totalSuccess: number;
+    totalFailure: number;
+    overallSuccessRate: number;
+  };
+}
+
+export interface NotificationHealthResponse {
+  [platform: string]: {
+    connected: boolean;
+    circuitBreakerState: string;
+  };
+}
+
+/**
+ * 알림 통계 조회
+ */
+export async function getNotificationStats(): Promise<ApiResponse<NotificationStatsResponse>> {
+  return fetchAPI<NotificationStatsResponse>('/api/notifications/stats');
+}
+
+/**
+ * 알림 플랫폼 헬스체크
+ */
+export async function getNotificationHealth(): Promise<ApiResponse<NotificationHealthResponse>> {
+  return fetchAPI<NotificationHealthResponse>('/api/notifications/health');
+}
+
+/**
+ * Circuit Breaker 수동 리셋
+ */
+export async function resetCircuitBreaker(
+  platform: string
+): Promise<ApiResponse<{ platform: string; message: string }>> {
+  return fetchAPI<{ platform: string; message: string }>(
+    `/api/notifications/circuit-breaker/${platform}/reset`,
+    { method: 'POST' }
+  );
+}
