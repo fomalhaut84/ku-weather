@@ -13,6 +13,9 @@ import { MatrixController, MatrixElement } from 'chartjs-chart-matrix';
 import { Chart } from 'react-chartjs-2';
 import { getAlertHistory, type AlertHistory } from '@/lib/api';
 import { WARNING_TYPE_NAMES } from '@/types/alert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import Card from '@/components/common/Card';
 
 // Chart.js 등록
 ChartJS.register(
@@ -325,29 +328,17 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">히트맵 데이터 로딩 중...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="히트맵 데이터 로딩 중..." />;
   }
 
   if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-600">{error}</p>
-      </div>
-    );
+    return <ErrorAlert message={error} />;
   }
 
   return (
     <div className="space-y-6">
       {/* 지역별 × 시간대별 히트맵 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">🕐 지역별 × 시간대별 특보 발생 히트맵</h3>
+      <Card title="🕐 지역별 × 시간대별 특보 발생 히트맵">
         <div className="h-[400px]">
           <Chart
             type="matrix"
@@ -377,11 +368,10 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
             매우 높음
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* 날짜별 × 지역별 히트맵 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">📅 월별 × 지역별 특보 발생 히트맵</h3>
+      <Card title="📅 월별 × 지역별 특보 발생 히트맵">
         <div className="h-[400px] overflow-x-auto">
           <div style={{ minWidth: `${Math.max(800, monthLabels.length * 50)}px`, height: '400px' }}>
             <Chart
@@ -420,11 +410,10 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
             매우 높음
           </span>
         </div>
-      </div>
+      </Card>
 
       {/* 특보 종류별 × 지역별 히트맵 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">⚠️ 특보 종류별 × 지역별 발생 히트맵</h3>
+      <Card title="⚠️ 특보 종류별 × 지역별 발생 히트맵">
         <div className="h-[350px] overflow-x-auto">
           <div style={{ minWidth: `${Math.max(800, regionLabels.length * 60)}px`, height: '350px' }}>
             <Chart
@@ -456,7 +445,7 @@ export default function HeatmapView({ period = '1y' }: HeatmapViewProps) {
             매우 높음
           </span>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

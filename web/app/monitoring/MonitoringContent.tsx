@@ -20,6 +20,9 @@ import {
   type NotificationHealthResponse,
   type NotificationPlatformStats,
 } from '@/lib/api';
+import { cbStateStyles } from '@/styles/tokens';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
 
 ChartJS.register(
   CategoryScale,
@@ -29,12 +32,6 @@ ChartJS.register(
   Tooltip,
   Legend,
 );
-
-const CB_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  CLOSED: { bg: 'bg-green-100', text: 'text-green-800', label: '정상' },
-  HALF_OPEN: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: '반개방' },
-  OPEN: { bg: 'bg-red-100', text: 'text-red-800', label: '차단' },
-};
 
 function formatRate(rate: number): string {
   return `${(rate * 100).toFixed(1)}%`;
@@ -134,14 +131,7 @@ export default function MonitoringContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">모니터링 데이터 로딩 중...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="모니터링 데이터 로딩 중..." />;
   }
 
   const healthyCount = health
@@ -182,11 +172,7 @@ export default function MonitoringContent() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
-          </div>
-        )}
+        {error && <ErrorAlert message={error} className="mb-4" />}
 
         {/* 요약 카드 (3열) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -220,7 +206,7 @@ export default function MonitoringContent() {
         {stats?.platforms?.length ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             {stats.platforms.map((platform: NotificationPlatformStats) => {
-              const cb = CB_COLORS[platform.circuitBreakerState] ?? CB_COLORS.CLOSED;
+              const cb = cbStateStyles[platform.circuitBreakerState] ?? cbStateStyles.CLOSED;
               const isConnected = health?.[platform.platform]?.connected ?? false;
 
               return (

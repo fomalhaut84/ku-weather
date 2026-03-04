@@ -14,57 +14,28 @@ import {
   WARNING_TYPE_EMOJI,
   WARNING_LEVEL_COLORS
 } from '@/types/alert';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
 
 // MapView는 클라이언트 사이드에서만 로드 (Leaflet SSR 이슈 방지)
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-        <p className="mt-4 text-gray-600">지도 로딩 중...</p>
-      </div>
-    </div>
-  ),
+  loading: () => <LoadingSpinner message="지도 로딩 중..." />,
 });
 
-// ChartView도 클라이언트 사이드에서만 로드
 const ChartView = dynamic(() => import('@/components/ChartView'), {
   ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-        <p className="mt-4 text-gray-600">차트 로딩 중...</p>
-      </div>
-    </div>
-  ),
+  loading: () => <LoadingSpinner message="차트 로딩 중..." />,
 });
 
-// AdvancedChartView도 클라이언트 사이드에서만 로드
 const AdvancedChartView = dynamic(() => import('@/components/AdvancedChartView'), {
   ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-        <p className="mt-4 text-gray-600">고급 차트 로딩 중...</p>
-      </div>
-    </div>
-  ),
+  loading: () => <LoadingSpinner message="고급 차트 로딩 중..." />,
 });
 
-// HeatmapView도 클라이언트 사이드에서만 로드
 const HeatmapView = dynamic(() => import('@/components/HeatmapView'), {
   ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center py-12">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-        <p className="mt-4 text-gray-600">히트맵 로딩 중...</p>
-      </div>
-    </div>
-  ),
+  loading: () => <LoadingSpinner message="히트맵 로딩 중..." />,
 });
 
 // WeatherForecastCard도 클라이언트 사이드에서만 로드
@@ -299,16 +270,8 @@ export default function DashboardContent() {
     }
   }, [availableRegions]);
 
-  // 로딩 중
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">특보 현황 로딩 중...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen message="특보 현황 로딩 중..." />;
   }
 
   return (
@@ -379,12 +342,7 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        {/* 에러 메시지 */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-600">{error}</p>
-          </div>
-        )}
+        {error && <ErrorAlert message={error} className="mb-6" />}
 
         {/* 필터 */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">

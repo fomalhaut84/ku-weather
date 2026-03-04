@@ -14,6 +14,10 @@ import {
 import { Bar, Pie } from 'react-chartjs-2';
 import { getAlertStatistics, type AlertStatistics } from '@/lib/api';
 import { WARNING_TYPE_NAMES, WARNING_LEVEL_NAMES } from '@/types/alert';
+import { chartPalette } from '@/styles/tokens';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import ErrorAlert from '@/components/common/ErrorAlert';
+import Card from '@/components/common/Card';
 
 // Chart.js 등록
 ChartJS.register(
@@ -81,26 +85,8 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
       {
         label: '발생 건수',
         data: byWarningType.map(stat => stat.count),
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',  // 파란색
-          'rgba(16, 185, 129, 0.8)',  // 초록색
-          'rgba(245, 158, 11, 0.8)',  // 노란색
-          'rgba(239, 68, 68, 0.8)',   // 빨간색
-          'rgba(168, 85, 247, 0.8)',  // 보라색
-          'rgba(236, 72, 153, 0.8)',  // 분홍색
-          'rgba(14, 165, 233, 0.8)',  // 하늘색
-          'rgba(34, 197, 94, 0.8)',   // 연두색
-        ],
-        borderColor: [
-          'rgba(59, 130, 246, 1)',
-          'rgba(16, 185, 129, 1)',
-          'rgba(245, 158, 11, 1)',
-          'rgba(239, 68, 68, 1)',
-          'rgba(168, 85, 247, 1)',
-          'rgba(236, 72, 153, 1)',
-          'rgba(14, 165, 233, 1)',
-          'rgba(34, 197, 94, 1)',
-        ],
+        backgroundColor: chartPalette.backgrounds,
+        borderColor: chartPalette.borders,
         borderWidth: 1,
       },
     ],
@@ -144,29 +130,17 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-          <p className="mt-4 text-gray-600">통계 로딩 중...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="통계 로딩 중..." />;
   }
 
   if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-600">{error}</p>
-      </div>
-    );
+    return <ErrorAlert message={error} />;
   }
 
   return (
     <div className="space-y-6">
       {/* 특보 종류별 통계 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">📊 특보 종류별 발생 현황</h3>
+      <Card title="📊 특보 종류별 발생 현황">
         <div className="h-[300px]">
           <Bar
             data={warningTypeChartData}
@@ -193,12 +167,11 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
             }}
           />
         </div>
-      </div>
+      </Card>
 
       {/* 특보 수준별 통계 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-4">⚠️ 특보 수준별 분포</h3>
+        <Card title="⚠️ 특보 수준별 분포">
           <div className="h-[250px]">
             <Pie
               data={warningLevelChartData}
@@ -213,11 +186,10 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
               }}
             />
           </div>
-        </div>
+        </Card>
 
         {/* 통계 요약 */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold mb-4">📈 통계 요약</h3>
+        <Card title="📈 통계 요약">
           <div className="space-y-4">
             <div className="border-l-4 border-blue-500 pl-4">
               <p className="text-sm text-gray-600">총 발생 건수</p>
@@ -240,12 +212,11 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* 지역별 통계 */}
-      <div className="bg-white rounded-lg shadow-sm p-6">
-        <h3 className="text-lg font-semibold mb-4">📍 지역별 발생 현황 (Top 10)</h3>
+      <Card title="📍 지역별 발생 현황 (Top 10)">
         <div className="h-[300px]">
           <Bar
             data={regionChartData}
@@ -269,7 +240,7 @@ export default function ChartView({ period = '7d' }: ChartViewProps) {
             }}
           />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
