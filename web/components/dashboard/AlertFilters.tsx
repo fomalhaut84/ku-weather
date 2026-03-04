@@ -33,8 +33,9 @@ export default function AlertFilters({
       <h2 className="text-xl font-semibold mb-4">🔍 필터</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">지역</label>
+          <label htmlFor="filter-region" className="block text-sm font-medium text-gray-700 mb-2">지역</label>
           <select
+            id="filter-region"
             value={selectedRegion}
             onChange={(e) => onRegionChange(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -47,8 +48,9 @@ export default function AlertFilters({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">특보 종류</label>
+          <label htmlFor="filter-warning-type" className="block text-sm font-medium text-gray-700 mb-2">특보 종류</label>
           <select
+            id="filter-warning-type"
             value={selectedWarningType}
             onChange={(e) => onWarningTypeChange(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -63,8 +65,9 @@ export default function AlertFilters({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">특보 수준</label>
+          <label htmlFor="filter-warning-level" className="block text-sm font-medium text-gray-700 mb-2">특보 수준</label>
           <select
+            id="filter-warning-level"
             value={selectedWarningLevel}
             onChange={(e) => onWarningLevelChange(e.target.value)}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

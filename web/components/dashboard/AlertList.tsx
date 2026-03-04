@@ -41,11 +41,13 @@ export default function AlertList({ alerts }: AlertListProps) {
           <p className="text-sm text-gray-500">현재 선택한 필터에 해당하는 특보가 없습니다.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4" role="list" aria-label="발효 중인 특보 목록">
           {alerts.map((alert) => (
-            <div
+            <article
               key={alert.id}
-              className={`border-2 rounded-lg p-6 ${WARNING_LEVEL_COLORS[alert.warningLevel] || 'bg-gray-100 border-gray-300'}`}
+              role="listitem"
+              aria-label={`${alert.regionName} ${WARNING_TYPE_NAMES[alert.warningType] || alert.warningType} ${WARNING_LEVEL_NAMES[alert.warningLevel] || alert.warningLevel}`}
+              className={`border-2 rounded-lg p-4 sm:p-6 ${WARNING_LEVEL_COLORS[alert.warningLevel] || 'bg-gray-100 border-gray-300'}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -82,7 +84,7 @@ export default function AlertList({ alerts }: AlertListProps) {
                   </div>
                 </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

@@ -173,10 +173,10 @@ export default function MapView({ alerts, onRegionClick }: MapViewProps) {
 
   return (
     <div className="relative w-full h-full">
-      <div ref={mapContainerRef} className="w-full h-full rounded-lg" />
+      <div ref={mapContainerRef} className="w-full h-full rounded-lg" aria-label="한국 지도 - 지역별 특보 현황" />
 
       {/* 범례 */}
-      <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 z-[1000]">
+      <aside aria-label="특보 수준 범례" className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 bg-white rounded-lg shadow-lg p-3 sm:p-4 z-[1000]">
         <h3 className="font-semibold mb-2 text-sm">특보 수준</h3>
         <div className="space-y-1 text-xs">
           <div className="flex items-center gap-2">
@@ -196,7 +196,7 @@ export default function MapView({ alerts, onRegionClick }: MapViewProps) {
             <span>정상</span>
           </div>
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

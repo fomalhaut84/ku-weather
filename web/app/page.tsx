@@ -1,6 +1,6 @@
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-12 md:p-24">
       <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm">
         <h1 className="text-4xl font-bold text-center mb-8">
           🌦️ 기상특보 현황 대시보드
@@ -16,7 +16,7 @@ export default function Home() {
           >
             <h2 className="mb-3 text-2xl font-semibold">
               📊 특보 현황{" "}
-              <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
                 →
               </span>
             </h2>
@@ -31,7 +31,7 @@ export default function Home() {
           >
             <h2 className="mb-3 text-2xl font-semibold">
               ⚙️ 구독 설정{" "}
-              <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
                 →
               </span>
             </h2>
@@ -46,7 +46,7 @@ export default function Home() {
           >
             <h2 className="mb-3 text-2xl font-semibold">
               🔔 알림 모니터링{" "}
-              <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
+              <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
                 →
               </span>
             </h2>

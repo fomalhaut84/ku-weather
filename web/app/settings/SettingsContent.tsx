@@ -234,13 +234,13 @@ export default function SettingsContent() {
 
         {/* 에러/성공 메시지 */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
             <p className="text-red-600">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <div role="status" className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
             <p className="text-green-600">{success}</p>
           </div>
         )}
@@ -249,8 +249,9 @@ export default function SettingsContent() {
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           {/* 구독 활성화 */}
           <div className="mb-8">
-            <label className="flex items-center cursor-pointer">
+            <label htmlFor="enabled-toggle" className="flex items-center cursor-pointer">
               <input
+                id="enabled-toggle"
                 type="checkbox"
                 checked={enabled}
                 onChange={(e) => setEnabled(e.target.checked)}
@@ -270,8 +271,9 @@ export default function SettingsContent() {
             <h3 className="text-xl font-semibold mb-4">📍 모니터링 지역</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {availableRegions.map((region) => (
-                <label key={region.code} className="flex items-center cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+                <label key={region.code} htmlFor={`region-${region.code}`} className="flex items-center cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
                   <input
+                    id={`region-${region.code}`}
                     type="checkbox"
                     checked={selectedRegions.includes(region.code)}
                     onChange={() => toggleRegion(region.code)}
@@ -293,8 +295,9 @@ export default function SettingsContent() {
             <h3 className="text-xl font-semibold mb-4">🌦️ 특보 종류</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {availableWarningTypes.map((warning) => (
-                <label key={warning.code} className="flex items-center cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+                <label key={warning.code} htmlFor={`warning-${warning.code}`} className="flex items-center cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
                   <input
+                    id={`warning-${warning.code}`}
                     type="checkbox"
                     checked={selectedWarningTypes.includes(warning.code)}
                     onChange={() => toggleWarningType(warning.code)}
@@ -320,8 +323,9 @@ export default function SettingsContent() {
                 { value: '2', label: '주의보', desc: '위험 수준' },
                 { value: '3', label: '경보', desc: '매우 위험한 수준' },
               ].map((level) => (
-                <label key={level.value} className="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
+                <label key={level.value} htmlFor={`level-${level.value}`} className="flex items-start cursor-pointer p-3 border rounded-lg hover:bg-gray-50">
                   <input
+                    id={`level-${level.value}`}
                     type="radio"
                     name="minLevel"
                     value={level.value}
@@ -341,8 +345,9 @@ export default function SettingsContent() {
           {/* 조용한 시간대 */}
           <div className="mb-8">
             <h3 className="text-xl font-semibold mb-4">🔕 조용한 시간대</h3>
-            <label className="flex items-center cursor-pointer mb-4">
+            <label htmlFor="quiet-hours-toggle" className="flex items-center cursor-pointer mb-4">
               <input
+                id="quiet-hours-toggle"
                 type="checkbox"
                 checked={quietHoursEnabled}
                 onChange={(e) => setQuietHoursEnabled(e.target.checked)}
@@ -352,20 +357,22 @@ export default function SettingsContent() {
             </label>
 
             {quietHoursEnabled && (
-              <div className="flex items-center gap-4 pl-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 pl-6">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">시작</label>
+                  <label htmlFor="quiet-start" className="block text-sm text-gray-600 mb-1">시작</label>
                   <input
+                    id="quiet-start"
                     type="time"
                     value={quietHoursStart}
                     onChange={(e) => setQuietHoursStart(e.target.value)}
                     className="border rounded px-3 py-2"
                   />
                 </div>
-                <span className="mt-6">~</span>
+                <span className="hidden sm:block sm:mt-6" aria-hidden="true">~</span>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">종료</label>
+                  <label htmlFor="quiet-end" className="block text-sm text-gray-600 mb-1">종료</label>
                   <input
+                    id="quiet-end"
                     type="time"
                     value={quietHoursEnd}
                     onChange={(e) => setQuietHoursEnd(e.target.value)}
@@ -382,8 +389,9 @@ export default function SettingsContent() {
           {/* 배치 모드 */}
           <div className="mb-8">
             <h3 className="text-xl font-semibold mb-4">📦 배치 모드</h3>
-            <label className="flex items-center cursor-pointer">
+            <label htmlFor="batch-mode-toggle" className="flex items-center cursor-pointer">
               <input
+                id="batch-mode-toggle"
                 type="checkbox"
                 checked={batchMode}
                 onChange={(e) => setBatchMode(e.target.checked)}
@@ -397,7 +405,7 @@ export default function SettingsContent() {
           </div>
 
           {/* 버튼 */}
-          <div className="flex gap-4 pt-6 border-t">
+          <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t">
             <button
               onClick={handleSave}
               disabled={saving}

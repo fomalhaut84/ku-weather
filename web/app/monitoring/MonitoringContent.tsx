@@ -143,13 +143,14 @@ export default function MonitoringContent() {
     <main className="min-h-screen bg-gray-50 p-4 md:p-8">
       {/* 헤더 */}
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <h1 className="text-2xl font-bold text-gray-900">
             알림 모니터링
           </h1>
           <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+            <label htmlFor="monitoring-auto-refresh" className="flex items-center gap-2 text-sm text-gray-600">
               <input
+                id="monitoring-auto-refresh"
                 type="checkbox"
                 checked={autoRefresh}
                 onChange={(e) => setAutoRefresh(e.target.checked)}
@@ -159,7 +160,8 @@ export default function MonitoringContent() {
             </label>
             <button
               onClick={fetchData}
-              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              aria-label="모니터링 데이터 새로고침"
+              className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               새로고침
             </button>
@@ -247,7 +249,8 @@ export default function MonitoringContent() {
                     <button
                       onClick={() => handleResetCB(platform.platform)}
                       disabled={resetting === platform.platform}
-                      className="mt-3 w-full text-sm px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                      aria-label={`${platform.platform} Circuit Breaker 리셋`}
+                      className="mt-3 w-full text-sm px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50"
                     >
                       {resetting === platform.platform ? '리셋 중...' : 'Circuit Breaker 리셋'}
                     </button>
