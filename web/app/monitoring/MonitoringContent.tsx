@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -145,14 +144,9 @@ export default function MonitoringContent() {
       {/* 헤더 */}
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <Link href="/" className="text-sm text-blue-600 hover:underline mb-1 block">
-              &larr; 홈으로
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900">
-              알림 모니터링
-            </h1>
-          </div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            알림 모니터링
+          </h1>
           <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input

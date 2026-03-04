@@ -416,22 +416,6 @@ export default function SettingsContent() {
           </div>
         </div>
 
-        {/* 하단 링크 */}
-        <div className="text-center">
-          <Link
-            href="/dashboard"
-            className="text-blue-600 hover:underline"
-          >
-            📊 특보 현황 보기
-          </Link>
-          <span className="mx-3 text-gray-400">|</span>
-          <Link
-            href="/"
-            className="text-blue-600 hover:underline"
-          >
-            홈으로
-          </Link>
-        </div>
       </div>
     </main>
   );

@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback } from 'react';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useDashboardAlerts } from '@/hooks/useDashboardAlerts';
@@ -156,10 +155,6 @@ export default function DashboardContent() {
           heatmapPeriod={settings.heatmapPeriod}
           onHeatmapPeriodChange={settings.setHeatmapPeriod}
         />
-
-        <div className="text-center">
-          <Link href="/" className="text-blue-600 hover:underline">홈으로</Link>
-        </div>
       </div>
 
       <NotificationManager
