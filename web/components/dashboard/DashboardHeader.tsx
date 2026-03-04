@@ -52,11 +52,12 @@ export default function DashboardHeader({
 }: DashboardHeaderProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <h1 className="text-3xl font-bold text-slate-800">📊 기상특보 현황</h1>
         <button
           onClick={onRefresh}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          aria-label="특보 현황 새로고침"
+          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           🔄 새로고침
         </button>
@@ -69,8 +70,9 @@ export default function DashboardHeader({
       )}
 
       <div className="mt-4 space-y-2">
-        <label className="flex items-center cursor-pointer">
+        <label htmlFor="auto-refresh" className="flex items-center cursor-pointer">
           <input
+            id="auto-refresh"
             type="checkbox"
             checked={autoRefresh}
             onChange={(e) => onAutoRefreshChange(e.target.checked)}
@@ -79,8 +81,9 @@ export default function DashboardHeader({
           <span className="ml-2 text-sm">자동 새로고침 (5분 간격)</span>
         </label>
 
-        <label className="flex items-center cursor-pointer">
+        <label htmlFor="notification-toggle" className="flex items-center cursor-pointer">
           <input
+            id="notification-toggle"
             type="checkbox"
             checked={notificationEnabled}
             onChange={(e) => onNotificationChange(e.target.checked)}
@@ -90,8 +93,9 @@ export default function DashboardHeader({
         </label>
 
         <div className="flex items-center gap-2">
-          <label className="flex items-center cursor-pointer">
+          <label htmlFor="realtime-toggle" className="flex items-center cursor-pointer">
             <input
+              id="realtime-toggle"
               type="checkbox"
               checked={realtimeEnabled}
               onChange={(e) => onRealtimeChange(e.target.checked)}
@@ -100,7 +104,11 @@ export default function DashboardHeader({
             <span className="ml-2 text-sm">⚡ 실시간 업데이트 (WebSocket)</span>
           </label>
           {realtimeEnabled && (
-            <span className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+            <span
+              role="status"
+              aria-label={isConnected ? 'WebSocket 연결됨' : 'WebSocket 연결 중'}
+              className={`text-xs px-2 py-0.5 rounded ${isConnected ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
+            >
               {isConnected ? '연결됨' : '연결 중...'}
             </span>
           )}

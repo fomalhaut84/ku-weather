@@ -20,8 +20,11 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${inter.className} flex flex-col min-h-screen`}>
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:bg-white focus:px-4 focus:py-2 focus:text-blue-700 focus:underline">
+          본문으로 건너뛰기
+        </a>
         <Header />
-        <div className="flex-1">{children}</div>
+        <div id="main-content" className="flex-1">{children}</div>
         <Footer />
       </body>
     </html>

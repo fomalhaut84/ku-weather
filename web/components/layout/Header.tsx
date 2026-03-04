@@ -20,14 +20,15 @@ export default function Header() {
             🌦️ 기상특보
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav aria-label="메인 네비게이션" className="flex items-center gap-1">
             {NAV_ITEMS.map(({ href, label }) => {
               const isActive = pathname === href || pathname?.startsWith(href + '/');
               return (
                 <Link
                   key={href}
                   href={href}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-blue-50 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'

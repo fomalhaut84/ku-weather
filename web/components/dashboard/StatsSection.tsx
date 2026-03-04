@@ -54,7 +54,7 @@ function PeriodButtons<T extends string>({
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-3 py-1 rounded text-sm ${
+          className={`px-3 py-2 min-h-[44px] rounded text-sm ${
             value === opt.value
               ? 'bg-blue-600 text-white'
               : 'bg-gray-200 text-slate-800 hover:bg-gray-300'
@@ -83,7 +83,7 @@ export default function StatsSection({
     <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-semibold">📊 특보 발생 통계</h2>
-        <button onClick={onToggle} className="text-sm text-blue-600 hover:underline">
+        <button onClick={onToggle} aria-expanded={showStats} className="text-sm text-blue-600 hover:underline">
           {showStats ? '통계 숨기기' : '통계 보기'}
         </button>
       </div>
@@ -91,12 +91,14 @@ export default function StatsSection({
       {showStats ? (
         <>
           {/* 탭 네비게이션 */}
-          <div className="flex gap-4 mb-4 border-b">
+          <div role="tablist" aria-label="통계 유형 선택" className="flex flex-wrap gap-2 sm:gap-4 mb-4 border-b">
             {TABS.map((tab) => (
               <button
                 key={tab.key}
+                role="tab"
+                aria-selected={statsTab === tab.key}
                 onClick={() => onTabChange(tab.key)}
-                className={`px-4 py-2 font-medium transition-colors ${
+                className={`px-3 sm:px-4 py-2 font-medium transition-colors text-sm sm:text-base ${
                   statsTab === tab.key
                     ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-600 hover:text-gray-800'
