@@ -57,7 +57,7 @@ export default function Home() {
         </div>
 
         <div className="mt-12 text-center text-sm text-gray-500">
-          <p>Phase 1 MVP 개발 중...</p>
+          <p>v2.0.0-rc</p>
         </div>
       </div>
     </main>
