@@ -41,7 +41,8 @@
     "express": "^5.1.0",
     "iconv-lite": "^0.6.3",
     "node-telegram-bot-api": "^0.66.0",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "zod": "^4.3.6"
   },
   "overrides": {
     "body-parser": "^2.2.1",
