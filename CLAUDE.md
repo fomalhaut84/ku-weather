@@ -23,23 +23,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm install             # 전체 의존성 설치
-pnpm build               # 전체 빌드 (shared → server → web)
-pnpm dev                 # 개발 서버 (server + web 동시)
-pnpm test                # 전체 테스트
-pnpm lint                # ESLint
-pnpm typecheck           # TypeScript 타입 검사
+npm run build            # 백엔드 빌드 (tsc)
+npm run build:shared     # shared 패키지 빌드
+npm run build:all        # shared → 백엔드 빌드
+npm test                 # 백엔드 테스트
+npm run typecheck        # TypeScript 타입 검사
+cd web && npm run dev    # 프론트엔드 개발 서버 (포트 3001)
+cd web && npm run build  # 프론트엔드 빌드
 ```
 
 검증 순서 (PR 전 필수):
 ```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+npm run typecheck && npm test && npm run build
 ```
+
+> **Note**: pnpm 워크스페이스 전체 스크립트(`pnpm dev`, `pnpm lint` 등)는 Phase 8에서 통합 설정 예정.
+> 현재는 기존 npm 스크립트 + `pnpm --filter` 명령으로 개별 패키지 실행.
 
 패키지별 명령:
 ```bash
-pnpm --filter @ku-weather/server dev     # 백엔드 개발 서버
-pnpm --filter @ku-weather/web dev        # 프론트엔드 개발 서버 (포트 3001)
-pnpm --filter @ku-weather/server test    # 백엔드 테스트만
+pnpm --filter @ku-weather/shared build   # shared 패키지 빌드
 npx prisma migrate dev                   # 마이그레이션 생성+적용 (개발)
 npx prisma migrate deploy               # 마이그레이션 적용 (프로덕션)
 npx prisma studio                        # DB 브라우저 GUI

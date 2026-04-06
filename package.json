@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "build:shared": "pnpm --filter @ku-weather/shared build",
-    "build:all": "pnpm build:shared && pnpm build",
+    "build:all": "pnpm build:shared && tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "test": "jest",
