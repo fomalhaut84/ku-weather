@@ -37,11 +37,13 @@ export const WARNING_TYPE_EMOJI: Readonly<Record<WeatherWarningType, string>> = 
 };
 
 /** 특보 종류 코드를 한글 이름으로 변환 */
-export function getWarningTypeName(code: string): string {
-  return WARNING_TYPE_NAMES[code.trim() as WeatherWarningType] ?? code;
+export function getWarningTypeName(code: string | null | undefined): string {
+  const normalized = typeof code === 'string' ? code.trim() : '';
+  return WARNING_TYPE_NAMES[normalized as WeatherWarningType] ?? normalized;
 }
 
 /** 특보 종류 코드를 이모지로 변환 */
-export function getWarningTypeEmoji(code: string): string {
-  return WARNING_TYPE_EMOJI[code.trim() as WeatherWarningType] ?? '⚠️';
+export function getWarningTypeEmoji(code: string | null | undefined): string {
+  const normalized = typeof code === 'string' ? code.trim() : '';
+  return WARNING_TYPE_EMOJI[normalized as WeatherWarningType] ?? '⚠️';
 }

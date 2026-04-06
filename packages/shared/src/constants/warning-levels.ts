@@ -26,11 +26,13 @@ export const WARNING_LEVEL_COLORS: Readonly<Record<WeatherWarningLevel, string>>
 };
 
 /** 특보 수준 코드를 한글 이름으로 변환 */
-export function getWarningLevelName(code: string): string {
-  return WARNING_LEVEL_NAMES[code.trim() as WeatherWarningLevel] ?? code;
+export function getWarningLevelName(code: string | null | undefined): string {
+  const normalized = typeof code === 'string' ? code.trim() : '';
+  return WARNING_LEVEL_NAMES[normalized as WeatherWarningLevel] ?? normalized;
 }
 
 /** 특보 수준 코드를 이모지로 변환 */
-export function getWarningLevelEmoji(code: string): string {
-  return WARNING_LEVEL_EMOJI[code.trim() as WeatherWarningLevel] ?? '⚠️';
+export function getWarningLevelEmoji(code: string | null | undefined): string {
+  const normalized = typeof code === 'string' ? code.trim() : '';
+  return WARNING_LEVEL_EMOJI[normalized as WeatherWarningLevel] ?? '⚠️';
 }

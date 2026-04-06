@@ -77,8 +77,8 @@ export interface AlertChange {
 export interface WeatherForecast {
   readonly regionId: string;
   readonly regionName: string;
-  readonly baseTime: Date;
-  readonly forecastTime: Date;
+  readonly baseTime: string;
+  readonly forecastTime: string;
   readonly temperature?: number;
   readonly feelsLike?: number;
   readonly minTemperature?: number;

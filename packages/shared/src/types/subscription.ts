@@ -6,7 +6,7 @@ import type { NotificationPlatform } from './notification';
 
 /** 사용자 구독 */
 export interface UserSubscription {
-  readonly platform: NotificationPlatform | string;
+  readonly platform: NotificationPlatform;
   readonly userId: string;
   readonly targetRegions: readonly string[];
   readonly warningTypes: readonly string[];

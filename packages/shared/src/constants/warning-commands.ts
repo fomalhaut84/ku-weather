@@ -16,6 +16,7 @@ export const WARNING_COMMAND_NAMES: Readonly<Record<WeatherCommandCode, string>>
 };
 
 /** 특보 명령 코드를 한글 이름으로 변환 */
-export function getWarningCommandName(code: string): string {
-  return WARNING_COMMAND_NAMES[code.trim() as WeatherCommandCode] ?? code;
+export function getWarningCommandName(code: string | null | undefined): string {
+  const normalized = typeof code === 'string' ? code.trim() : '';
+  return WARNING_COMMAND_NAMES[normalized as WeatherCommandCode] ?? normalized;
 }

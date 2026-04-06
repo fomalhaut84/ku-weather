@@ -31,7 +31,7 @@ export interface AlertFilters {
 export interface AlertHistoryFilters extends AlertFilters {
   readonly startDate: string;
   readonly endDate: string;
-  readonly changeType?: string;
+  readonly changeType?: import('./weather').AlertChangeType;
 }
 
 /** 통계 파라미터 */
