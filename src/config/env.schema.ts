@@ -1,12 +1,22 @@
 import { z } from 'zod/v4';
 
-/** boolean 환경변수 헬퍼: 문자열 'true'/'false' → boolean */
-const booleanEnv = (defaultValue: string = 'false') =>
+/**
+ * boolean 환경변수 헬퍼 (opt-in): 'true'만 true, 나머지는 false
+ * 기본값이 false인 플래그에 사용 (예: TELEGRAM_ENABLED, DEBUG)
+ */
+const booleanOptIn = (defaultValue: string = 'false') =>
   z.string().default(defaultValue).transform(v => v === 'true');
 
-/** comma-separated 환경변수 헬퍼: "a,b,c" → ["a","b","c"] */
+/**
+ * boolean 환경변수 헬퍼 (opt-out): 'false'만 false, 나머지는 true
+ * 기본값이 true인 플래그에 사용 (예: SLACK_BATCH_MODE, SERVER_ENABLED)
+ */
+const booleanOptOut = () =>
+  z.string().default('true').transform(v => v !== 'false');
+
+/** comma-separated 환경변수 헬퍼: "a, b, c" → ["a","b","c"] */
 const csvEnv = () =>
-  z.string().default('').transform(s => s.split(',').filter(Boolean));
+  z.string().default('').transform(s => s.split(',').map(v => v.trim()).filter(v => v.length > 0));
 
 /**
  * 환경변수 검증 스키마 (Zod v4)
@@ -18,7 +28,7 @@ export const envSchema = z.object({
 
   // Slack
   SLACK_WEBHOOK_URL: z.url('SLACK_WEBHOOK_URL은 유효한 URL이어야 합니다'),
-  SLACK_BATCH_MODE: booleanEnv('true'),
+  SLACK_BATCH_MODE: booleanOptOut(),
 
   // 모니터링 설정
   TARGET_REGION_IDS: csvEnv(),
@@ -29,18 +39,18 @@ export const envSchema = z.object({
   // 환경
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   ENVIRONMENT: z.string().default('development'),
-  DEBUG: booleanEnv('false'),
+  DEBUG: booleanOptIn('false'),
 
   // Telegram
   TELEGRAM_BOT_TOKEN: z.string().default(''),
   TELEGRAM_CHAT_ID: z.string().optional(),
-  TELEGRAM_ENABLED: booleanEnv('false'),
+  TELEGRAM_ENABLED: booleanOptIn('false'),
   TELEGRAM_WEBHOOK_URL: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
 
   // HTTP 서버
   PORT: z.coerce.number().default(3000),
-  SERVER_ENABLED: booleanEnv('true'),
+  SERVER_ENABLED: booleanOptOut(),
   CORS_ORIGIN: z.string().optional(),
 
   // 웹 대시보드
@@ -48,7 +58,41 @@ export const envSchema = z.object({
 
   // 데이터베이스
   DATABASE_URL: z.string().optional(),
-});
+}).check(
+  z.check<{
+    TELEGRAM_ENABLED: boolean;
+    TELEGRAM_BOT_TOKEN: string;
+    TELEGRAM_WEBHOOK_URL?: string;
+    TELEGRAM_WEBHOOK_SECRET?: string;
+  }>(ctx => {
+    if (!ctx.value.TELEGRAM_ENABLED) return;
+
+    if (!ctx.value.TELEGRAM_BOT_TOKEN) {
+      ctx.issues.push({
+        message: 'TELEGRAM_ENABLED=true일 때 TELEGRAM_BOT_TOKEN은 필수입니다',
+        path: ['TELEGRAM_BOT_TOKEN'],
+        input: ctx.value.TELEGRAM_BOT_TOKEN,
+        code: 'custom',
+      });
+    }
+    if (!ctx.value.TELEGRAM_WEBHOOK_URL) {
+      ctx.issues.push({
+        message: 'TELEGRAM_ENABLED=true일 때 TELEGRAM_WEBHOOK_URL은 필수입니다',
+        path: ['TELEGRAM_WEBHOOK_URL'],
+        input: ctx.value.TELEGRAM_WEBHOOK_URL,
+        code: 'custom',
+      });
+    }
+    if (!ctx.value.TELEGRAM_WEBHOOK_SECRET) {
+      ctx.issues.push({
+        message: 'TELEGRAM_ENABLED=true일 때 TELEGRAM_WEBHOOK_SECRET은 필수입니다',
+        path: ['TELEGRAM_WEBHOOK_SECRET'],
+        input: ctx.value.TELEGRAM_WEBHOOK_SECRET,
+        code: 'custom',
+      });
+    }
+  }),
+);
 
 export type EnvConfig = z.infer<typeof envSchema>;
 

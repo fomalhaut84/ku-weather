@@ -4,7 +4,7 @@ import { logger } from '../../utils/logger';
 import { AlertChange } from '../../types/weather';
 
 export interface SocketServerConfig {
-  readonly corsOrigin: string;
+  readonly corsOrigin?: string;
 }
 
 /**
@@ -17,7 +17,7 @@ export class SocketServer {
   constructor(httpServer: HttpServerType, config: SocketServerConfig) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: config.corsOrigin,
+        origin: config.corsOrigin ?? '*',
         methods: ['GET', 'POST'],
       },
       transports: ['websocket', 'polling'],
