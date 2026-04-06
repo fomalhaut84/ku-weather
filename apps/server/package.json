@@ -1,0 +1,13 @@
+{
+  "name": "@ku-weather/server",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "echo 'Phase 2에서 구현'",
+    "dev": "echo 'Phase 2에서 구현'",
+    "test": "echo 'Phase 2에서 구현'"
+  },
+  "dependencies": {
+    "@ku-weather/shared": "workspace:*"
+  }
+}
