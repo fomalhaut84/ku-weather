@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, WeatherAlert as PrismaWeatherAlert, AlertHistory as PrismaAlertHistory, RegionMapping as PrismaRegionMapping } from '@prisma/client';
 import { AlertChange, AlertChangeType, CachedAlert, WeatherAlert } from '../../types/weather';
 import { logger } from '../../utils/logger';
 
@@ -168,7 +168,7 @@ export class WeatherRepository {
     warningType?: string;
     warningLevel?: string;
     upperRegion?: string;
-  }): Promise<unknown[]> {
+  }): Promise<PrismaWeatherAlert[]> {
     const alerts = await this.prisma.weatherAlert.findMany({
       where: {
         regionId: filters?.regionId,
@@ -193,7 +193,7 @@ export class WeatherRepository {
     regionId?: string;
     warningType?: string;
     changeType?: AlertChangeType;
-  }): Promise<unknown[]> {
+  }): Promise<PrismaAlertHistory[]> {
     const histories = await this.prisma.alertHistory.findMany({
       where: {
         timestamp: { gte: filters.startDate, lte: filters.endDate },
@@ -267,7 +267,7 @@ export class WeatherRepository {
   /**
    * 지역 매핑 조회
    */
-  async getRegionMapping(regionId: string): Promise<unknown | null> {
+  async getRegionMapping(regionId: string): Promise<PrismaRegionMapping | null> {
     return this.prisma.regionMapping.findUnique({ where: { regionId } });
   }
 

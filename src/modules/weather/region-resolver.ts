@@ -64,6 +64,9 @@ export class RegionResolver {
   ]);
 
   constructor(authKey: string) {
+    if (!authKey) {
+      throw new Error('WEATHER_API_KEY가 제공되지 않았습니다');
+    }
     this.authKey = authKey;
     this.loadGridCoordinatesFromCsv();
   }
@@ -681,7 +684,7 @@ export class RegionResolver {
    */
   private loadGridCoordinatesFromCsv(): void {
     try {
-      const csvPath = path.join(__dirname, '../../단기예보지점좌표(위경도)_202504.csv');
+      const csvPath = path.join(process.cwd(), '단기예보지점좌표(위경도)_202504.csv');
 
       if (!fs.existsSync(csvPath)) {
         logger.warn(`격자 좌표 CSV 파일을 찾을 수 없습니다: ${csvPath}`);

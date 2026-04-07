@@ -34,6 +34,9 @@ export class ForecastService {
   private readonly vilageFcstUrl = 'https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst';
 
   constructor(authKey: string, deps: ForecastServiceDeps) {
+    if (!authKey) {
+      throw new Error('WEATHER_API_KEY가 제공되지 않았습니다');
+    }
     this.authKey = authKey;
     this.getGridCoordinates = deps.getGridCoordinates;
     this.fetchWithRetry = deps.fetchWithRetry;
